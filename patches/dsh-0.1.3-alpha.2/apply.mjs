@@ -25,7 +25,7 @@ const backup=join(process.env.DSH_HOME??join(homedir(),'.dsh'),'backups','local-
 for(const f of manifest.files){const dest=join(backup,f.path);await mkdir(dirname(dest),{recursive:true});await cp(join(nm,f.path),dest);}
 await writeFile(join(backup,'manifest.json'),JSON.stringify(manifest,null,2));
 const work=await mkdtemp(join(tmpdir(),'dsh-alpha2-patch-'));
-try{for(const args of [['--check'],[]]){const result=spawnSync('git',['apply','--unsafe-paths','--directory='+nm.replaceAll('\\','/'),...args,join(dir,'dsh-local-fixes.patch')],{cwd:work,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||'git apply failed');}
+try{for(const args of [['--check'],[]]){const result=spawnSync('git',['-c','core.autocrlf=false','-c','core.eol=lf','apply','--unsafe-paths','--directory='+nm.replaceAll('\\','/'),...args,join(dir,'dsh-local-fixes.patch')],{cwd:work,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||'git apply failed');}
 for(const f of manifest.files)if(sha(await readFile(join(nm,f.path)))!==f.after)throw Error('Post-apply checksum mismatch: '+f.path);
 console.log(`Applied and SHA-256 verified ${manifest.files.length} files. Backup: ${backup}`);
 }finally{await rm(work,{recursive:true,force:true});}

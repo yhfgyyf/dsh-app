@@ -33,7 +33,7 @@ for (const [name, value] of Object.entries(pins.plugins) as [string, { repositor
   await mkdir(directory, { recursive: true });
   await run('git', ['init', '--quiet'], { cwd: directory });
   await run('git', ['fetch', '--quiet', '--depth=1', `https://github.com/${value.repository}.git`, value.commit], { cwd: directory });
-  await run('git', ['checkout', '--quiet', '--detach', value.commit], { cwd: directory });
+  await run('git', ['-c', 'core.autocrlf=false', 'checkout', '--quiet', '--detach', value.commit], { cwd: directory });
   const pkg = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
   if (pkg.name !== name || pkg.version !== value.version) throw new Error(`Plugin identity differs: ${name}`);
 }
