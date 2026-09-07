@@ -19,7 +19,7 @@ for (const name of ['README.md', 'THIRD_PARTY_NOTICES.md']) await cp(join(root, 
 await writeFile(join(staging, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, description: pkg.description, main: pkg.main, private: true }, null, 2));
 await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
 assert.match(execFileSync(join(runtime, 'bin/node.exe'), ['--version'], { encoding: 'utf8' }), /^v24\./);
-const [app] = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', executableName: 'DSH Desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'win32', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false, appCopyright: 'Independent desktop client for DeepSeek Harness', win32metadata: { CompanyName: 'yhfgyyf', FileDescription: 'DSH Desktop', ProductName: 'DSH Desktop' } });
+const [app] = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', executableName: 'DSH Desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'win32', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false, icon: join(root, 'assets/icon.ico'), appCopyright: 'Independent desktop client for DeepSeek Harness', win32metadata: { CompanyName: 'yhfgyyf', FileDescription: 'DSH Desktop', ProductName: 'DSH Desktop' } });
 const packagedRuntime = await runtimeManifest(join(app, 'resources/runtime'));
 assert.deepEqual(packagedRuntime, await runtimeManifest(join(root, '.runtime')), 'Packaged runtime differs from the tested runtime');
 const iscc = process.env.ISCC_PATH ?? join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');

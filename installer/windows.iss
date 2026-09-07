@@ -30,6 +30,7 @@ WizardStyle=modern
 UninstallDisplayIcon={app}\DSH Desktop.exe
 CloseApplications=yes
 SetupLogging=yes
+SetupIconFile=..\assets\icon.ico
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

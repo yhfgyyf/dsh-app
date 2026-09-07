@@ -18,7 +18,8 @@ const nm=join(upgrade.globalPackage,'node_modules');
 for(const name of ['web','tui']) {
  const dir=join(home,'profiles',name);await mkdir(join(dir,'node_modules'),{recursive:true});
  const plugins=['dsh-auto-preset-router','dsh-audit-mode','dsh-progressive-tools',...(name==='tui'?['dsh-tui-app']:[])];
- const manifest={name:`dsh-test-${name}`,private:true,dependencies:Object.fromEntries(plugins.map(key=>[key,`file:${join(upgrade.plugins,key).replaceAll('\\','/')}`]))};
+ const bundles=['@deepseek-ai/dsh-base',name==='web'?'@deepseek-ai/dsh-web-app':'dsh-tui-app','dsh-auto-preset-router','dsh-audit-mode','dsh-progressive-tools'];
+ const manifest={name:`dsh-test-${name}`,private:true,dsh:{profile:{bundles}},dependencies:Object.fromEntries(plugins.map(key=>[key,`file:${join(upgrade.plugins,key).replaceAll('\\','/')}`]))};
  for(const key of plugins) await symlink(join(upgrade.plugins,key),join(dir,'node_modules',key),process.platform==='win32'?'junction':'dir');
  await symlink(join(nm,'@deepseek-ai'),join(dir,'node_modules','@deepseek-ai'),process.platform==='win32'?'junction':'dir');
  await writeFile(join(dir,'package.json'),JSON.stringify(manifest,null,2));
@@ -37,7 +38,7 @@ async function digest(path:string):Promise<string>{const hash=createHash('sha256
 try{
  let app=await desktop();
  const w=cli('web',['--no-open','--port','0']);
- await until(()=>/dsh web: (http:\/\/[^\s]+)/.test(w.output())||w.child.exitCode!==null,45000);
+ await until(()=>/dsh web: (http:\/\/[^\s]+)/.test(w.output())||w.child.exitCode!==null,45000).catch(async e=>{await writeFile(join(data,'web-error.log'),w.output().replace(/token=[^\s]+/g,'token=[redacted]'));throw e;});
  const match=w.output().match(/dsh web: (http:\/\/[^\s]+)/);if(!match){await writeFile(join(data,'web-error.log'),w.output().replace(/token=[^\s]+/g,'token=[redacted]'));throw Error('Web failed to boot; see private fixture log');}
  const launchUrl=match[1],endpoint=new URL(launchUrl).origin;const file=join(data,'web-connection.json');await writeFile(file,JSON.stringify({owner:'dsh-desktop-test',endpoint,launchUrl}),{mode:0o600});const web=await connectFixture(file);clients.push(web);
  const created=await app.client.rpc('session/create',{request:{cwd:data,agentPreset:'standard'}}); const sessionId=created.sessionId;

@@ -16,6 +16,7 @@ const staging = join(output, 'staging');
 await mkdir(staging, { recursive: true });
 await cp(join(root, 'dist'), join(staging, 'dist'), { recursive: true });
 await cp(join(root, 'README.md'), join(staging, 'README.md'));
+await cp(join(root, 'THIRD_PARTY_NOTICES.md'), join(staging, 'THIRD_PARTY_NOTICES.md'));
 await writeFile(join(staging, 'package.json'), JSON.stringify({ name: version.name, version: version.version, description: version.description, main: version.main, private: true }, null, 2));
 
 const run = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
