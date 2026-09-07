@@ -1,0 +1,26 @@
+{
+  "node": "24.15.0",
+  "dsh": "0.1.3-alpha.2",
+  "plugins": {
+    "dsh-auto-preset-router": {
+      "repository": "yhfgyyf/dsh-auto-preset-router",
+      "commit": "0a292c14405879d66f6bba5150db82510bd05955",
+      "version": "0.2.4"
+    },
+    "dsh-audit-mode": {
+      "repository": "yhfgyyf/dsh-audit-mode",
+      "commit": "2e22f39f1afe24a094568de29adb65f79fc74fde",
+      "version": "0.6.1"
+    },
+    "dsh-progressive-tools": {
+      "repository": "yhfgyyf/dsh-progressive-tools",
+      "commit": "3df3e891d9b75dd3d5e3c70b0ba471857ad5166f",
+      "version": "0.3.2"
+    },
+    "dsh-tui-app": {
+      "repository": "yhfgyyf/dsh-tui-app",
+      "commit": "cb01f12bc36ca1664f157ff6b10c853d32ae7cf1",
+      "version": "0.2.0"
+    }
+  }
+}

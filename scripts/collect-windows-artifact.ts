@@ -1,0 +1,12 @@
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join, dirname, basename } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('..', import.meta.url));
+const artifact = JSON.parse(await readFile(join(root, 'release/latest-windows.json'), 'utf8'));
+const output = join(root, 'release/upload');
+await mkdir(output, { recursive: true });
+await cp(artifact.installer, join(output, basename(artifact.installer)));
+await cp(join(dirname(artifact.installer), 'runtime-manifest.json'), join(output, 'runtime-manifest-windows-x64.json'));
+for (const [from, to] of [['.test-data/windows-installer-report.json', 'windows-installer-report.json'], ['.test-data/native-owned/report.json', 'windows-native-report.json'], ['docs/evidence/three-surfaces-alpha2.json', 'windows-three-surfaces-report.json']]) await cp(join(root, from), join(output, to));
+await writeFile(join(output, 'SHA256SUMS-windows.txt'), `${artifact.sha256}  ${basename(artifact.installer)}\n`);
+await writeFile(join(output, 'windows-artifact.json'), JSON.stringify({ ...artifact, app: undefined, installer: basename(artifact.installer) }, null, 2));

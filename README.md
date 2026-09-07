@@ -1,0 +1,62 @@
+# dsh-app
+
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon** 和 **Windows x64**。
+
+应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## 下载与使用
+
+从 [GitHub Releases](https://github.com/yhfgyyf/dsh-app/releases) 下载对应版本：
+
+| 平台 | 安装包 | 安装方式 |
+| --- | --- | --- |
+| macOS Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | 解压，将 `DSH Desktop.app` 放入应用程序目录 |
+| Windows 10/11 x64 | `DSH-Desktop-*-Windows-x64-Setup.exe` | 运行安装程序，默认按当前用户安装，无需管理员权限 |
+
+打开应用，在“设置 → 模型”配置提供方与密钥，选择工作区并创建会话。已有 DSH 用户直接沿用 `~/.dsh` 中的配置；Windows 默认对应 `%USERPROFILE%\.dsh`。安装包内已包含运行所需的 Node 和 DSH，无需另外安装。
+
+每次 Release 提供 `SHA256SUMS.txt`。当前安装包未进行 Developer ID 公证或 Windows 代码签名，系统可能要求用户确认来源。Windows 卸载会移除程序，保留 DSH 会话和用户配置。
+
+## 能力
+
+- 工作区与会话列表、历史、重命名、分支、删除、搜索、日志导出。
+- 流式文本、推理、Markdown、代码、工具详情、图片与 MP4 附件。
+- 模型提供方配置、权限审批、计划、目标、问答、工作流与子代理。
+- 标准、PTC、极简、创造、自动、审计预设；模型推理强度单独设置。
+- 原生菜单、文件/目录选择、下载保存、缩放、窗口状态和核心异常恢复。
+
+内置 DSH `0.1.3-alpha.2`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
+
+部分能力依赖所选模型或外部工具：MP4 需要提供方支持 `video_url`；Audit 的 Codex / Claude Code 后端需要对应 CLI，也可配置 DSH 模型后端。安装包不包含模型账号、密钥或这些外部 CLI。
+
+## 与 Web / TUI 共享
+
+App、Web 和 TUI 可共用同一个 `DSH_HOME`，默认 `~/.dsh`。会话、附件、工作区和模型配置在这里保存。App 自己的窗口与端口状态位于系统 Application Support / AppData 下的 `DSH Desktop` 目录。
+
+使用官方会话生命周期锁：同一会话同时只有一个进程可以写入。其他端尝试恢复、修改或删除占用中的会话会收到占用错误；持有端退出后可以接手。切换页面不保证释放会话，跨进程实时跟随活动流也不属于当前功能。
+
+本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.1.3-alpha.2)。
+
+## 从源码构建
+
+需要 Git、Node.js **24.15.0** 与 npm：
+
+```sh
+npm ci
+npm run setup:runtime
+npm run check
+npm start
+```
+
+`setup:runtime` 下载指定 DSH 版本与固定提交的插件，检查并应用补丁，生成独立 `.runtime`。不会读取或复制用户的 DSH 配置、凭据和会话。
+
+```sh
+npm run package          # macOS：需要 Swift 和 iconutil
+npm run package:windows  # Windows x64：需要 Inno Setup 6
+```
+
+Windows 也可在仓库 Actions 页面手动运行 **Build Windows installer**，执行检查、跨端测试、打包、静默安装、启动、退出和卸载验证，随后下载构建产物。
+
+详情：[构建说明](docs/BUILDING.md) · [架构](docs/ARCHITECTURE.md) · [测试](docs/TESTING.md) · [第三方声明](THIRD_PARTY_NOTICES.md)。
+
+这是独立项目，并非 DeepSeek 或 OpenAI 官方产品。

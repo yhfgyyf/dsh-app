@@ -1,0 +1,44 @@
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.15.0
+          cache: npm
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build pinned runtime and apply verified patch
+        run: npm run setup:runtime
+      - name: Typecheck, unit tests and production build
+        run: npm run check
+      - name: Shared model settings
+        run: npm run test:model-settings
+      - name: Web, TUI and App ownership
+        run: npm run test:three-surfaces
+      - name: Native Electron lifecycle
+        run: npm run test:native
+      - name: Create Windows installer
+        run: node scripts/package-windows.ts
+      - name: Install, launch, close and uninstall
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1
+      - name: Collect verified installer and reports
+        run: node scripts/collect-windows-artifact.ts
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dsh-app-windows-x64
+          path: release/upload/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14

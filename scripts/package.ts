@@ -1,0 +1,44 @@
+import { packager } from '@electron/packager';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import { runtimeManifest } from './runtime-manifest.ts';
+
+if (process.platform !== 'darwin') throw new Error('此打包脚本面向 macOS。');
+const root = fileURLToPath(new URL('..', import.meta.url));
+const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+const output = join(root, 'release', stamp);
+const staging = join(output, 'staging');
+await mkdir(staging, { recursive: true });
+await cp(join(root, 'dist'), join(staging, 'dist'), { recursive: true });
+await cp(join(root, 'README.md'), join(staging, 'README.md'));
+await writeFile(join(staging, 'package.json'), JSON.stringify({ name: version.name, version: version.version, description: version.description, main: version.main, private: true }, null, 2));
+
+const run = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
+  const child = spawn(command, args, { stdio: 'inherit' });
+  child.on('error', reject);
+  child.on('exit', code => code === 0 ? resolve() : reject(new Error(`${command} failed (${code})`)));
+});
+const iconset = join(output, 'DSH.iconset');
+await run('swift', [join(root, 'scripts/make-icon.swift'), iconset]);
+await run('iconutil', ['-c', 'icns', iconset, '-o', join(output, 'DSH.icns')]);
+const runtime = join(output, 'runtime');
+await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
+const packaged = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness' } });
+const app = join(packaged[0], 'DSH Desktop.app');
+const sourceRuntime = await runtimeManifest(join(root, '.runtime'));
+const packagedRuntime = await runtimeManifest(join(app, 'Contents/Resources/runtime'));
+assert.deepEqual(packagedRuntime, sourceRuntime, 'Packaged runtime differs from the tested runtime');
+await writeFile(join(output, 'runtime-manifest.json'), JSON.stringify(packagedRuntime, null, 2));
+const archive = join(output, `DSH-Desktop-${version.version}-macOS-${process.arch}.zip`);
+await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, archive]);
+const bytes = await readFile(archive);
+const sha256 = createHash('sha256').update(bytes).digest('hex');
+const result = { app, archive, sha256, bytes: bytes.length, signed: false, notarized: false, electron: version.devDependencies.electron, runtime: { fileCount: packagedRuntime.fileCount, bytes: packagedRuntime.bytes, sha256: packagedRuntime.sha256 } };
+await writeFile(join(output, 'artifact.json'), JSON.stringify(result, null, 2));
+await writeFile(join(root, 'release/latest.json'), JSON.stringify(result, null, 2));
+console.log(JSON.stringify(result, null, 2));

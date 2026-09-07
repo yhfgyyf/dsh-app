@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { runtimeManifest } from './runtime-manifest.ts';
+const [installed, packaged] = process.argv.slice(2);
+if (!installed || !packaged) throw new Error('Expected installed and packaged directories');
+assert.deepEqual(await readFile(join(installed, 'resources/app.asar')), await readFile(join(packaged, 'resources/app.asar')));
+assert.deepEqual(await runtimeManifest(join(installed, 'resources/runtime')), await runtimeManifest(join(packaged, 'resources/runtime')));
+assert.match(execFileSync(join(installed, 'resources/runtime/bin/node.exe'), ['--version'], { encoding: 'utf8', env: { ...process.env, PATH: process.env.SystemRoot ?? 'C:\\Windows' } }), /^v24\./);
+console.log('Installed Windows app and runtime verified.');

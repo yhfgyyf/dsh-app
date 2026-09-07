@@ -1,0 +1,41 @@
+/* DSH 0.1.2-rc.1 CSS-module adapter. Contracts are verified in tests/upstream.test.ts. */
+html[data-dsh-desktop] { --desktop-titlebar-height: 44px; height: 100%; }
+html[data-dsh-desktop] body { height: 100%; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+html[data-dsh-desktop] #root { height: 100%; }
+html[data-dsh-desktop] #root { box-sizing: border-box; padding-top: var(--desktop-titlebar-height); }
+html[data-dsh-desktop] .pI_x6G_frame { border-top: 1px solid var(--dsw-alias-border-l3); }
+.desktop-titlebar { position: fixed; inset: 0 0 auto; height: var(--desktop-titlebar-height); box-sizing: border-box; display: flex; align-items: center; padding: 0 12px 0 92px; gap: 16px; background: var(--dsw-specific-sidebar-fill); color: var(--dsw-alias-label-primary); -webkit-app-region: drag; z-index: 20; user-select: none; pointer-events: auto; }
+.desktop-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; text-align: center; }
+.desktop-title-actions { display: flex; align-items: center; gap: 10px; -webkit-app-region: no-drag; }
+.desktop-titlebar button { font: inherit; color: inherit; border: 0; background: transparent; cursor: pointer; border-radius: 6px; padding: 4px 6px; }
+.desktop-titlebar button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.desktop-icon { display: grid; place-items: center; width: 28px; height: 28px; }
+.desktop-status { display: inline-flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 11px; white-space: nowrap; }
+.desktop-status i { width: 5px; height: 5px; border-radius: 50%; background: #bd924d; }
+.desktop-status i[data-connected="true"] { background: #68a178; }
+.desktop-brand { font-size: 15px; font-weight: 600; letter-spacing: -.3px; }
+.desktop-connection-action { width: 100%; background: none; border: 0; color: var(--dsw-alias-label-tertiary); padding: 8px; display: flex; align-items: center; gap: 8px; font: inherit; font-size: 11px; border-radius: 7px; cursor: pointer; }
+.desktop-connection-action:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.desktop-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; font-size: 13px; }
+.desktop-settings-row p { margin: 6px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.desktop-settings-row button { flex: none; background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l3); color: inherit; padding: 7px 12px; border-radius: 7px; cursor: pointer; }
+.desktop-boot-error { position: fixed; z-index: 10000; inset: 60px 20px auto; background: #fff4df; color: #533e18; padding: 18px; border-radius: 10px; }
+.desktop-boot-error button { margin-left: 16px; }
+html[data-dsh-desktop] .hHd-Xa_root { --dsh-sidebar-inline-padding: 10px; font-size: 13px; }
+html[data-dsh-desktop] .hHd-Xa_logoRow { height: 42px; margin-bottom: 2px; padding: 4px; }
+html[data-dsh-desktop] .hHd-Xa_newSession { justify-content: flex-start; height: 34px; border: 0; background: transparent; border-radius: 7px; padding: 6px 8px; font-size: 13px; font-weight: 400; }
+html[data-dsh-desktop] .hHd-Xa_newSession:hover { background: var(--dsw-alias-interactive-bg-hover); }
+html[data-dsh-desktop] .hHd-Xa_collapsed .hHd-Xa_newSession { justify-content: center; }
+html[data-dsh-desktop] .YDXeBa_sessionRow { border-radius: 6px; font-size: 13px; }
+html[data-dsh-desktop] .YDXeBa_projectRow { font-size: 13px; }
+html[data-dsh-desktop] .VOzbGW_trigger { height: 34px; border-radius: 7px; font-size: 13px; }
+html[data-dsh-desktop] .VOzbGW_panel { border-radius: 14px; border: 1px solid var(--dsw-alias-border-l3); }
+html[data-dsh-desktop] .VOzbGW_nav { background: var(--dsw-specific-sidebar-fill); border-right: 1px solid var(--dsw-alias-border-l3); }
+html[data-dsh-desktop] .VOzbGW_navCell { border-radius: 7px; height: 36px; font-size: 13px; }
+html[data-dsh-desktop] .Sixlwa_bubble { border-radius: 14px; }
+html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { html[data-dsh-desktop] *, html[data-dsh-desktop] *::before, html[data-dsh-desktop] *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (max-width: 760px) { .desktop-title { text-align: left; } .desktop-status { display: none; } html[data-dsh-desktop] .VOzbGW_panel { max-width: calc(100vw - 20px); } html[data-dsh-desktop] .VOzbGW_nav { width: 150px; } }
+
+.desktop-startup { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #777; font: 14px -apple-system, sans-serif; background: #f6f6f6; padding: 40px; box-sizing: border-box; }
+@media (prefers-color-scheme: dark) { .desktop-startup { background: #181818; color: #bbb; } }

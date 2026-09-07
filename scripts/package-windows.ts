@@ -1,0 +1,38 @@
+import { packager } from '@electron/packager';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { spawn, execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import { runtimeManifest } from './runtime-manifest.ts';
+
+if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Build this installer on Windows x64.');
+const root = fileURLToPath(new URL('..', import.meta.url));
+const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+const output = join(root, 'release', new Date().toISOString().replace(/[:.]/g, '-'));
+const staging = join(output, 'staging');
+const runtime = join(output, 'runtime');
+await mkdir(staging, { recursive: true });
+await cp(join(root, 'dist'), join(staging, 'dist'), { recursive: true });
+for (const name of ['README.md', 'THIRD_PARTY_NOTICES.md']) await cp(join(root, name), join(staging, name));
+await writeFile(join(staging, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, description: pkg.description, main: pkg.main, private: true }, null, 2));
+await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
+assert.match(execFileSync(join(runtime, 'bin/node.exe'), ['--version'], { encoding: 'utf8' }), /^v24\./);
+const [app] = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', executableName: 'DSH Desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'win32', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false, appCopyright: 'Independent desktop client for DeepSeek Harness', win32metadata: { CompanyName: 'yhfgyyf', FileDescription: 'DSH Desktop', ProductName: 'DSH Desktop' } });
+const packagedRuntime = await runtimeManifest(join(app, 'resources/runtime'));
+assert.deepEqual(packagedRuntime, await runtimeManifest(join(root, '.runtime')), 'Packaged runtime differs from the tested runtime');
+const iscc = process.env.ISCC_PATH ?? join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');
+await new Promise<void>((resolve, reject) => {
+  const child = spawn(iscc, [`/DAppVersion=${pkg.version}`, `/DSourceDir=${app}`, `/DOutputDir=${output}`, join(root, 'installer/windows.iss')], { stdio: 'inherit', windowsHide: true });
+  child.on('error', reject);
+  child.on('exit', code => code === 0 ? resolve() : reject(new Error(`Inno Setup exited with ${code}`)));
+});
+const installer = join(output, `DSH-Desktop-${pkg.version}-Windows-x64-Setup.exe`);
+const bytes = await readFile(installer);
+const sha256 = createHash('sha256').update(bytes).digest('hex');
+const result = { app, installer, sha256, bytes: bytes.length, platform: 'win32', arch: 'x64', signed: false, electron: pkg.devDependencies.electron, runtime: { fileCount: packagedRuntime.fileCount, bytes: packagedRuntime.bytes, sha256: packagedRuntime.sha256 } };
+await writeFile(join(output, 'runtime-manifest.json'), JSON.stringify(packagedRuntime, null, 2));
+await writeFile(join(output, 'artifact.json'), JSON.stringify(result, null, 2));
+await writeFile(join(root, 'release/latest-windows.json'), JSON.stringify(result, null, 2));
+console.log(JSON.stringify(result, null, 2));

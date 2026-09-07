@@ -1,0 +1,25 @@
+:root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: light-dark(#252525, #ececec); background: light-dark(#fafafa, #181818); font-synthesis: none; -webkit-font-smoothing: antialiased; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+.setup-titlebar { height: 44px; display: grid; place-items: center; font-size: 12px; font-weight: 500; color: light-dark(#747474, #a4a4a4); -webkit-app-region: drag; user-select: none; }
+main { width: min(440px, calc(100% - 48px)); margin: clamp(40px, 12vh, 160px) auto 32px; }
+.setup-mark { display: inline-block; font-size: 26px; letter-spacing: -1.5px; font-weight: 650; margin-bottom: 24px; }
+.setup-mark span { color: light-dark(#8b8b8b, #757575); }
+h1 { font-size: 27px; font-weight: 550; letter-spacing: -.8px; margin: 0 0 12px; }
+.intro { margin: 0 0 36px; font-size: 14px; color: light-dark(#727272, #aaa); }
+label { font-size: 12px; font-weight: 500; display: block; margin-bottom: 9px; }
+input { width: 100%; padding: 13px 14px; border: 1px solid light-dark(#ddd, #3b3b3b); border-radius: 9px; background: light-dark(#fff, #222); color: inherit; font: 14px "SFMono-Regular", monospace; }
+input:focus { outline: 2px solid light-dark(#777, #aaa); outline-offset: 2px; }
+.hint, details p { font-size: 12px; line-height: 1.7; color: light-dark(#818181, #999); }
+.hint { margin: 10px 0 20px; }
+button { cursor: pointer; font: inherit; }
+.connect { width: 100%; padding: 12px 15px; border: 0; border-radius: 9px; color: light-dark(#fff, #202020); background: light-dark(#272727, #e8e8e8); display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 500; }
+.connect:hover { opacity: .88; }
+.connect:disabled { cursor: default; opacity: .5; }
+.error { padding: 10px 12px; margin: 0 0 16px; border: 1px solid light-dark(#e6c6bb, #604238); background: light-dark(#f9f0eb, #2e231f); color: light-dark(#95543e, #e0aa97); font-size: 12px; line-height: 1.7; border-radius: 7px; }
+details { margin-top: 30px; font-size: 12px; color: light-dark(#666, #aaa); }
+summary { cursor: pointer; }
+code { display: block; overflow-wrap: anywhere; background: light-dark(#f0f0f0, #242424); color: inherit; padding: 10px 12px; border-radius: 7px; font-size: 11px; }
+footer { display: flex; justify-content: space-between; align-items: center; margin-top: 42px; color: light-dark(#929292, #818181); font-size: 11px; }
+footer button { color: inherit; border: 0; background: transparent; padding: 6px 0; font-size: 11px; }
+:focus-visible { outline: 2px solid light-dark(#777, #aaa); outline-offset: 3px; }

@@ -1,0 +1,14 @@
+import { spawn } from 'node:child_process';
+import { cp, mkdir, readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+const root = fileURLToPath(new URL('..', import.meta.url));
+const data = join(root, '.test-data/ui-owned');
+await mkdir(join(data, 'core'), { recursive: true });
+await cp(join(root, '.test-data/fixture-owned/desktop.patch.yml'), join(data, 'core/desktop.patch.yml'));
+const packaged = process.argv.includes('--packaged');
+const executable = packaged ? join(JSON.parse(await readFile(join(root, 'release/latest.json'), 'utf8')).app, 'Contents/MacOS/DSH Desktop') : join(root, 'node_modules/.bin/electron');
+const child = spawn(executable, packaged ? [] : ['.'], { cwd: root, env: { ...process.env, DSH_DESKTOP_DATA_DIR: data, DSH_DESKTOP_CONFIG_HOME: join(data, 'core'), DSH_DESKTOP_FIXTURE_KEY: 'desktop-local-fixture' }, stdio: 'inherit' });
+console.log('Launched independent desktop with disposable data and local mock provider.');
+child.on('exit', code => { process.exitCode = code ?? 1; });
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => child.kill('SIGTERM'));
