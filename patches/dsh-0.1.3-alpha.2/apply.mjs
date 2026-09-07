@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, cp, mkdtemp, rm } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, cp, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -6,7 +6,7 @@ import { tmpdir, homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 const dir=dirname(fileURLToPath(import.meta.url));
 const manifest=JSON.parse(await readFile(join(dir,'manifest.json'),'utf8'));
-const globalRoot=process.env.DSH_PATCH_GLOBAL_ROOT??execFileSync('npm',['root','-g'],{encoding:'utf8'}).trim();
+const globalRoot=await realpath(process.env.DSH_PATCH_GLOBAL_ROOT??execFileSync('npm',['root','-g'],{encoding:'utf8'}).trim());
 const pkg=join(globalRoot,'@deepseek-ai/dsh'),nm=join(pkg,'node_modules');
 const sha=x=>createHash('sha256').update(x).digest('hex');
 const version=async p=>JSON.parse(await readFile(join(p,'package.json'),'utf8')).version;
