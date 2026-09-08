@@ -251,7 +251,7 @@ else {
     app.quit();
   });
   app.on('activate', () => { if (!window) void createWindow().then(() => connect()); else window.show(); });
-  app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+  app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !quitting) app.quit(); });
   app.on('before-quit', (event) => {
     if (quitting || !preferencesFile) return;
     event.preventDefault();
