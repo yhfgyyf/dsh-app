@@ -35,6 +35,13 @@ the real DSH services with a local SSE model stub. The advanced tool fixture has
 POSIX shell examples; the Windows workflow focuses on unit, model settings,
 ownership, native boot and installer behavior.
 
+macOS `npm run package` additionally verifies the complete ad-hoc signature
+before and after a ZIP extraction, compares all runtime files and checks exact
+app.asar bytes. A successful `codesign` check establishes signature integrity,
+not Gatekeeper trust: the preview build has no Developer ID or notarization.
+First-open testing must retain the browser download quarantine and follow the
+normal macOS per-app confirmation if blocked.
+
 Windows packaging additionally runs `scripts/test-windows-installer.ps1`:
 silent installation into a path containing spaces; full runtime and app.asar
 comparison; bundled Node without system Node on PATH; installed GUI/core boot;

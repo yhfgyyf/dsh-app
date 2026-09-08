@@ -20,9 +20,16 @@ Build on an Apple Silicon Mac with the Swift toolchain and `iconutil`:
 npm run package
 ```
 
-The package includes its own Node executable and native dependencies. The script
-compares every runtime file with the tested snapshot before producing a ZIP.
-`release/latest.json` records the artifact path, SHA-256 and runtime manifest.
+The package includes its own Node executable and native dependencies. After
+packaging, the script applies a complete ad-hoc signature to the Electron app and
+helpers. Existing runtime binaries remain byte-identical and are sealed as
+resources. It checks every runtime file against the tested snapshot, verifies
+the signature with `codesign --verify --deep --strict`, creates the ZIP, then
+extracts it and repeats the signature, runtime and app.asar checks.
+`release/latest.json` records the artifact path, SHA-256, signature type and
+runtime manifest. Ad-hoc signing ensures integrity; it does not provide an Apple
+Developer ID or notarization. Downloaded builds may need the per-app Open Anyway
+confirmation in System Settings > Privacy & Security.
 
 ## Windows x64
 

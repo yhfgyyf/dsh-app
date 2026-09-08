@@ -29,17 +29,34 @@ await run('swift', [join(root, 'scripts/make-icon.swift'), iconset]);
 await run('iconutil', ['-c', 'icns', iconset, '-o', join(output, 'DSH.icns')]);
 const runtime = join(output, 'runtime');
 await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
-const packaged = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness' } });
+const packaged = await packager({
+  extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness' },
+  osxSign: {
+    identity: '-', identityValidation: false,
+    preAutoEntitlements: false, preEmbedProvisioningProfile: false,
+    // Preserve the tested runtime's native binaries and seal them as resources.
+    ignore: file => file.includes('/Contents/Resources/'),
+    optionsForFile: () => ({ hardenedRuntime: false, timestamp: 'none' }),
+  },
+});
 const app = join(packaged[0], 'DSH Desktop.app');
+await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
 const sourceRuntime = await runtimeManifest(join(root, '.runtime'));
 const packagedRuntime = await runtimeManifest(join(app, 'Contents/Resources/runtime'));
 assert.deepEqual(packagedRuntime, sourceRuntime, 'Packaged runtime differs from the tested runtime');
 await writeFile(join(output, 'runtime-manifest.json'), JSON.stringify(packagedRuntime, null, 2));
 const archive = join(output, `DSH-Desktop-${version.version}-macOS-${process.arch}.zip`);
 await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, archive]);
+// Verify the distributed ZIP, including its signature resource seal.
+const extracted = join(output, 'verification');
+await run('ditto', ['-x', '-k', archive, extracted]);
+const extractedApp = join(extracted, 'DSH Desktop.app');
+await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', extractedApp]);
+assert.deepEqual(await runtimeManifest(join(extractedApp, 'Contents/Resources/runtime')), sourceRuntime, 'Archived runtime differs from the tested runtime');
+assert.deepEqual(await readFile(join(extractedApp, 'Contents/Resources/app.asar')), await readFile(join(app, 'Contents/Resources/app.asar')), 'Archived app differs from the packaged app');
 const bytes = await readFile(archive);
 const sha256 = createHash('sha256').update(bytes).digest('hex');
-const result = { app, archive, sha256, bytes: bytes.length, signed: false, notarized: false, electron: version.devDependencies.electron, runtime: { fileCount: packagedRuntime.fileCount, bytes: packagedRuntime.bytes, sha256: packagedRuntime.sha256 } };
+const result = { app, archive, sha256, bytes: bytes.length, signed: true, signature: 'ad-hoc', developerId: false, notarized: false, archiveVerified: true, electron: version.devDependencies.electron, runtime: { fileCount: packagedRuntime.fileCount, bytes: packagedRuntime.bytes, sha256: packagedRuntime.sha256 } };
 await writeFile(join(output, 'artifact.json'), JSON.stringify(result, null, 2));
 await writeFile(join(root, 'release/latest.json'), JSON.stringify(result, null, 2));
 console.log(JSON.stringify(result, null, 2));

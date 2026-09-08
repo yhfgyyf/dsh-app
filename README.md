@@ -15,7 +15,9 @@
 
 打开应用，在“设置 → 模型”配置提供方与密钥，选择工作区并创建会话。已有 DSH 用户直接沿用 `~/.dsh` 中的配置；Windows 默认对应 `%USERPROFILE%\.dsh`。安装包内已包含运行所需的 Node 和 DSH，无需另外安装。
 
-每次 Release 提供 `SHA256SUMS.txt`。当前安装包未进行 Developer ID 公证或 Windows 代码签名，系统可能要求用户确认来源。Windows 卸载会移除程序，保留 DSH 会话和用户配置。
+每次 Release 提供 `SHA256SUMS.txt`。macOS 从 v0.1.1 起使用完整的 ad-hoc 签名，尚未使用 Apple Developer ID 签名或公证。首次打开若被阻止，先关闭提示，再到“系统设置 → 隐私与安全性”找到 DSH Desktop，点击“仍要打开”，按系统要求确认；参见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。v0.1.0 的 Mac 包存在签名缺陷，请重新下载 v0.1.1 或更新版本。
+
+Windows 安装包尚未代码签名，系统可能要求确认来源。Windows 卸载会移除程序，保留 DSH 会话和用户配置。
 
 ## 能力
 
