@@ -1,10 +1,18 @@
 # dsh-app
 
+<img src="assets/readme/app-icon.png" alt="DSH Desktop 应用图标" width="96" />
+
 简体中文 | [English](README.en.md)
 
 独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon** 和 **Windows x64**。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## 界面预览
+
+![DSH Desktop 主界面，工作区和会话信息已模糊处理](assets/readme/workspace-blurred.png)
+
+工作区名称和会话信息已模糊处理，模型名称保留显示。
 
 ## 下载与使用
 

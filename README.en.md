@@ -1,10 +1,18 @@
 # dsh-app
 
+<img src="assets/readme/app-icon.png" alt="DSH Desktop app icon" width="96" />
+
 [简体中文](README.md) | English
 
 An independent DeepSeek Harness desktop application for **macOS Apple Silicon** and **Windows x64**.
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
+
+## Interface preview
+
+![DSH Desktop main interface with workspace and session details blurred](assets/readme/workspace-blurred.png)
+
+Workspace names and session details are blurred for privacy. The model name remains visible.
 
 ## Download and use
 
