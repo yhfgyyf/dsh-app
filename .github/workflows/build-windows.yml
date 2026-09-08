@@ -28,6 +28,16 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Install pinned Inno Setup with long-path support
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
+          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
+          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Create Windows installer
         run: node scripts/package-windows.ts
       - name: Install, launch, close and uninstall

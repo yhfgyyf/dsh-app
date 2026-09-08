@@ -52,7 +52,7 @@ npm start
 
 ```sh
 npm run package          # macOS：需要 Swift 和 iconutil
-npm run package:windows  # Windows x64：需要 Inno Setup 6
+npm run package:windows  # Windows x64：需要 Inno Setup 7
 ```
 
 Windows 也可在仓库 Actions 页面手动运行 **Build Windows installer**，执行检查、跨端测试、打包、静默安装、启动、退出和卸载验证，随后下载构建产物。

@@ -26,7 +26,8 @@ compares every runtime file with the tested snapshot before producing a ZIP.
 
 ## Windows x64
 
-Build on Windows x64 with [Inno Setup 6](https://jrsoftware.org/isinfo.php):
+Build on Windows x64 with [Inno Setup 7](https://jrsoftware.org/isdl.php), which
+supports the long dependency paths in a deeply nested installation directory:
 
 ```powershell
 npm run package:windows
@@ -35,12 +36,13 @@ node scripts/collect-windows-artifact.ts
 ```
 
 Set `ISCC_PATH` if the compiler is not installed under
-`C:\Program Files (x86)\Inno Setup 6\ISCC.exe`. The installer supports Windows
+`C:\Program Files\Inno Setup 7\ISCC.exe`. The installer supports Windows
 10 build 19041 or later, installs per user, offers Start menu / optional desktop
 shortcuts, and keeps user data when uninstalled. The Windows binary is built
 with Windows-native dependencies and `node.exe`; a macOS runtime is not reused.
 
-The manual GitHub Actions workflow uses Windows Server 2022 and verifies the
+The manual GitHub Actions workflow uses Windows Server 2022, downloads Inno Setup
+7.1.0 with a pinned SHA-256, and verifies the
 installer in its disposable build environment. It uploads only the installer,
 checksums, runtime manifest and test reports. Signing credentials are not
 required; resulting packages are unsigned.

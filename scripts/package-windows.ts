@@ -22,7 +22,7 @@ assert.match(execFileSync(join(runtime, 'bin/node.exe'), ['--version'], { encodi
 const [app] = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', executableName: 'DSH Desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'win32', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false, icon: join(root, 'assets/icon.ico'), appCopyright: 'Independent desktop client for DeepSeek Harness', win32metadata: { CompanyName: 'yhfgyyf', FileDescription: 'DSH Desktop', ProductName: 'DSH Desktop' } });
 const packagedRuntime = await runtimeManifest(join(app, 'resources/runtime'));
 assert.deepEqual(packagedRuntime, await runtimeManifest(join(root, '.runtime')), 'Packaged runtime differs from the tested runtime');
-const iscc = process.env.ISCC_PATH ?? join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe');
+const iscc = process.env.ISCC_PATH ?? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Inno Setup 7', 'ISCC.exe');
 await new Promise<void>((resolve, reject) => {
   const child = spawn(iscc, [`/DAppVersion=${pkg.version}`, `/DSourceDir=${app}`, `/DOutputDir=${output}`, join(root, 'installer/windows.iss')], { stdio: 'inherit', windowsHide: true });
   child.on('error', reject);
