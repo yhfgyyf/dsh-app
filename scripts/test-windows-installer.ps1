@@ -11,7 +11,7 @@ $installLog = Join-Path $data 'install.log'
 $setup = Start-Process -FilePath $artifact.installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"'), ('/LOG="' + $installLog + '"')) -Wait -PassThru
 if ($setup.ExitCode -ne 0) {
   if (Test-Path $installLog) {
-    Select-String -Path $installLog -Pattern 'error|failed|abort' -Context 2,4 | Select-Object -Last 8 | Out-String | Write-Output
+    Select-String -Path $installLog -Pattern 'Exception|Error[ :]|aborted|failed:' -Context 2,4 | Select-Object -Last 8 | Out-String | Write-Output
     Get-Content $installLog -Tail 20 | Write-Output
   }
   throw "Installer failed: $($setup.ExitCode)"
