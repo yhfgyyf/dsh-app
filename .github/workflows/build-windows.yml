@@ -35,6 +35,14 @@ jobs:
         run: ./scripts/test-windows-installer.ps1
       - name: Collect verified installer and reports
         run: node scripts/collect-windows-artifact.ts
+      - name: Preserve installation diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dsh-app-windows-diagnostics
+          path: .test-data/installer-*/install.log
+          if-no-files-found: ignore
+          retention-days: 7
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dsh-app-windows-x64

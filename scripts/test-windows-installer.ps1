@@ -7,8 +7,15 @@ $config = Join-Path $data 'user-home'
 New-Item -ItemType Directory -Path $config -Force | Out-Null
 $sentinel = Join-Path $config 'keep-on-uninstall.txt'
 Set-Content -Path $sentinel -Value 'DSH user data must survive uninstall'
-$setup = Start-Process -FilePath $artifact.installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"'), ('/LOG="' + (Join-Path $data 'install.log') + '"')) -Wait -PassThru
-if ($setup.ExitCode -ne 0) { throw "Installer failed: $($setup.ExitCode)" }
+$installLog = Join-Path $data 'install.log'
+$setup = Start-Process -FilePath $artifact.installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"'), ('/LOG="' + $installLog + '"')) -Wait -PassThru
+if ($setup.ExitCode -ne 0) {
+  if (Test-Path $installLog) {
+    Select-String -Path $installLog -Pattern 'error|failed|abort' -Context 2,4 | Select-Object -Last 8 | Out-String | Write-Output
+    Get-Content $installLog -Tail 20 | Write-Output
+  }
+  throw "Installer failed: $($setup.ExitCode)"
+}
 $exe = Join-Path $install 'DSH Desktop.exe'
 $node = Join-Path $install 'resources/runtime/bin/node.exe'
 if (!(Test-Path $exe) -or !(Test-Path $node)) { throw 'Installed binaries are missing' }
