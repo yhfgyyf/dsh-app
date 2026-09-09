@@ -10,6 +10,7 @@ export type DesktopPreferences = {
   endpoint: string;
   window: WindowBounds & { maximized: boolean };
   zoomFactor: number;
+  computerEnabled: boolean;
 };
 
 export type ConnectionInput = {
@@ -24,6 +25,7 @@ export function defaultPreferences(): DesktopPreferences {
     endpoint: 'http://127.0.0.1:3080',
     window: { width: 1320, height: 900, maximized: false },
     zoomFactor: 1,
+    computerEnabled: false,
   };
 }
 
@@ -74,11 +76,13 @@ export function parsePreferences(value: unknown): DesktopPreferences {
   if (value.window.x !== undefined) bounds.x = boundedNumber(value.window.x, -131072, 131072, true);
   if (value.window.y !== undefined) bounds.y = boundedNumber(value.window.y, -131072, 131072, true);
   if (typeof value.window.maximized !== 'boolean') throw new Error('桌面窗口配置无效。');
+  if (value.computerEnabled !== undefined && typeof value.computerEnabled !== 'boolean') throw new Error('电脑操作开关配置无效。');
   return {
     version: 1,
     endpoint,
     window: { ...bounds, maximized: value.window.maximized },
     zoomFactor: boundedNumber(value.zoomFactor, 0.5, 2),
+    computerEnabled: value.computerEnabled ?? false,
   };
 }
 

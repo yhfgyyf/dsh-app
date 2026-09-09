@@ -77,3 +77,11 @@ test('default preferences do not share mutable state', () => {
   first.window.width = 1000;
   assert.equal(defaultPreferences().window.width, 1320);
 });
+
+test('computer opt-in persists and older preferences default to disabled', () => {
+  const { computerEnabled, ...old } = defaultPreferences();
+  assert.equal(computerEnabled, false);
+  assert.equal(parsePreferences(old).computerEnabled, false);
+  assert.equal(parsePreferences({ ...old, computerEnabled: true }).computerEnabled, true);
+  assert.throws(() => parsePreferences({ ...old, computerEnabled: 'true' }));
+});

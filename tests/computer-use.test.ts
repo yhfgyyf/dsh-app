@@ -10,8 +10,11 @@ class Driver implements ComputerDriver {
   stopped = 0;
   pause?: (signal: AbortSignal) => Promise<void>;
   releaseStop?: Promise<void>;
-  async permissions() { return { supported: true, accessibility: true, screenRecording: true }; }
-  async start() {}
+  permissionState = { supported: true, accessibility: true, screenRecording: true };
+  prompts: boolean[] = [];
+  starting?: (signal: AbortSignal) => Promise<void>;
+  async permissions(prompt = false) { this.prompts.push(prompt); return { ...this.permissionState }; }
+  async start(signal: AbortSignal) { await this.starting?.(signal); }
   async describe() { return { tools: [] }; }
   async call(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<ComputerResult> {
     this.calls.push({ name, args });
@@ -24,6 +27,7 @@ const request = (sessionId: string, operation: ComputerRequest['operation'], arg
 const signal = () => AbortSignal.timeout(10000);
 async function fixture(scope?: number) {
   const driver = new Driver(); const broker = new DesktopComputerUse(driver);
+  await broker.setEnabled(true, false);
   await broker.request(request('a', 'start', { reason: 'Isolated test', ...(scope ? { application_pid: scope } : {}) }), signal());
   return { driver, broker };
 }
@@ -41,6 +45,55 @@ test('desktop lease excludes other sessions and enforces application scope', asy
     await assert.rejects(broker.request(request('a', 'observe', { kind: 'desktop' }), signal()), /仅限一个应用/);
     assert.equal(driver.calls.length, 0);
   } finally { await broker.stop(); }
+});
+
+test('computer is off by default and requires both permissions and a working driver', async () => {
+  const driver = new Driver(); const broker = new DesktopComputerUse(driver);
+  assert.equal((await broker.permissions()).enabled, false);
+  await assert.rejects(broker.request(request('a', 'start', { reason: 'test' }), signal()), /开关/);
+  for (const permissions of [{ supported: false, accessibility: true, screenRecording: true }, { supported: true, accessibility: false, screenRecording: true }, { supported: true, accessibility: true, screenRecording: false }]) {
+    driver.permissionState = permissions;
+    assert.equal((await broker.setEnabled(true)).enabled, false);
+    assert.equal(driver.prompts.at(-1), true);
+  }
+  driver.permissionState = { supported: true, accessibility: true, screenRecording: true };
+  driver.starting = async () => { throw new Error('fixture driver failed'); };
+  assert.equal((await broker.setEnabled(true)).enabled, false);
+  assert.match(broker.state.error!, /fixture driver failed/);
+  driver.starting = undefined;
+  assert.equal((await broker.permissions()).enabled, true);
+  await broker.setEnabled(false);
+});
+
+test('revoking permission ends the active lease and disables the switch; returning from settings rechecks permission', async () => {
+  const { driver, broker } = await fixture();
+  driver.permissionState.screenRecording = false;
+  assert.equal((await broker.permissions()).enabled, false);
+  assert.equal(broker.state.owner, undefined);
+  await assert.rejects(broker.request(request('a', 'observe', { kind: 'desktop' }), signal()), /开关/);
+  driver.permissionState.screenRecording = true;
+  assert.equal((await broker.permissions()).enabled, true);
+  assert.equal(driver.prompts.at(-1), false);
+  await broker.setEnabled(false);
+  assert.equal((await broker.permissions()).enabled, false);
+});
+
+test('disabling during driver startup cannot be undone by a late startup result', async () => {
+  const driver = new Driver(); const states: boolean[] = [];
+  const broker = new DesktopComputerUse(driver, state => states.push(state.enabled));
+  let entered!: () => void; const starting = new Promise<void>(resolve => { entered = resolve; });
+  let release!: () => void;
+  driver.starting = async () => { entered(); await new Promise<void>(resolve => { release = resolve; }); };
+  const enabling = broker.setEnabled(true);
+  await starting;
+  assert.equal(broker.state.enabled, false);
+  await broker.setEnabled(false);
+  release(); await enabling;
+  assert.equal(broker.state.enabled, false);
+  assert.ok(states.every(enabled => !enabled));
+  driver.starting = undefined;
+  assert.equal((await broker.setEnabled(true)).enabled, true);
+  await broker.setEnabled(false);
 });
 
 test('actions bind the exact observed target and consume their snapshot', async () => {

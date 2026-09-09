@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const nativeExternals = ['electron', ...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
+const auditInstaller = await import(new URL('install-audit-compat.mjs', import.meta.url).href);
+await auditInstaller.applyAuditCompat({ nodeModules: resolve(root, '.runtime/node_modules'), pluginRoot: resolve(root, '.runtime/node_modules/dsh-audit-mode'), backupHome: resolve(root, '.build-runtime') });
 const artifactInstaller = await import(new URL('install-artifact-links.mjs', import.meta.url).href);
 await artifactInstaller.applyArtifactLinks();
 const sidebarInstaller = await import(new URL('install-sidebar-autoclose.mjs', import.meta.url).href);

@@ -15,18 +15,16 @@ function useComputerState() {
 
 function ComputerControls({ state }: { state: ComputerState }) {
   const [error, setError] = useState('');
-  async function request() {
-    try { setError(''); await window.dshDesktop?.requestComputerPermissions(); }
-    catch { setError('未能读取系统权限，请重试。'); }
+  const [pending, setPending] = useState(false);
+  async function toggle() {
+    setPending(true);
+    try { setError(''); await window.dshDesktop?.setComputerEnabled(!state.enabled); }
+    catch { setError('未能更改电脑操作开关，请重试。'); }
+    finally { setPending(false); }
   }
   return <div className="desktop-computer-controls">
-    <strong>电脑操作</strong>
-    <p>{state.owner ? state.owner.reason : '在对话中说明要操作的应用和任务，确认授权后开始。'}</p>
-    {state.owner && <p>范围：{state.owner.applicationPid ? `应用 PID ${state.owner.applicationPid}` : '本机桌面'} · {state.action ? '正在操作' : state.phase === 'stopping' ? '正在停止' : '等待下一步'}</p>}
-    <p>辅助功能：{state.permissions.accessibility ? '可用' : '未授权'} · 屏幕录制：{state.permissions.screenRecording ? '可用' : '未授权'}</p>
-    <p>可随时点击停止。{state.stopShortcutAvailable ? `快捷键：${navigator.platform.includes('Mac') ? '⌘ + Option' : 'Ctrl + Alt'} + Shift + Esc。` : '全局快捷键当前不可用，请使用 App 停止按钮。'}</p>
-    <button onClick={() => { void request(); }}>检查并申请系统权限</button>
-    {(state.error || error) && <p role="alert">{error || state.error}</p>}
+    <span>电脑操作</span>
+    <button type="button" className="desktop-computer-switch" role="switch" aria-label="电脑操作" aria-checked={state.enabled} aria-busy={pending} disabled={pending} title={error || state.error || undefined} onClick={() => { void toggle(); }}><span /></button>
   </div>;
 }
 

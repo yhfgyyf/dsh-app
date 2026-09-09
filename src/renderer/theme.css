@@ -68,8 +68,12 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-computer summary { list-style: none; cursor: pointer; }
 .desktop-computer summary::-webkit-details-marker { display: none; }
 .desktop-computer details:not([open]) .desktop-computer-popover { display: none; }
-.desktop-computer-popover { position: absolute; top: 36px; right: 0; width: 340px; max-width: calc(100vw - 32px); padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 8px 32px #0003; z-index: 1000; }
-.desktop-computer-controls { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; }
-.desktop-computer-controls p { margin: 8px 0; white-space: normal; overflow-wrap: anywhere; }
-.desktop-computer-controls button { padding: 6px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
+.desktop-computer-popover { position: absolute; top: 36px; right: 0; width: 220px; max-width: calc(100vw - 32px); padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 8px 32px #0003; z-index: 1000; }
+.desktop-computer-controls { display: flex; align-items: center; justify-content: space-between; gap: 24px; color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; }
+.desktop-computer-controls .desktop-computer-switch { display: inline-flex; align-items: center; flex: 0 0 34px; width: 34px; height: 20px; padding: 2px; border: 0; border-radius: 12px; background: #777; cursor: pointer; }
+.desktop-computer-switch span { width: 16px; height: 16px; border-radius: 50%; background: white; transition: transform .15s; }
+.desktop-computer-switch[aria-checked="true"] { background: #198754; }
+.desktop-computer-switch[aria-checked="true"] span { transform: translateX(14px); }
+.desktop-computer-switch:disabled { cursor: progress; opacity: .6; }
+.desktop-computer-switch:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .desktop-titlebar .desktop-computer-stop { color: #e34c4c; font-size: 12px; }

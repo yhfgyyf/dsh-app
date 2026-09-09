@@ -34,6 +34,7 @@ else {
   let browser: SidebarBrowser | undefined;
   let updates: DesktopUpdates;
   let computer: DesktopComputerUse;
+  let computerSettingRevision = 0;
   let connected = false;
   let connecting = false;
   let connectionError: string | undefined;
@@ -133,6 +134,7 @@ else {
     window.once('ready-to-show', () => window?.show());
     window.on('resize', scheduleSave);
     window.on('move', scheduleSave);
+    window.on('focus', () => { void computer.permissions(); });
     window.on('close', scheduleSave);
     window.on('closed', () => { stopComputer(); browser?.clear(); browser = undefined; window = undefined; connected = false; });
     window.webContents.on('did-finish-load', () => window?.webContents.setZoomFactor(preferences.zoomFactor));
@@ -225,7 +227,15 @@ else {
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
     handle('desktop:computer-state', () => computer.permissions());
-    handle('desktop:computer-permissions', () => computer.permissions(true));
+    handle('desktop:computer-enabled', async value => {
+      if (typeof value !== 'boolean') throw new Error('电脑操作开关值无效。');
+      const revision = ++computerSettingRevision;
+      if (!value) await computer.setEnabled(false);
+      await preferencesFile.save({ ...preferences, computerEnabled: value });
+      if (revision !== computerSettingRevision) return computer.state;
+      preferences.computerEnabled = value;
+      return value ? computer.setEnabled(true) : computer.state;
+    });
     handle('desktop:computer-stop', () => computer.stop());
     handle('desktop:update-state', () => updates.state);
     handle('desktop:update-schedule', value => updates.setSchedule(value));
@@ -267,6 +277,7 @@ else {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:computer-state', state);
     });
     computer.setStopShortcutAvailable(globalShortcut.register('CommandOrControl+Alt+Shift+Escape', stopComputer));
+    void computer.setEnabled(preferences.computerEnabled, false);
     powerMonitor.on('lock-screen', stopComputer);
     powerMonitor.on('suspend', stopComputer);
     runtime = new DesktopRuntime({
@@ -314,6 +325,6 @@ else {
     globalShortcut.unregisterAll();
     updates?.stop();
     clearTimeout(saveTimer);
-    void savePreferences().then(async () => { await computer?.stop().catch(() => {}); browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
+    void savePreferences().then(async () => { await computer?.setEnabled(false).catch(() => {}); browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
   });
 }

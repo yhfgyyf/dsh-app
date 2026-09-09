@@ -41,6 +41,7 @@ void app.whenReady().then(async () => {
   window.show(); window.focus();
   driver = new CuaComputerDriver({ runtimeRoot: join(root, '.runtime'), hostBundleId: 'io.dsh.desktop' });
   broker = new DesktopComputerUse(driver);
+  await broker.setEnabled(true, false);
   await request('start', { reason: 'Operate only the isolated native test window', application_pid: process.pid });
   report.driverPid = driver.pid;
   report.checks.push('Electron loaded the pinned native SDK and started a private worker');

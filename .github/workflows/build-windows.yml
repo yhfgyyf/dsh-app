@@ -53,6 +53,9 @@ jobs:
       - name: Computer use approval and image transport
         timeout-minutes: 4
         run: npm run test:computer-tools
+      - name: Computer switch and audit dock UI
+        timeout-minutes: 3
+        run: npm run test:computer-settings
       - name: Native computer input and screenshot (three consecutive runs)
         timeout-minutes: 4
         run: |

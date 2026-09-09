@@ -7,7 +7,7 @@ import type { ComputerState } from '../shared/computer-use.ts';
 
 const api: DesktopAPI = {
   getComputerState: () => ipcRenderer.invoke('desktop:computer-state'),
-  requestComputerPermissions: () => ipcRenderer.invoke('desktop:computer-permissions'),
+  setComputerEnabled: enabled => ipcRenderer.invoke('desktop:computer-enabled', enabled),
   stopComputerUse: () => ipcRenderer.invoke('desktop:computer-stop'),
   onComputerState: listener => {
     const callback = (_event: unknown, state: ComputerState) => listener(state);

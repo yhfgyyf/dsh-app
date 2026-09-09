@@ -10,6 +10,7 @@ npm run test:model-settings
 npm run test:three-surfaces
 npm run test:native
 npm run test:computer-tools
+npm run test:computer-settings
 npm run test:computer-native
 npm run test:audit-switch
 npm run test:updates
@@ -51,6 +52,16 @@ and macOS accessibility/screen-recording grants; missing permissions fail the te
 Reports are `.test-data/computer-tools-latest.json` and
 `.test-data/computer-native-latest.json`. The Windows workflow runs both before
 building and testing the installer.
+
+`test:computer-settings` exercises the production renderer, preload, main IPC and
+preferences with controlled OS permission/driver outcomes. It checks that the
+switch stays off until permissions and startup succeed, disabling persists, and
+returning from System Settings refreshes the state. It also renders the actual
+packaged Audit component with retained history, switches through all presets,
+and verifies that leaving Audit closes its subscriptions. Only native-driver
+outcomes and Audit API responses are fixtures; no user permissions are changed.
+The report is `.test-data/computer-settings-latest.json`. Every build applies and
+hash-verifies the Audit compatibility patch before bundling the runtime.
 
 `test:sidebar-browser` checks the production Electron sidebar: link clicks,
 native page bounds, navigation history, dialog visibility, isolated web content,

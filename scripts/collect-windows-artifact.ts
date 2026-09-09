@@ -13,6 +13,7 @@ const nativeRuns = await Promise.all((await readdir(join(root, '.test-data/compu
 if (nativeRuns.some(run => run.failures.length)) throw new Error('Native computer verification contained a failed run.');
 await writeFile(join(output, 'windows-computer-native-report.json'), JSON.stringify({ ...nativeLatest, runs: nativeRuns }, null, 2));
 await cp(join(root, '.test-data/computer-tools-latest.json'), join(output, 'windows-computer-tools-report.json'));
+await cp(join(root, '.test-data/computer-settings-latest.json'), join(output, 'windows-computer-settings-report.json'));
 for (const [from, to] of [['.test-data/windows-installer-report.json', 'windows-installer-report.json'], ['.test-data/native-owned/report.json', 'windows-native-report.json'], ['docs/evidence/three-surfaces.json', 'windows-three-surfaces-report.json'], ['.test-data/updates-native/latest.json', 'windows-updates-report.json'], ['.test-data/artifact-links-native/latest.json', 'windows-artifact-links-report.json'], ['.test-data/sidebar-browser-native/report.json', 'windows-sidebar-browser-report.json']]) await cp(join(root, from), join(output, to));
 await writeFile(join(output, 'SHA256SUMS-windows.txt'), `${artifact.sha256}  ${basename(artifact.installer)}\n`);
 await writeFile(join(output, 'windows-artifact.json'), JSON.stringify({ ...artifact, app: undefined, installer: basename(artifact.installer) }, null, 2));

@@ -25,7 +25,10 @@ function dimensions(result: ComputerResult) {
 
 /** One App-owned desktop lease. Only the owned core can request observations/actions. */
 export class DesktopComputerUse {
-  state: ComputerState = { phase: 'idle', driverVersion: COMPUTER_DRIVER_VERSION, permissions: { supported: ['darwin', 'win32'].includes(process.platform), accessibility: false, screenRecording: false } };
+  state: ComputerState = { enabled: false, phase: 'idle', driverVersion: COMPUTER_DRIVER_VERSION, permissions: { supported: ['darwin', 'win32'].includes(process.platform), accessibility: false, screenRecording: false } };
+  private desiredEnabled = false;
+  private activation?: AbortController;
+  private refreshing?: Promise<ComputerState>;
   private active?: AbortController;
   private stopping?: Promise<void>;
   private snapshot?: Snapshot;
@@ -37,10 +40,46 @@ export class DesktopComputerUse {
   constructor(driver: ComputerDriver, publish: (state: ComputerState) => void = () => {}, platform = process.platform) { this.driver = driver; this.publish = publish; this.platform = platform; }
   private update(change: Partial<ComputerState>) { this.state = { ...this.state, ...change }; this.publish(structuredClone(this.state)); }
   setStopShortcutAvailable(available: boolean) { this.update({ stopShortcutAvailable: available }); }
+  async setEnabled(enabled: boolean, prompt = true): Promise<ComputerState> {
+    this.desiredEnabled = enabled;
+    if (!enabled) {
+      this.activation?.abort();
+      this.update({ enabled: false });
+      await this.stop();
+      return this.state;
+    }
+    // A prompt must not get swallowed by an in-flight background permission check.
+    if (this.refreshing) await this.refreshing;
+    return this.permissions(prompt);
+  }
   async permissions(prompt = false): Promise<ComputerState> {
-    try { this.update({ permissions: await this.driver.permissions(prompt), error: undefined }); }
-    catch (error) { this.update({ error: String(error) }); }
-    return this.state;
+    if (this.refreshing) return this.refreshing;
+    const controller = new AbortController();
+    this.activation = controller;
+    this.refreshing = (async () => {
+      try {
+        const permissions = await this.driver.permissions(prompt);
+        controller.signal.throwIfAborted();
+        this.update({ permissions, error: undefined });
+        if (!this.desiredEnabled || !permissions.supported || !permissions.accessibility || !permissions.screenRecording) {
+          const wasEnabled = this.state.enabled;
+          this.update({ enabled: false });
+          if (wasEnabled) await this.stop();
+        } else if (!this.state.enabled) {
+          await this.stopping;
+          controller.signal.throwIfAborted();
+          await this.driver.start(AbortSignal.any([controller.signal, AbortSignal.timeout(30000)]));
+          controller.signal.throwIfAborted();
+          this.update({ enabled: true });
+        }
+      } catch (error) {
+        this.update({ enabled: false });
+        await this.stop().catch(() => {});
+        if (!controller.signal.aborted) this.update({ error: String(error) });
+      }
+      return this.state;
+    })().finally(() => { if (this.activation === controller) this.activation = undefined; this.refreshing = undefined; });
+    return this.refreshing;
   }
   private requireOwner(sessionId: string) {
     if (this.state.phase !== 'active' || this.state.owner?.sessionId !== sessionId) throw new Error('当前会话没有电脑操作授权，请先调用 computer_start。');
@@ -58,6 +97,10 @@ export class DesktopComputerUse {
       if (this.state.owner && this.state.owner.sessionId !== request.sessionId) throw new Error('其他会话正在操作桌面。');
       await this.stop(); return json(this.state);
     }
+    if (!this.state.enabled) throw new Error('请先打开 App 中的电脑操作开关。');
+    await this.permissions();
+    signal.throwIfAborted();
+    if (!this.state.enabled) throw new Error('电脑操作不可用，请检查 App 中的电脑操作开关和系统权限。');
     if (this.stopping || this.active) throw new Error('桌面操作正在进行或停止，请等该操作结束后重试。');
     if (request.operation !== 'start') this.requireOwner(request.sessionId);
     else {
@@ -166,7 +209,6 @@ export class DesktopComputerUse {
   }
   async stop(): Promise<void> {
     if (this.stopping) return this.stopping;
-    if (this.state.phase === 'idle' && !this.active) return;
     clearTimeout(this.expiry);
     this.snapshot = undefined;
     this.active?.abort(new Error('电脑操作已停止。'));

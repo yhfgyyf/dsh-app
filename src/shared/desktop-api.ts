@@ -18,7 +18,7 @@ export type DesktopInfo = {
 
 export interface DesktopAPI {
   getComputerState(): Promise<ComputerState>;
-  requestComputerPermissions(): Promise<ComputerState>;
+  setComputerEnabled(enabled: boolean): Promise<ComputerState>;
   stopComputerUse(): Promise<void>;
   onComputerState(listener: (state: ComputerState) => void): () => void;
   getUpdateState(): Promise<UpdateState>;

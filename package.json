@@ -25,6 +25,7 @@
     "test:native": "electron tests/native-smoke.cjs",
     "test:computer-native": "node scripts/test-computer-native.ts",
     "test:computer-tools": "node scripts/test-computer-tools.ts",
+    "test:computer-settings": "node scripts/test-computer-settings.ts",
     "test:sidebar-browser": "electron tests/sidebar-browser.cjs",
     "test:artifact-links": "electron tests/artifact-links.cjs",
     "test:updates": "electron tests/updates-native.cjs",

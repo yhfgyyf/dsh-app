@@ -24,6 +24,7 @@ const driver: ComputerDriver = {
   },
 };
 const broker = new DesktopComputerUse(driver);
+await broker.setEnabled(true, false);
 const names = ['computer_status', 'computer_start', 'computer_observe', 'computer_act', 'computer_stop'];
 const report: { checks: string[]; failures: string[] } = { checks: [], failures: [] };
 let current: { face: string; decision: string; step: number; observation?: string; imageSeen: boolean };

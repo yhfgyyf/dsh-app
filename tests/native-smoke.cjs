@@ -86,6 +86,9 @@ ipcMain.handle = (channel, listener) => {
         report.checks.push('IPC rejects untrusted senders, executable URLs and invalid values');
         for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'http://untrusted.invalid/' } }]) await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:computer-stop')(invalid)));
         const computer = await handlers.get('desktop:computer-state')(event);
+        assert.equal(computer.enabled, false);
+        for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'http://untrusted.invalid/' } }]) await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:computer-enabled')(invalid, true)));
+        await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:computer-enabled')(event, 'true')));
         assert.equal(computer.driverVersion, '0.25.0');
         assert.equal(computer.phase, 'idle');
         assert.equal(typeof computer.stopShortcutAvailable, 'boolean');
