@@ -84,7 +84,17 @@ void app.whenReady().then(async () => {
     report.checks.push('Refused background input had no effect; fresh observation permitted explicit foreground input');
   }
   await writeFile(join(data, 'typing.json'), JSON.stringify({ x, y, typed, focused: window.isFocused(), state: await window.webContents.executeJavaScript('({value:document.querySelector("#input").value,active:document.activeElement.id})') }, null, 2));
-  await observe();
+  snapshot = await observe();
+  if (process.platform === 'win32' && await window.webContents.executeJavaScript('document.querySelector("#input").value === ""')) {
+    // The driver can restore the previous foreground before Chromium drains
+    // SendInput. Retry only after proving zero effect, never after partial input.
+    await request('act', { action: 'bring_to_front', observation_id: snapshot.observation_id, arguments: {} });
+    await until(async () => window.isFocused());
+    snapshot = await observe();
+    typed = await typeText('foreground');
+    await writeFile(join(data, 'typing-recovery.json'), JSON.stringify({ typed, focused: window.isFocused() }, null, 2));
+    report.checks.push('Verified empty input recovered with an explicit foreground window and a fresh observation');
+  }
   await until(() => window.webContents.executeJavaScript('document.querySelector("#input").value === "DSH 你好 123"'));
   report.checks.push('Native Unicode text input verified by independent fixture readback');
   snapshot = await observe();
