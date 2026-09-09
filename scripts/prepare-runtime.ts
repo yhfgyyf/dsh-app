@@ -42,6 +42,10 @@ const artifactInstaller = await import(new URL('install-artifact-links.mjs', imp
 await artifactInstaller.applyArtifactLinks();
 const sidebarInstaller = await import(new URL('install-sidebar-autoclose.mjs', import.meta.url).href);
 await sidebarInstaller.applySidebarAutoclose();
+const computerInstaller = await import(new URL('prepare-computer-use.ts', import.meta.url).href);
+await computerInstaller.prepareComputerUse();
+const progressiveImageInstaller = await import(new URL('install-progressive-images.mjs', import.meta.url).href);
+await progressiveImageInstaller.applyProgressiveImages();
 for (const name of ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-base', 'dsh-auto-preset-router', 'dsh-audit-mode', 'dsh-progressive-tools']) req.resolve(name);
 await writeFile(join(destination, 'snapshot.json'), JSON.stringify({ dsh: pkg.version, node: process.version, nodeSha256: createHash('sha256').update(await readFile(process.execPath)).digest('hex'), createdAt: new Date().toISOString() }, null, 2));
 console.log('Prepared independent DSH runtime and Node binary; no user data copied.');

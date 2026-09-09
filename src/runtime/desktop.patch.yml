@@ -226,3 +226,5 @@
       name: dsh-audit-mode
     - id: progressive-tools
       name: dsh-progressive-tools
+    - id: desktop-computer-use
+      name: './computer-use.ts'

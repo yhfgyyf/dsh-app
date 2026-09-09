@@ -1,6 +1,7 @@
 import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
 import type { UpdateSchedule, UpdateState } from './updates.ts';
 import type { LocalOpenRequest } from './local-open.ts';
+import type { ComputerState } from './computer-use.ts';
 
 export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
 
@@ -16,6 +17,10 @@ export type DesktopInfo = {
 };
 
 export interface DesktopAPI {
+  getComputerState(): Promise<ComputerState>;
+  requestComputerPermissions(): Promise<ComputerState>;
+  stopComputerUse(): Promise<void>;
+  onComputerState(listener: (state: ComputerState) => void): () => void;
   getUpdateState(): Promise<UpdateState>;
   setUpdateSchedule(schedule: UpdateSchedule): Promise<UpdateState>;
   checkForUpdates(): Promise<UpdateState>;

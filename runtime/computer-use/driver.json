@@ -1,0 +1,22 @@
+{
+  "version": "0.25.0",
+  "repository": "trycua/cua",
+  "commit": "45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f",
+  "tag": "cua-driver-rs-v0.25.0",
+  "assets": {
+    "darwin": {
+      "name": "cua-driver-rs-0.25.0-darwin-universal.tar.gz",
+      "directory": "cua-driver-rs-0.25.0-darwin-universal",
+      "sha256": "02e3dc00f57e967d7e1d30fbc42b1329fdac1ac6052935e1356b48d21c862ee4",
+      "bytes": 67526856,
+      "files": ["cua-driver", "cua-cursor-theme"]
+    },
+    "win32": {
+      "name": "cua-driver-rs-0.25.0-windows-x86_64-binary.zip",
+      "directory": "",
+      "sha256": "314f5df05933810499deaa61022c714341aff64f8e45157a589df6a4b1724fa4",
+      "bytes": 28015587,
+      "files": ["cua-driver.exe", "cua-driver-uia.exe", "cua-cursor-theme.exe"]
+    }
+  }
+}

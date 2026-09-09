@@ -4,6 +4,7 @@ import { installSidebarBrowser } from './sidebar-browser.tsx';
 import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
 import { installLocalOpen } from './local-open.tsx';
+import { ComputerControl, ComputerSettings } from './computer-use.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
@@ -70,6 +71,7 @@ function TitleBar({ state, reconnect }: { state: StateSource; reconnect: () => v
     <span className="desktop-title">{title.replace(/\s*[·|—-]\s*DSH.*$/, '') || 'DSH Desktop'}</span>
     <div className="desktop-title-actions">
       <UpdateIcon />
+      <ComputerControl />
       <span className="desktop-status" role="status" title={status === 'connected' ? '已连接本机 DSH' : 'DSH 连接中断'}><i data-connected={status === 'connected'} />{status === 'connected' ? '本机' : status === 'connecting' ? '连接中' : '离线'}</span>
       {status !== 'connected' && <button onClick={reconnect}>重连</button>}
       <button className="desktop-icon" aria-label="运行状态" title="运行状态" onClick={() => { void window.dshDesktop?.showConnection(); }}><Icon kind="connect" /></button>
@@ -86,7 +88,7 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /></div>;
+  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /></div>;
 }
 
 /** Settings/search have no public controller; target their version-pinned UI controls. */

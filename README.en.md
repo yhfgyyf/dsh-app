@@ -59,6 +59,24 @@ The official session lifecycle lock allows only one process to write to a sessio
 
 Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.5-alpha.1).
 
+## Computer use
+
+Describe the application and task in a conversation, then approve the task's
+computer-use request. The monitor icon in the title bar shows permissions and
+the current task; an active task has a Stop button. The global stop shortcut is
+`Command + Option + Shift + Escape` on macOS and `Ctrl + Alt + Shift + Escape`
+on Windows.
+
+Grant Accessibility and Screen Recording to DSH Desktop on macOS. Screenshots
+require an image-capable model, such as `deepseek-v4-flash-vision-exp`; text-only
+models can use window accessibility trees. Tools support finding applications
+and windows, screenshots, clicks, typing, keyboard shortcuts, scrolling and
+dragging. One session owns the desktop at a time, with release on completion,
+cancellation, screen lock or App exit. Windows requires an interactive logged-in
+desktop; the lock screen and UAC secure desktop are unavailable. Full-desktop
+capture currently targets the primary display; other displays can be observed
+through individual application windows.
+
 ## Build from source
 
 Install Git, Node.js **24.15.0**, and npm, then run:

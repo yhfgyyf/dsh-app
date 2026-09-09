@@ -3,8 +3,17 @@ import type { DesktopAPI } from '../shared/desktop-api.ts';
 import { isDesktopCommand, externalWebUrl } from '../shared/desktop-api.ts';
 import type { BrowserState } from '../shared/sidebar-browser.ts';
 import type { UpdateState } from '../shared/updates.ts';
+import type { ComputerState } from '../shared/computer-use.ts';
 
 const api: DesktopAPI = {
+  getComputerState: () => ipcRenderer.invoke('desktop:computer-state'),
+  requestComputerPermissions: () => ipcRenderer.invoke('desktop:computer-permissions'),
+  stopComputerUse: () => ipcRenderer.invoke('desktop:computer-stop'),
+  onComputerState: listener => {
+    const callback = (_event: unknown, state: ComputerState) => listener(state);
+    ipcRenderer.on('desktop:computer-state', callback);
+    return () => ipcRenderer.removeListener('desktop:computer-state', callback);
+  },
   getUpdateState: () => ipcRenderer.invoke('desktop:update-state'),
   setUpdateSchedule: (schedule) => ipcRenderer.invoke('desktop:update-schedule', schedule),
   checkForUpdates: () => ipcRenderer.invoke('desktop:update-check'),

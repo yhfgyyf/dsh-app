@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, protocol, screen, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, protocol, screen, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
 import { readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, extname, resolve } from 'node:path';
@@ -14,6 +14,8 @@ import { DesktopUpdates } from './updates.ts';
 import { createUpdateFetch } from './update-network.ts';
 import { installTextContextMenu } from './context-menu.ts';
 import { openLocal } from './local-open.ts';
+import { DesktopComputerUse } from './computer-use.ts';
+import { CuaComputerDriver } from './computer-use-driver.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
@@ -31,6 +33,7 @@ else {
   let runtime: DesktopRuntime;
   let browser: SidebarBrowser | undefined;
   let updates: DesktopUpdates;
+  let computer: DesktopComputerUse;
   let connected = false;
   let connecting = false;
   let connectionError: string | undefined;
@@ -38,6 +41,7 @@ else {
   let quitting = false;
   const resources = join(app.getAppPath(), 'dist', 'renderer');
   const setupUrl = 'dsh://app/index.html';
+  const stopComputer = () => { void computer?.stop().catch(() => console.error('电脑操作驱动停止失败。')); };
 
   function info(): DesktopInfo {
     return { name: 'DSH Desktop', version: app.getVersion(), endpoint: preferences.endpoint, connected, connecting, error: connectionError, zoomFactor: preferences.zoomFactor, platform: process.platform };
@@ -101,6 +105,7 @@ else {
       { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
       { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开右侧面板', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },
       { role: 'windowMenu', label: '窗口' },
+      { label: '电脑操作', submenu: [{ label: '立即停止电脑操作', accelerator: 'CmdOrCtrl+Alt+Shift+Escape', click: stopComputer }] },
       { label: '帮助', submenu: [{ label: 'DSH 项目', click: () => { void shell.openExternal('https://github.com/deepseek-ai/deepseek-harness'); } }] },
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -129,7 +134,7 @@ else {
     window.on('resize', scheduleSave);
     window.on('move', scheduleSave);
     window.on('close', scheduleSave);
-    window.on('closed', () => { browser?.clear(); browser = undefined; window = undefined; connected = false; });
+    window.on('closed', () => { stopComputer(); browser?.clear(); browser = undefined; window = undefined; connected = false; });
     window.webContents.on('did-finish-load', () => window?.webContents.setZoomFactor(preferences.zoomFactor));
     window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.alt || !(input.meta || input.control) || input.isAutoRepeat) return;
@@ -146,7 +151,7 @@ else {
       openSidebarLink(url);
       return { action: 'deny' };
     });
-    window.webContents.on('render-process-gone', () => { void showConnection('界面进程已退出。请重新加载界面。'); });
+    window.webContents.on('render-process-gone', () => { stopComputer(); void showConnection('界面进程已退出。请重新加载界面。'); });
     await window.loadURL(setupUrl);
   }
 
@@ -219,6 +224,9 @@ else {
 
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
+    handle('desktop:computer-state', () => computer.permissions());
+    handle('desktop:computer-permissions', () => computer.permissions(true));
+    handle('desktop:computer-stop', () => computer.stop());
     handle('desktop:update-state', () => updates.state);
     handle('desktop:update-schedule', value => updates.setSchedule(value));
     handle('desktop:update-check', () => updates.check());
@@ -255,12 +263,20 @@ else {
     preferencesFile = new PreferencesFile(app.getPath('userData'));
     try { preferences = await preferencesFile.load(); }
     catch { connectionError = '已有桌面配置无法读取，原文件已保留。'; }
+    computer = new DesktopComputerUse(new CuaComputerDriver({ runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'), hostBundleId: 'io.dsh.desktop' }), state => {
+      if (window && !window.isDestroyed()) window.webContents.send('desktop:computer-state', state);
+    });
+    computer.setStopShortcutAvailable(globalShortcut.register('CommandOrControl+Alt+Shift+Escape', stopComputer));
+    powerMonitor.on('lock-screen', stopComputer);
+    powerMonitor.on('suspend', stopComputer);
     runtime = new DesktopRuntime({
       runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'),
       entry: join(app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'), 'app/index.ts'),
       home: join(app.getPath('userData'), 'core'),
       configHome: resolve(process.env.DSH_DESKTOP_CONFIG_HOME ?? process.env.DSH_HOME ?? join(app.getPath('home'), '.dsh')),
       cwd: app.getPath('home'),
+      computerRequest: (request, signal) => computer.request(request, signal),
+      computerStop: () => computer.stop(),
       pickDirectory: async () => {
         if (!window) return null;
         const result = await dialog.showOpenDialog(window, { title: '选择工作区', buttonLabel: '选择工作区', properties: ['openDirectory', 'createDirectory'] });
@@ -295,8 +311,9 @@ else {
     if (quitting || !preferencesFile) return;
     event.preventDefault();
     quitting = true;
+    globalShortcut.unregisterAll();
     updates?.stop();
     clearTimeout(saveTimer);
-    void savePreferences().then(async () => { browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
+    void savePreferences().then(async () => { await computer?.stop().catch(() => {}); browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
   });
 }

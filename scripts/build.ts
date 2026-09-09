@@ -10,6 +10,8 @@ const artifactInstaller = await import(new URL('install-artifact-links.mjs', imp
 await artifactInstaller.applyArtifactLinks();
 const sidebarInstaller = await import(new URL('install-sidebar-autoclose.mjs', import.meta.url).href);
 await sidebarInstaller.applySidebarAutoclose();
+const progressiveImageInstaller = await import(new URL('install-progressive-images.mjs', import.meta.url).href);
+await progressiveImageInstaller.applyProgressiveImages();
 
 for (const entry of ['main', 'preload', 'updater']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
@@ -43,7 +45,7 @@ await build({
 });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'directory-picker.ts', 'cordis.yml', 'desktop.patch.yml']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'cordis.yml', 'desktop.patch.yml']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
 await build({ configFile: false, plugins: [{
   name: 'desktop-browser-loader',
   transform(code, id) {

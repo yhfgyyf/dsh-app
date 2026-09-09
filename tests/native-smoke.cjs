@@ -84,6 +84,14 @@ ipcMain.handle = (channel, listener) => {
         await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:external')(event, 'javascript:alert(1)')));
         await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:color-scheme')(event, 'unsupported')));
         report.checks.push('IPC rejects untrusted senders, executable URLs and invalid values');
+        for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'http://untrusted.invalid/' } }]) await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:computer-stop')(invalid)));
+        const computer = await handlers.get('desktop:computer-state')(event);
+        assert.equal(computer.driverVersion, '0.25.0');
+        assert.equal(computer.phase, 'idle');
+        assert.equal(typeof computer.stopShortcutAvailable, 'boolean');
+        assert.equal(handlers.has('desktop:computer-act'), false);
+        assert.equal(handlers.has('desktop:computer-observe'), false);
+        report.checks.push('Computer status and emergency stop use trusted App IPC; renderer exposes no native action endpoint');
         const ses = session.fromPartition('persist:dsh');
         const document = await (await ses.fetch(info.endpoint)).text();
         assert.equal(document, readFileSync(join(root, 'dist/renderer/app/index.html'), 'utf8'));

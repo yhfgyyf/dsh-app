@@ -1,0 +1,9 @@
+{
+  "name": "dsh-desktop-computer-use-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@trycua/cua-driver": "0.25.0"
+  }
+}

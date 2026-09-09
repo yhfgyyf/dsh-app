@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { assertBootGraph, type BootGraph } from '../shared/dsh-boot.ts';
+import { isComputerRequest, type ComputerRequest, type ComputerResult } from '../shared/computer-use.ts';
 
 export type RuntimeReady = { type: 'ready'; endpoint: string; launchUrl: string; graph: BootGraph; hostPlugins: string[] };
-type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; pickDirectory?: () => Promise<string | null> };
+type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
 export async function availableDesktopPort(port: number): Promise<number> {
   if (!port) return 0;
   return new Promise((resolve, reject) => {
@@ -56,7 +57,23 @@ export class DesktopRuntime {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     this.child = child;
+    const computerRequests = new Map<string, AbortController>();
+    const stopComputer = () => { for (const controller of computerRequests.values()) controller.abort(); void this.options.computerStop?.().catch(() => {}); };
+    child.once('disconnect', stopComputer);
     child.on('message', async (message: any) => {
+      if (message?.type === 'computer-cancel' && typeof message.id === 'string') { computerRequests.get(message.id)?.abort(); return; }
+      if (message?.type === 'computer-request') {
+        if (!isComputerRequest(message) || computerRequests.has(message.id)) return;
+        const controller = new AbortController();
+        computerRequests.set(message.id, controller);
+        try {
+          if (!this.options.computerRequest) throw new Error('当前主机没有电脑操作能力。');
+          const result = await this.options.computerRequest(message, controller.signal);
+          if (child.connected) child.send({ type: 'computer-result', id: message.id, result });
+        } catch (error) { if (child.connected) child.send({ type: 'computer-result', id: message.id, error: error instanceof Error ? error.message : String(error) }); }
+        finally { computerRequests.delete(message.id); }
+        return;
+      }
       if (message?.type !== 'pick-folder' || typeof message.id !== 'string') return;
       let path: string | null = null;
       try { path = await this.options.pickDirectory?.() ?? null; } catch { /* Cancellation yields no selection. */ }
@@ -64,7 +81,7 @@ export class DesktopRuntime {
     });
     // Keep process output local; login URLs are only carried by structured IPC.
     for (const stream of [child.stdout, child.stderr]) stream?.on('data', chunk => console.log(String(chunk).replace(/token=[^\s]+/g, 'token=[redacted]')));
-    child.once('exit', code => { this.ready = undefined; this.child = undefined; if (!this.stopping) this.options.onExit(code); });
+    child.once('exit', code => { stopComputer(); this.ready = undefined; this.child = undefined; if (!this.stopping) this.options.onExit(code); });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('DSH 核心启动超时。')); }, 45000);
       const finish = () => clearTimeout(timer);
@@ -86,6 +103,7 @@ export class DesktopRuntime {
   }
   async stop() {
     this.stopping = true;
+    await this.options.computerStop?.().catch(() => {});
     const child = this.child;
     if (!child) return;
     await new Promise<void>(resolve => {

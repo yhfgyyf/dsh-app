@@ -12,6 +12,16 @@ installation, set `DSH_INSTALL_ROOT` to the DSH package directory and
 `DSH_PLUGIN_ROOT` to a directory containing the three desktop plugin packages.
 The public build uses `setup:runtime` so these machine-local paths are unnecessary.
 
+Computer use is prepared by the same setup step. `runtime/computer-use/driver.json`
+pins Cua Driver 0.25.0, its source commit, platform assets and SHA-256 values;
+the adjacent npm lockfile pins the SDK and native bridge. `npm run setup:computer-use`
+can rebuild this isolated part of `.runtime` without replacing the DSH snapshot.
+The downloaded archive is verified before extraction, the driver runs as a private
+App-owned worker, and no Cua daemon or updater is installed. Driver telemetry is
+disabled. SDK and license files remain outside ASAR with the bundled runtime.
+Build and preparation apply the hash-guarded `invoke_tool` image forwarding patch
+in `patches/progressive-images`, retaining an original-file backup.
+
 ## macOS
 
 Build on an Apple Silicon Mac with the Swift toolchain and `iconutil`:

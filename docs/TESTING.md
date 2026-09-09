@@ -9,6 +9,8 @@ npm run check
 npm run test:model-settings
 npm run test:three-surfaces
 npm run test:native
+npm run test:computer-tools
+npm run test:computer-native
 npm run test:audit-switch
 npm run test:updates
 ```
@@ -36,6 +38,19 @@ processes and ownership release after a crash.
 `test:native` boots Electron and the independent core, inspects its IPC and
 transport contracts, checks exact frontend bytes, injects a core failure and
 verifies recovery and process cleanup. It uses its own data directory.
+
+`test:computer-tools` runs the real DSH core, approval service, attachment store,
+native tool calls, `invoke_tool`, PTC worker and a local model endpoint. It checks
+rejected and allowed task grants, screenshot bytes reaching model requests and
+desktop release. The native driver is a disposable fixture in this transport test.
+`test:computer-native` instead loads the actual Cua SDK in Electron and operates
+only its own test window using real OS accessibility and input APIs. It verifies
+screenshots, accessibility clicks, Unicode text, a narrow screenshot coordinate
+target and worker process cleanup. It requires a logged-in interactive desktop
+and macOS accessibility/screen-recording grants; missing permissions fail the test.
+Reports are `.test-data/computer-tools-latest.json` and
+`.test-data/computer-native-latest.json`. The Windows workflow runs both before
+building and testing the installer.
 
 `test:sidebar-browser` checks the production Electron sidebar: link clicks,
 native page bounds, navigation history, dialog visibility, isolated web content,
