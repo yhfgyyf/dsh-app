@@ -56,12 +56,12 @@ export async function openLocal(window: BrowserWindow, request: LocalOpenRequest
       const powershell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
       await run(powershell, ['-NoProfile', '-NonInteractive', '-STA', '-EncodedCommand', Buffer.from(WINDOWS_OPEN_WITH, 'utf16le').toString('base64')], {
         windowsHide: true, env: { ...process.env, DSH_DESKTOP_OPEN_TARGET: path },
-      });
+      }).catch(() => { throw new Error('无法打开系统的“打开方式”面板。请在文件夹中显示该文件，再右键选择打开方式。'); });
       return;
     }
     if (process.platform === 'darwin') {
       const result = await dialog.showOpenDialog(window, { title: '选择打开此文件的应用', defaultPath: '/Applications', properties: ['openFile'], filters: [{ name: '应用程序', extensions: ['app'] }] });
-      if (!result.canceled && result.filePaths[0]) await run('/usr/bin/open', ['-a', result.filePaths[0], path]);
+      if (!result.canceled && result.filePaths[0]) await run('/usr/bin/open', ['-a', result.filePaths[0], path]).catch(() => { throw new Error('无法使用所选应用打开此文件，请选择其他应用。'); });
       return;
     }
     throw new Error('当前系统不支持选择打开方式。');
