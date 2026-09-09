@@ -81,6 +81,14 @@ void app.whenReady().then(async () => {
     if (!(error instanceof Error) || !error.message.startsWith('background_unavailable:')) throw error;
     assert.equal(await window.webContents.executeJavaScript('document.querySelector("#input").value'), '');
     snapshot = await observe();
+    // Establish a stable foreground before SendInput; background delivery may
+    // have restored a runner console (or HWND 0) after its refused click.
+    if (process.platform === 'win32') {
+      await request('act', { action: 'bring_to_front', observation_id: snapshot.observation_id, arguments: {} });
+      await until(async () => window.isFocused());
+      snapshot = await observe();
+      assert.equal(await window.webContents.executeJavaScript('document.querySelector("#input").value'), '');
+    }
     typed = await typeText('foreground');
     report.checks.push('Refused background input had no effect; fresh observation permitted explicit foreground input');
   }

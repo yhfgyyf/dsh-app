@@ -51,6 +51,9 @@ async function run(event: IpcMainInvokeEvent) {
   const settled = () => until(async () => !(await state())?.busy, 'Switch remained busy');
   await until(async () => !!(await state()), 'Computer switch missing');
   await evaluate("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续')?.click()");
+  await until(() => evaluate("Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='稍后配置')"), 'Onboarding did not advance');
+  await evaluate("Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='稍后配置').click()");
+  await until(() => evaluate("!Array.from(document.querySelectorAll('button')).some(b=>b.textContent==='稍后配置')"), 'Onboarding remained over the switch');
   await evaluate("document.querySelector('.desktop-computer details').open=true");
   assert.equal((await state()).checked, 'false');
   assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.desktop-computer-controls')).map(n=>({text:n.innerText,paragraphs:n.querySelectorAll('p').length,switches:n.querySelectorAll('[role=switch]').length}))"), [{ text: '电脑操作', paragraphs: 0, switches: 1 }]);
