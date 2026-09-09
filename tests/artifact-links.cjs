@@ -134,6 +134,12 @@ async function run(event) {
   assert.equal(await svgPage.executeJavaScript(`document.documentElement.localName`), 'svg');
   assert.equal(await svgPage.executeJavaScript(`document.querySelector('animate').getAttribute('dur')`), '2s');
   report.checks.push('Clicking the actual inline SVG opens its animated document in the native right sidebar');
+  const svgVisible = () => window.contentView.children.find(view => view.webContents === svgPage)?.getVisible();
+  await js(`document.querySelector('.desktop-computer summary').click()`);
+  await until(() => !svgVisible(), 'Native preview covered the open computer controls');
+  await js(`document.querySelector('.desktop-computer summary').click()`);
+  await until(svgVisible, 'Closing computer controls did not restore the native preview');
+  report.checks.push('Computer controls stay above native previews; closing the popover restores the preview');
   await interactions.verifyLocalFile(host, workspace, 'pelican.svg', until);
   const pngPage = await opened('.desktop-artifact-previews button[title$="/preview.png"]', 'preview.png');
   assert.equal(await pngPage.executeJavaScript(`document.querySelector('img').naturalWidth`), 32);

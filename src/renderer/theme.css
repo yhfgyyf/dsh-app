@@ -67,6 +67,7 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-computer { display: flex; align-items: center; gap: 6px; position: relative; }
 .desktop-computer summary { list-style: none; cursor: pointer; }
 .desktop-computer summary::-webkit-details-marker { display: none; }
+.desktop-computer details:not([open]) .desktop-computer-popover { display: none; }
 .desktop-computer-popover { position: absolute; top: 36px; right: 0; width: 340px; max-width: calc(100vw - 32px); padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); box-shadow: 0 8px 32px #0003; z-index: 1000; }
 .desktop-computer-controls { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; }
 .desktop-computer-controls p { margin: 8px 0; white-space: normal; overflow-wrap: anywhere; }
