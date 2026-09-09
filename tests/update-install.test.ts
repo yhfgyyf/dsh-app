@@ -10,6 +10,35 @@ import { prepareMacUpdate } from '../src/main/updates.ts';
 import { macUpdateTarget } from '../src/main/update-target.ts';
 
 const mac = { skip: process.platform !== 'darwin' };
+const windows = { skip: process.platform !== 'win32' };
+
+test('Windows installer failure restores and relaunches the old app while its DLL is still mapped', windows, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'dsh-update-locked-'));
+  const target = join(directory, 'DSH Desktop');
+  await mkdir(target);
+  const dll = join(target, 'd3dcompiler_47.dll');
+  await cp(join(process.env.SystemRoot!, 'System32/d3dcompiler_47.dll'), dll);
+  const hash = await fileSha256(dll);
+  const script = join(directory, 'hold-dll.ps1');
+  await writeFile(script, `Add-Type -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr LoadLibrary(string path);' -Name Native -Namespace Fixture\n$module = [Fixture.Native]::LoadLibrary('${dll.replaceAll("'", "''")}')\nif ($module -eq [IntPtr]::Zero) { exit 1 }\n[Console]::WriteLine('ready')\n[Console]::ReadLine() | Out-Null\n`);
+  const holder = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-File', script], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('DLL holder did not start')), 15000);
+      holder.once('error', error => { clearTimeout(timer); reject(error); });
+      holder.once('exit', code => { clearTimeout(timer); reject(new Error(`DLL holder exited: ${code}`)); });
+      holder.stdout.on('data', chunk => { if (String(chunk).includes('ready')) { clearTimeout(timer); resolve(); } });
+    });
+    const plan: InstallPlan = { platform: 'win32', parentPid: process.pid, target, payload: process.execPath, backup: join(directory, 'previous-app'), version: '0.1.2', sha256: await fileSha256(process.execPath), result: join(directory, 'result.json') };
+    let launched = false;
+    // Node deliberately rejects Inno Setup arguments, after the backup is made.
+    await assert.rejects(installUpdate(plan, async () => { launched = true; }), /node\.exe 安装失败/);
+    assert.equal(launched, true, 'A failed update must relaunch the restored app');
+    assert.equal(await fileSha256(dll), hash, 'The mapped DLL must remain byte-identical');
+    assert.equal(JSON.parse(await readFile(plan.result, 'utf8')).status, 'error');
+  } finally { holder.stdin.end('\n'); await waitForExit(holder.pid!); }
+});
+
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-update-install-'));
   const target = join(directory, 'installed', 'DSH Desktop.app');
