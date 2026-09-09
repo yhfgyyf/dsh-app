@@ -71,4 +71,4 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-computer-controls { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 1.6; }
 .desktop-computer-controls p { margin: 8px 0; white-space: normal; overflow-wrap: anywhere; }
 .desktop-computer-controls button { padding: 6px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; }
-.desktop-computer-stop { color: #e34c4c; font-size: 12px; }
+.desktop-titlebar .desktop-computer-stop { color: #e34c4c; font-size: 12px; }

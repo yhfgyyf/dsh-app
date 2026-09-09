@@ -65,12 +65,24 @@ void app.whenReady().then(async () => {
   report.checks.push('Accessibility click delivered a real native event and changed the fixture');
   await assert.rejects(request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: { element_index: element.element_index } }), /观察已失效/);
   snapshot = await observe();
-  const input = snapshot.elements.find((e: any) => e.label?.includes('Native input') && /textfield|textarea|edit|entry/i.test(e.role));
-  assert.ok(input, 'Fixture input missing from native tree');
-  const bounds = snapshot.window_bounds;
-  const x = (input.frame.x + input.frame.w / 2 - bounds.x) / bounds.width;
-  const y = (input.frame.y + input.frame.h / 2 - bounds.y) / bounds.height;
-  const typed = await request('act', { action: 'type_text', observation_id: snapshot.observation_id, arguments: { x, y, text: 'DSH 你好 123' } });
+  let x = 0, y = 0;
+  const typeText = async (delivery_mode?: string) => {
+    const input = snapshot.elements.find((e: any) => e.label?.includes('Native input') && /textfield|textarea|edit|entry/i.test(e.role));
+    assert.ok(input, 'Fixture input missing from native tree');
+    const bounds = snapshot.window_bounds;
+    x = (input.frame.x + input.frame.w / 2 - bounds.x) / bounds.width;
+    y = (input.frame.y + input.frame.h / 2 - bounds.y) / bounds.height;
+    return request('act', { action: 'type_text', observation_id: snapshot.observation_id, arguments: { x, y, text: 'DSH 你好 123', ...(delivery_mode ? { delivery_mode } : {}) } });
+  };
+  let typed;
+  try { typed = await typeText(); }
+  catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith('background_unavailable:')) throw error;
+    assert.equal(await window.webContents.executeJavaScript('document.querySelector("#input").value'), '');
+    snapshot = await observe();
+    typed = await typeText('foreground');
+    report.checks.push('Refused background input had no effect; fresh observation permitted explicit foreground input');
+  }
   await writeFile(join(data, 'typing.json'), JSON.stringify({ x, y, typed, focused: window.isFocused(), state: await window.webContents.executeJavaScript('({value:document.querySelector("#input").value,active:document.activeElement.id})') }, null, 2));
   await observe();
   await until(() => window.webContents.executeJavaScript('document.querySelector("#input").value === "DSH 你好 123"'));
