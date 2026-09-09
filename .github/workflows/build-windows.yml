@@ -28,6 +28,11 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Native updater, file previews and sidebar
+        run: |
+          npm run test:updates
+          npm run test:artifact-links
+          npm run test:sidebar-browser
       - name: Install pinned Inno Setup with long-path support
         shell: pwsh
         run: |

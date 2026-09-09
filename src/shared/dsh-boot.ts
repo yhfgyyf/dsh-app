@@ -59,7 +59,7 @@ export function withDesktopPlugin(value: unknown, revision: string): BootGraph {
   assertBootGraph(value);
   if (!/^[a-zA-Z0-9._-]{1,80}$/.test(revision)) throw new Error('桌面插件版本无效。');
   if (value.entries.some((entry) => entry.id === DESKTOP_PLUGIN_ID)) throw new Error('桌面插件已加载。');
-  const required = ['@deepseek-ai/dsh-client-ui-layout', '@deepseek-ai/dsh-client-ui-theme', '@deepseek-ai/dsh-client-ui-renderer'];
+  const required = ['@deepseek-ai/dsh-client-ui-layout', '@deepseek-ai/dsh-client-ui-theme', '@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-ui-sidebar-right'];
   if (required.some((id) => !value.entries.some((entry) => entry.id === id))) {
     throw new Error('此 DSH 服务缺少桌面布局所需的前端插件。');
   }

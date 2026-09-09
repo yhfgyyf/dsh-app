@@ -8,7 +8,7 @@ import { DesktopRuntime } from '../src/main/runtime.ts';
 import { connectFixture } from '../tests/fixture-client.ts';
 const root=fileURLToPath(new URL('..',import.meta.url));
 const source = process.env.DSH_TEST_INSTALL_ROOT && process.env.DSH_TEST_PLUGIN_ROOT ? {} : JSON.parse(await readFile(join(root,'.build-runtime/source.json'),'utf8'));
-const upgrade = { version: '0.1.3-alpha.2', globalPackage: process.env.DSH_TEST_INSTALL_ROOT ?? source.installRoot, plugins: process.env.DSH_TEST_PLUGIN_ROOT ?? source.pluginRoot };
+const upgrade = { version: JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8')).dsh, globalPackage: process.env.DSH_TEST_INSTALL_ROOT ?? source.installRoot, plugins: process.env.DSH_TEST_PLUGIN_ROOT ?? source.pluginRoot };
 const desktopRuntime=process.env.DSH_TEST_DESKTOP_RUNTIME??join(root,'.runtime');
 await mkdir(join(root,'.test-data'),{recursive:true});
 await mkdir(join(root,'docs/evidence'),{recursive:true});
@@ -44,7 +44,7 @@ try{
  const created=await app.client.rpc('session/create',{request:{cwd:data,agentPreset:'standard'}}); const sessionId=created.sessionId;
  await app.client.rpc('session/rename',{request:{sessionId,title:'three surface ownership'}});
  await until(async()=> (await web.rpc('session/list',{_request:{}})).items.some((x:any)=>x.sessionId===sessionId));
- await check('App and official Web boot on alpha.2 and share session listing',async()=>assert.ok(sessionId));
+ await check('App and official Web boot on the pinned runtime and share session listing',async()=>assert.ok(sessionId));
  const deny=async(client:typeof web,method:string)=>{const reply=await client.rpc('session/'+method,{request:{sessionId,title:'must not write'}},true);assert.equal(reply.ok,false);assert.equal(reply.error.code,'session/agent-busy');};
  await check('App owner rejects foreign Web rename and deletion without log changes',async()=>{const before=await digest(join(home,'sessions'));await deny(web,'rename');await deny(web,'delete');assert.equal(await digest(join(home,'sessions')),before);});
  await check('actual TUI rejects a session owned by App',async()=>{const t=await tui(sessionId);await until(()=>t.child.exitCode!==null);assert.equal(t.child.exitCode,1);assert.match(t.output(),/already.*owned|owned.*process|already.*open/i);});
@@ -60,4 +60,4 @@ try{
  // The App's IPC shutdown drains persistence on every OS; killing a CLI on Windows does not.
  const next=await app.client.rpc('session/create',{request:{cwd:data,agentPreset:'standard'}});await app.client.rpc('session/rename',{request:{sessionId:next.sessionId,title:'race and crash'}});app.client.close();await app.core.stop();web.close();await stop(w.child);
  await check('two actual TUI processes racing to resume yield exactly one owner',async()=>{const a=cli('tui',['--resume',next.sessionId]),b=cli('tui',['--resume',next.sessionId]);await until(()=>a.child.exitCode!==null||b.child.exitCode!==null,30000);const loser=a.child.exitCode===1?a:b,winner=loser===a?b:a;assert.equal(loser.child.exitCode,1);assert.equal(winner.child.exitCode,null);assert.match(loser.output(),/already.*owned|owned.*process|already.*open/i);await stop(winner.child,'SIGKILL');const recovered=await tui(next.sessionId);assert.equal(recovered.child.exitCode,null,recovered.output().slice(-1000));recovered.child.stdin!.write('/exit\n');await until(()=>recovered.child.exitCode!==null);assert.equal(recovered.child.exitCode,0);});
-}catch(e){console.error(e);process.exitCode=1;}finally{for(const c of clients)c.close();for(const c of cores)await c.stop();for(const p of processes)await stop(p).catch(()=>{});await writeFile(join(root,'docs/evidence/three-surfaces-alpha2.json'),JSON.stringify({at:new Date().toISOString(),data,version:upgrade.version,installRoot:upgrade.globalPackage,desktopRuntime,scope:'actual DesktopRuntime, official Web CLI and custom TUI CLI sharing disposable DSH_HOME; no external model calls',results},null,2));}
+}catch(e){console.error(e);process.exitCode=1;}finally{for(const c of clients)c.close();for(const c of cores)await c.stop();for(const p of processes)await stop(p).catch(()=>{});await writeFile(join(root,'docs/evidence/three-surfaces.json'),JSON.stringify({at:new Date().toISOString(),data,version:upgrade.version,installRoot:upgrade.globalPackage,desktopRuntime,scope:'actual DesktopRuntime, official Web CLI and custom TUI CLI sharing disposable DSH_HOME; no external model calls',results},null,2));}

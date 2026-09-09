@@ -59,6 +59,8 @@
       name: '@deepseek-ai/dsh-api-settings-controller'
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
+    - id: workspace-files
+      name: '@deepseek-ai/dsh-api-workspace-files'
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
     - id: webserver
@@ -90,8 +92,16 @@
       name: '@deepseek-ai/dsh-client-ui-renderer'
     - id: ui-session
       name: '@deepseek-ai/dsh-client-ui-session'
+    - id: resources
+      name: '@deepseek-ai/dsh-client-resources'
     - id: ui-sidebar
       name: '@deepseek-ai/dsh-client-ui-sidebar'
+    - id: ui-sidebar-right
+      name: '@deepseek-ai/dsh-client-ui-sidebar-right'
+    - id: ui-sidebar-textpreview
+      name: '@deepseek-ai/dsh-client-ui-sidebar-textpreview'
+    - id: ui-sidebar-files
+      name: '@deepseek-ai/dsh-client-ui-sidebar-files'
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'
     - id: ui-settings-general

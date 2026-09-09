@@ -57,3 +57,41 @@ required; resulting packages are unsigned.
 Package versions identify the desktop application. The embedded DSH and plugin
 versions are pinned separately. Release checksums attest the distributed bytes;
 archive timestamps and native tooling can prevent byte-identical rebuilds.
+
+## Audit compatibility in Web/TUI
+
+Apply the Audit compatibility patch to existing Web and TUI profiles backed by
+DSH `0.1.5-alpha.1`:
+
+```sh
+node scripts/install-audit-compat.mjs --check
+npm run install:audit-compat
+node scripts/install-audit-compat.mjs --verify
+```
+
+The installer backs up changed files, rejects unknown runtime/plugin bytes,
+verifies SHA-256 and supports repeat runs. Restart the affected Web, TUI or
+desktop process to load updated code. Settings, sessions and credentials are
+preserved. Use `--home PATH` for a different DSH home; the installer also accepts
+`--runtime NODE_MODULES` and `--plugin AUDIT_PACKAGE` for staged runtimes.
+
+The Audit compatibility patch updates the persona to `prefix`/`suffix` and
+shares Host inspection providers across mounted presets. The audit bar follows
+the current session preset and is hidden outside Audit mode. `setup:runtime` and
+`prepare:runtime` apply it before packaging; no external dependency is added.
+
+## Publishing application updates
+
+Bump the version in `package.json` and `package-lock.json`, run the checks, and
+build both platform packages from that revision. Publish the exact versioned
+ZIP and Windows Setup filenames produced by the packaging scripts. Upload all
+assets and checksums to a draft Release before publishing it. The updater reads
+the public GitHub releases list, includes published previews, and requires the
+matching platform asset's GitHub SHA-256 digest. It does not require a GitHub token.
+
+The installer helper uses the bundled Node copied outside the app directory.
+It waits for the app and its owned core to exit. macOS verifies the archive,
+bundle identity, version and complete code signature before swapping bundles;
+Windows runs the verified Inno installer against the current installation path.
+Both keep an old-app backup and preserve DSH_HOME. Installation results are saved
+under the desktop application-data directory in `updates/install-result.json`.

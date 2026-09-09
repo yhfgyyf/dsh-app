@@ -1,0 +1,21 @@
+--- a/@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js
+@@ -3309,10 +3309,14 @@
+ 						d.bySession = seat(d, sessionId, seedTitle, (s) => advance(s, (state, mint) => isGuide(state, tabId) ? [] : (0, _deepseek_ai_dsh_client_ui_dockkit.planDuplicateTab)(state, mint, tabId).ops, seedTitle));
+ 					},
+ 					closeTab: (d, sessionId, tabId) => {
+-						d.bySession = seat(d, sessionId, seedTitle, (s) => advance(s, (state) => state.tabs[tabId] === void 0 ? [] : [{
+-							type: "closeTab",
+-							tabId
+-						}], seedTitle));
++						d.bySession = seat(d, sessionId, seedTitle, (s) => advance(s, (state) => {
++							if (state.tabs[tabId] === void 0) return [];
++							const ops = [{ type: "closeTab", tabId }];
++							// A remaining Start page does not keep an otherwise empty sidebar open.
++							if (Object.values(state.tabs).every(tab => tab.id === tabId || tab.kind === GUIDE_KIND))
++								ops.push(...(0, _deepseek_ai_dsh_client_ui_dockkit.planSetExpanded)(state, false));
++							return ops;
++						}, seedTitle));
+ 					},
+ 					focusTab: (d, sessionId, tabId) => {
+ 						d.bySession = seat(d, sessionId, seedTitle, (s) => advance(s, (state) => planFocusTab(state, tabId), seedTitle));

@@ -7,6 +7,9 @@ import Loader from '@deepseek-ai/cordis-plugin-loader';
 import * as ClientStore from '@deepseek-ai/dsh-client-store';
 import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots';
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives';
+import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit';
+import { ArtifactMarkdown } from './artifact-markdown.tsx';
+import './updates.css';
 import { withDesktopPlugin } from '../shared/dsh-boot.ts';
 import '../shared/desktop-api.ts';
 
@@ -20,7 +23,7 @@ function Startup({ error }: { error?: string }) {
 status.render(<Startup />);
 let context: Cordis.Context | undefined;
 async function bootDesktop() {
-  const graph = withDesktopPlugin(await window.dshDesktop!.getBoot(), '0.1.0');
+  const graph = withDesktopPlugin(await window.dshDesktop!.getBoot(), (await window.dshDesktop!.getInfo()).version);
   const queue: Registration[] = [];
   const facade = { mode: 'queue', pendingQueue: queue, load(registration: Registration) { queue.push(registration); } };
   target.__ModuleLoader__ = facade;
@@ -37,7 +40,8 @@ async function bootDesktop() {
   const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: {
     react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient,
     '@deepseek-ai/cordis': Cordis, '@deepseek-ai/dsh-client-store': ClientStore,
-    '@deepseek-ai/dsh-client-ui-slots': UiSlots, '@deepseek-ai/dsh-client-ui-primitives': UiPrimitives,
+    '@deepseek-ai/dsh-client-ui-slots': UiSlots, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
+    '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
   } });
   const ctx = context = new Cordis.Context();
   await ctx.plugin(Loader);

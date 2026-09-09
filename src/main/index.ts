@@ -9,13 +9,15 @@ import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
 import { PreferencesFile } from './preferences.ts';
 import { createDshTransport } from './transport.ts';
 import { DesktopRuntime } from './runtime.ts';
+import { SidebarBrowser } from './sidebar-browser.ts';
+import { DesktopUpdates } from './updates.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
 if (customData && isAbsolute(customData)) app.setPath('userData', customData);
 else app.setPath('userData', join(app.getPath('appData'), 'DSH Desktop'));
 
-protocol.registerSchemesAsPrivileged([{ scheme: 'dsh', privileges: { standard: true, secure: true, supportFetchAPI: true } }]);
+protocol.registerSchemesAsPrivileged(['dsh', 'dsh-preview'].map(scheme => ({ scheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } })));
 
 const ownInstance = app.requestSingleInstanceLock();
 if (!ownInstance) app.quit();
@@ -24,6 +26,8 @@ else {
   let preferences: DesktopPreferences = defaultPreferences();
   let preferencesFile: PreferencesFile;
   let runtime: DesktopRuntime;
+  let browser: SidebarBrowser | undefined;
+  let updates: DesktopUpdates;
   let connected = false;
   let connecting = false;
   let connectionError: string | undefined;
@@ -71,9 +75,14 @@ else {
   }
 
   function sendCommand(command: DesktopCommand) {
-    if (window && !window.isDestroyed() && isEndpointDocument(window.webContents.getURL(), preferences.endpoint)) {
+    if (window && !window.isDestroyed() && (isEndpointDocument(window.webContents.getURL(), preferences.endpoint) || (command === 'updates' && isSetupDocument(window.webContents.getURL())))) {
       window.webContents.send('desktop:command', command);
     }
+  }
+
+  function openSidebarLink(value: string) {
+    const url = externalWebUrl(value);
+    if (url && window && !window.isDestroyed()) window.webContents.send('desktop:open-link', url);
   }
 
   function applyZoom(value: number) {
@@ -84,10 +93,10 @@ else {
 
   function installMenu() {
     const template: MenuItemConstructorOptions[] = [
-      { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
+      { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '检查更新…', click: () => { sendCommand('updates'); void updates.check(); } }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
       { label: '文件', submenu: [{ label: '新建会话', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new-session') }, { label: '搜索会话', accelerator: 'CmdOrCtrl+F', click: () => sendCommand('search') }, { type: 'separator' }, { role: 'close', label: '关闭窗口' }] },
       { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
-      { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开详情', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },
+      { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开右侧面板', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },
       { role: 'windowMenu', label: '窗口' },
       { label: '帮助', submenu: [{ label: 'DSH 项目', click: () => { void shell.openExternal('https://github.com/deepseek-ai/deepseek-harness'); } }] },
     ];
@@ -110,11 +119,13 @@ else {
       webPreferences: { preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'), partition: 'persist:dsh', contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false },
     });
     if (bounds.maximized) window.maximize();
+    browser = new SidebarBrowser(window, () => preferences.endpoint, openSidebarLink);
+    window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) browser?.clear(); });
     window.once('ready-to-show', () => window?.show());
     window.on('resize', scheduleSave);
     window.on('move', scheduleSave);
     window.on('close', scheduleSave);
-    window.on('closed', () => { window = undefined; connected = false; });
+    window.on('closed', () => { browser?.clear(); browser = undefined; window = undefined; connected = false; });
     window.webContents.on('did-finish-load', () => window?.webContents.setZoomFactor(preferences.zoomFactor));
     window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.alt || !(input.meta || input.control) || input.isAutoRepeat) return;
@@ -125,12 +136,10 @@ else {
     window.webContents.on('will-navigate', (event, url) => {
       if (isSetupDocument(url) || isEndpointDocument(url, preferences.endpoint)) return;
       event.preventDefault();
-      const external = externalWebUrl(url);
-      if (external) void shell.openExternal(external);
+      openSidebarLink(url);
     });
     window.webContents.setWindowOpenHandler(({ url }) => {
-      const external = externalWebUrl(url);
-      if (external) void shell.openExternal(external);
+      openSidebarLink(url);
       return { action: 'deny' };
     });
     window.webContents.on('render-process-gone', () => { void showConnection('界面进程已退出。请重新加载界面。'); });
@@ -206,6 +215,11 @@ else {
 
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
+    handle('desktop:update-state', () => updates.state);
+    handle('desktop:update-schedule', value => updates.setSchedule(value));
+    handle('desktop:update-check', () => updates.check());
+    handle('desktop:update-download', () => updates.download());
+    handle('desktop:update-install', () => updates.install());
     handle('desktop:info', info);
     handle('desktop:boot', () => runtime.graph());
     handle('desktop:connect', connect);
@@ -221,6 +235,11 @@ else {
       if (!url) throw new Error('此链接不能在外部浏览器打开。');
       return shell.openExternal(url);
     });
+    handle('desktop:browser-open', (id, target, navigation) => browser?.open(id, target, navigation));
+    handle('desktop:browser-bounds', (id, bounds) => browser?.bounds(id, bounds));
+    handle('desktop:browser-navigate', (id, url) => browser?.navigate(id, url));
+    handle('desktop:browser-action', (id, action) => browser?.action(id, action));
+    handle('desktop:browser-close', (id) => browser?.close(id));
   }
 
   app.on('second-instance', () => { window?.show(); window?.focus(); });
@@ -242,10 +261,20 @@ else {
       onExit: () => { connected = false; if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
     });
     await installProtocols();
+    updates = new DesktopUpdates({
+      currentVersion: app.getVersion(), platform: process.platform, arch: process.arch,
+      home: join(app.getPath('userData'), 'updates'), appPath: app.getAppPath(),
+      runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'),
+      executable: process.execPath, packaged: app.isPackaged,
+      corePid: () => runtime.child?.pid, quit: () => app.quit(),
+      publish: state => { if (window && !window.isDestroyed()) window.webContents.send('desktop:update-state', state); },
+    });
+    await updates.restoreResult();
     installIpc();
     installMenu();
     await createWindow();
     await connect();
+    updates.start();
   }).catch(() => {
     console.error('DSH Desktop 无法启动。请检查应用资源和配置目录。');
     app.quit();
@@ -256,7 +285,8 @@ else {
     if (quitting || !preferencesFile) return;
     event.preventDefault();
     quitting = true;
+    updates?.stop();
     clearTimeout(saveTimer);
-    void savePreferences().then(async () => { window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
+    void savePreferences().then(async () => { browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
   });
 }

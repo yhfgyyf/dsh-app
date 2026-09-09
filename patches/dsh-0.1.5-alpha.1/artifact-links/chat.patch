@@ -1,0 +1,93 @@
+--- a/@deepseek-ai/dsh-client-ui-chat/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-chat/lib/client.js
+@@ -2963,28 +2963,45 @@
+ 		};
+ 		//#endregion
+ 		//#region lib/types/client/chat/AssistantMarkdown.js
+-		/**
+-		* Map one authored media destination to the same-origin workspace-file URL.
+-		* @param protocol - `window.location.protocol` at render time.
+-		* @param origin - `window.location.origin` at render time.
+-		* @param value - The authored markdown destination, exactly as written.
+-		* @returns The API URL for an absolute POSIX path on an HTTP(S) page, or
+-		* undefined when the destination cannot be a Host-served local file
+-		* (non-HTTP transport such as Electron `file://`, protocol-relative or
+-		* relative destinations).
+-		*/
+-		function localPathMediaUrl(protocol, origin, value) {
+-			if (protocol !== "http:" && protocol !== "https:") return void 0;
+-			if (value.length === 0 || !value.startsWith("/") || value.startsWith("//")) return void 0;
+-			return `${origin}/api/file?path=${encodeURIComponent(value)}`;
++		/** Resolve only path-shaped references; existence is checked by the desktop renderer. */
++		function localArtifactPath(value, cwd) {
++			if (typeof value !== "string" || value.length === 0 || value.length > 4096 || value.trim() !== value || /[\x00-\x1f]/.test(value)) return;
++			if (value.startsWith("file:")) {
++				try {
++					const url = new URL(value);
++					if (url.host || url.search || url.hash) return;
++					value = decodeURIComponent(url.pathname).replace(/^\/([A-Za-z]:\/)/, "$1");
++				} catch { return; }
++			}
++			if (value.startsWith("//") || value.startsWith("\\\\") || value.startsWith("~")) return;
++			if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(value) && !/^[A-Za-z]:[/\\]/.test(value)) return;
++			if (!/[/\\]/.test(value) && !/\.[A-Za-z0-9]{1,16}$/.test(value) && !/^(Dockerfile|Makefile|LICENSE|README)$/.test(value)) return;
++			const absolute = isAbsoluteWorkspacePath(value) ? value : cwd ? cwd.replace(/[/\\]+$/, "") + "/" + value : value;
++			if (!isAbsoluteWorkspacePath(absolute)) return;
++			// Normalize dot segments before assigning a session-scoped sidebar address.
++			const parts = absolute.replace(/\\/g, "/").replace(/^\/+/, "").split("/").map(encodeURIComponent);
++			const normalized = decodeURIComponent(new URL("file:///" + parts.join("/")).pathname);
++			return /^[A-Za-z]:/.test(absolute) ? normalized.slice(1) : normalized;
++		}
++		function localPathMediaUrl(protocol, origin, value, cwd) {
++			if (protocol !== "http:" && protocol !== "https:") return;
++			let decoded;
++			try { decoded = decodeURIComponent(value); } catch { decoded = value; }
++			const path = localArtifactPath(decoded, cwd);
++			return path === undefined ? undefined : `${origin}/api/file?path=${encodeURIComponent(path)}`;
+ 		}
+ 		/** Reasoning block as the Think variant summary row (figma 39:28304). */
+-		const AssistantMarkdown = (0, react.memo)(function AssistantMarkdown({ blocks, streaming, interrupted, renderMessageImages, reasoningHidden = false, revealProcess, mentions, t }) {
++		const AssistantMarkdown = (0, react.memo)(function AssistantMarkdown({ blocks, streaming, interrupted, renderMessageImages, reasoningHidden = false, revealProcess, mentions, cwd, openFile, showFiles, t }) {
+ 			const labels = (0, react.useMemo)(() => markdownLabels(t), [t]);
+ 			const pathImages = (0, react.useMemo)(() => {
+ 				const { protocol, origin } = window.location;
+-				return { resolve: (value) => localPathMediaUrl(protocol, origin, value) };
+-			}, []);
++				return { resolve: (value) => localPathMediaUrl(protocol, origin, value, cwd) };
++			}, [cwd]);
++			const localFiles = (0, react.useMemo)(() => openFile === undefined ? undefined : ({
++				resolve: value => localArtifactPath(value, cwd),
++				source: path => `${window.location.origin}/api/file?path=${encodeURIComponent(path)}`,
++				open: path => openFile(path)
++			}), [cwd, openFile]);
+ 			const last = blocks.length - 1;
+ 			if (!(streaming || interrupted === true || blocks.some((block) => block.kind !== "tool-call"))) return null;
+ 			const rendered = [];
+@@ -2998,6 +3015,8 @@
+ 							streaming,
+ 							labels,
+ 							fileMentions: mentions,
++							localFiles,
++							showFiles,
+ 							pathImages
+ 						}, i));
+ 						break;
+@@ -3058,7 +3077,7 @@
+ 		//#endregion
+ 		//#region lib/types/client/chat/AssistantNodeView.js
+ 		/** Streaming, settled, and interrupted Assistant states share one keyed renderer instance. */
+-		const AssistantNodeView = (0, react.memo)(function AssistantNodeView({ node, useTurnData, turnProcess, openFile, renderMessageImages, fileMentions, t }) {
++		const AssistantNodeView = (0, react.memo)(function AssistantNodeView({ node, useTurnData, turnProcess, cwd, openFile, renderMessageImages, fileMentions, t }) {
+ 			const data = node.data;
+ 			const turn = node.location.kind === "turn" || node.location.kind === "step" ? node.location.turn : void 0;
+ 			const tail = useTurnData("turn-tail");
+@@ -3089,6 +3108,9 @@
+ 				reasoningHidden,
+ 				revealProcess,
+ 				mentions,
++				cwd,
++				openFile,
++				showFiles: owner !== undefined,
+ 				t
+ 			});
+ 		});

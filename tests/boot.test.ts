@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm';
 import { assertBootGraph, DESKTOP_PLUGIN_ID, withDesktopPlugin } from '../src/shared/dsh-boot.ts';
 import type { BootGraph } from '../src/shared/dsh-boot.ts';
 
-const modules = ['@deepseek-ai/dsh-client-ui-layout', '@deepseek-ai/dsh-client-ui-theme', '@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-modules'];
+const modules = ['@deepseek-ai/dsh-client-ui-layout', '@deepseek-ai/dsh-client-ui-theme', '@deepseek-ai/dsh-client-ui-renderer', '@deepseek-ai/dsh-client-ui-sidebar-right', '@deepseek-ai/dsh-client-modules'];
 function fixture(): BootGraph {
   const entries = modules.map((name) => ({
     id: name, url: `/plugins/${name}/client.js`, rev: 'test-revision',

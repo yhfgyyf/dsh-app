@@ -1,0 +1,1394 @@
+diff --git a/@deepseek-ai/dsh-api-remotes/lib/client.js b/@deepseek-ai/dsh-api-remotes/lib/client.js
+index d6241bb..aeaf0c8 100644
+--- a/@deepseek-ai/dsh-api-remotes/lib/client.js
++++ b/@deepseek-ai/dsh-api-remotes/lib/client.js
+@@ -4515,7 +4515,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 				literal("image/png"),
+ 				literal("image/jpeg"),
+ 				literal("image/webp"),
+-				literal("image/gif")
++				literal("image/gif"),
++				literal("video/mp4")
+ 			]),
+ 			"data": string(),
+ 			"name": string().optional()
+@@ -7154,7 +7155,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 					literal("image/png"),
+ 					literal("image/jpeg"),
+ 					literal("image/webp"),
+-					literal("image/gif")
++					literal("image/gif"),
++					literal("video/mp4")
+ 				]).readonly(),
+ 				"data": string().readonly(),
+ 				"name": string().readonly().optional()
+@@ -7296,7 +7298,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 						literal("image/png"),
+ 						literal("image/jpeg"),
+ 						literal("image/webp"),
+-						literal("image/gif")
++						literal("image/gif"),
++						literal("video/mp4")
+ 					]),
+ 					"bytes": number(),
+ 					"width": number(),
+@@ -7378,7 +7381,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 					literal("image/png"),
+ 					literal("image/jpeg"),
+ 					literal("image/webp"),
+-					literal("image/gif")
++					literal("image/gif"),
++					literal("video/mp4")
+ 				]),
+ 				"bytes": number(),
+ 				"width": number(),
+@@ -7481,7 +7485,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 									literal("image/png"),
+ 									literal("image/jpeg"),
+ 									literal("image/webp"),
+-									literal("image/gif")
++									literal("image/gif"),
++									literal("video/mp4")
+ 								]))
+ 							}).optional(),
+ 							"modelSelection": object({
+@@ -7618,6 +7623,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 			"sessionId": intersection(string(), unknown()).readonly(),
+ 			"agentPreset": string().readonly().optional()
+ 		});
++		const _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema = object({ "sessionId": intersection(string(), unknown()).readonly() });
++		const _deepseek_ai_dsh_api_session_controller_session_delete_result$schema = object({ "sessionId": intersection(string(), unknown()).readonly() });
+ 		const _deepseek_ai_dsh_api_session_controller_session_follow_parameter_0$schema = object({
+ 			"address": union([object({
+ 				"kind": literal("session").readonly(),
+@@ -7766,7 +7773,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 								literal("image/png"),
+ 								literal("image/jpeg"),
+ 								literal("image/webp"),
+-								literal("image/gif")
++								literal("image/gif"),
++								literal("video/mp4")
+ 							]))
+ 						}).optional(),
+ 						"modelSelection": object({
+@@ -7954,7 +7962,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 							literal("image/png"),
+ 							literal("image/jpeg"),
+ 							literal("image/webp"),
+-							literal("image/gif")
++							literal("image/gif"),
++							literal("video/mp4")
+ 						]))
+ 					}).optional(),
+ 					"modelSelection": object({
+@@ -8121,7 +8130,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 						literal("image/png"),
+ 						literal("image/jpeg"),
+ 						literal("image/webp"),
+-						literal("image/gif")
++						literal("image/gif"),
++						literal("video/mp4")
+ 					]).readonly(),
+ 					"data": string().readonly(),
+ 					"name": string().readonly().optional()
+@@ -8188,7 +8198,8 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 									literal("image/png"),
+ 									literal("image/jpeg"),
+ 									literal("image/webp"),
+-									literal("image/gif")
++									literal("image/gif"),
++									literal("video/mp4")
+ 								]),
+ 								"bytes": number(),
+ 								"width": number(),
+@@ -8394,6 +8405,33 @@ Set the \`cycles\` parameter to \`"ref"\` to resolve cyclical schemas with defs.
+ 						"column": 3
+ 					}
+ 				},
++				{
++					id: "@deepseek-ai/dsh-api-session-controller#session/delete",
++					service: "sessionController",
++					namespace: "session",
++					method: "delete",
++					invocation: { kind: "direct" },
++					parameters: [{
++						name: "request",
++						wire: "request",
++						source: "json",
++						codec: {
++							mode: "strict",
++							typeSymbol: "@deepseek-ai/dsh-api-session-controller/types#SessionDeleteRequest",
++							schema: _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema
++						}
++					}],
++					result: {
++						mode: "strict",
++						typeSymbol: "@deepseek-ai/dsh-api-session-controller/types#SessionDeleteValue",
++						schema: _deepseek_ai_dsh_api_session_controller_session_delete_result$schema
++					},
++					sourceLocation: {
++						"file": "packages/api/session-controller/src/index.ts",
++						"line": 317,
++						"column": 9
++					}
++				},
+ 				{
+ 					id: "@deepseek-ai/dsh-api-session-controller#session/follow",
+ 					service: "sessionController",
+diff --git a/@deepseek-ai/dsh-api-session-controller/lib/client.js b/@deepseek-ai/dsh-api-session-controller/lib/client.js
+index ea42b6b..e9cffbd 100644
+--- a/@deepseek-ai/dsh-api-session-controller/lib/client.js
++++ b/@deepseek-ai/dsh-api-session-controller/lib/client.js
+@@ -2622,6 +2622,12 @@ window.__ModuleLoader__.load({
+ 				});
+ 				return result;
+ 			}
++			/** Delete one ordinary Session and remove its local list projection immediately. */
++			async delete(sessionId) {
++				const result = await this.remote.session.delete({ sessionId });
++				if (result.ok) this.handleSessionRemoved(sessionId);
++				return result;
++			}
+ 			/**
+ 			* Insert-or-enrich a locally synthesized summary: a new id prepends; an
+ 			* existing entry only gains fields it lacks (the session-added frame and the
+@@ -3244,6 +3250,12 @@ window.__ModuleLoader__.load({
+ 				}
+ 				return childId;
+ 			}
++			/** Delete a Session on the Host and synchronously project its removal. */
++			async delete(sessionId) {
++				const result = await this.manager.delete(sessionId);
++				if (!result.ok) throw new Error(`session delete failed: ${result.error.code}: ${result.error.message}`);
++				this.projectList();
++			}
+ 			/**
+ 			* Resolve an Agent-scoped context view (use-and-discard).
+ 			* @param id - session id (the agent identity — 1:1 same axis).
+diff --git a/@deepseek-ai/dsh-api-session-controller/lib/index.js b/@deepseek-ai/dsh-api-session-controller/lib/index.js
+index 2b1cf04..14f0b3d 100644
+--- a/@deepseek-ai/dsh-api-session-controller/lib/index.js
++++ b/@deepseek-ai/dsh-api-session-controller/lib/index.js
+@@ -2,7 +2,9 @@ import z from "@deepseek-ai/schemastery";
+ import { AssistantStreamAccumulator, ReasoningEffortId, assistantStreamChunks, createUserMessage, errorChain, freezeMessage } from "@deepseek-ai/dsh-llm";
+ import { canOpenNativePath, openNativePath } from "@deepseek-ai/dsh-native-command";
+ import { Remote, RemoteError, TypertRemoteService, remoteErrorOf } from "@deepseek-ai/dsh-typert-protocol";
+-import { mkdir } from "node:fs/promises";
++import { mkdir, readdir, rm } from "node:fs/promises";
++import { dirname, join } from "node:path";
++import { SessionAlreadyOwnedError, SessionPersistenceNotFoundError } from "@deepseek-ai/dsh-session-persistence";
+ import { installModelSelection } from "@deepseek-ai/dsh-agent";
+ import { SessionQueryError } from "@deepseek-ai/dsh-session-query";
+ import { randomUUID } from "node:crypto";
+@@ -176,11 +178,16 @@ var ApiSessionAgentController = class {
+ 	ctx;
+ 	resumes = /* @__PURE__ */ new Map();
+ 	creations = /* @__PURE__ */ new Map();
++	handles = /* @__PURE__ */ new Map();	
++	deleting = /* @__PURE__ */ new Set();
+ 	selections = /* @__PURE__ */ new WeakMap();
+ 	imageAdmissionChains = /* @__PURE__ */ new WeakMap();
+ 	/** @param ctx - Host context carrying Agent, model, persistence, and Typert services. */
+ 	constructor(ctx) {
+ 		this.ctx = ctx;
++		ctx.on("agent/disposed", ({ agent }) => {
++			this.handles.delete(agent.id);
++		});
+ 		ctx.typert.lookups.configure("agent", async (sessionId) => {
+ 			const found = await this.resolveAgent(sessionId);
+ 			if ("error" in found) throw found.error;
+@@ -214,6 +221,7 @@ var ApiSessionAgentController = class {
+ 		return this.resolve(observation.header.id, observation);
+ 	}
+ 	async resolve(sessionId, observation) {
++		if (this.deleting.has(sessionId)) return { error: new RemoteError("session/agent-busy", `session "${sessionId}" is being deleted`, {}) };
+ 		const live = this.liveAgent(sessionId);
+ 		if (live !== void 0) return live;
+ 		const attached = this.ctx.sessions.get(sessionId);
+@@ -230,6 +238,7 @@ var ApiSessionAgentController = class {
+ 		} catch (error) {
+ 			if (error instanceof ApiSessionNotFound) return { error: new RemoteError("session/not-found", error.message, { sessionId }) };
+ 			if (error instanceof ApiSessionSubagentOwnership) return { error: apiSessionSubagentOwnershipError(error.sessionId) };
++			if (error instanceof SessionAlreadyOwnedError) return { error: new RemoteError("session/agent-busy", error.message, { sessionId }) };
+ 			const raced = this.liveAgent(sessionId);
+ 			if (raced !== void 0) return raced;
+ 			const racedSession = this.ctx.sessions.get(sessionId);
+@@ -246,6 +255,7 @@ var ApiSessionAgentController = class {
+ 	* @returns the matching live ordinary Agent.
+ 	*/
+ 	async ensureSession(sessionId, cwd, checkPersistedIdentity, presetId) {
++		if (this.deleting.has(sessionId)) throw new RemoteError("session/agent-busy", `session "${sessionId}" is being deleted`, {});
+ 		let creation = this.creations.get(sessionId);
+ 		if (creation === void 0) {
+ 			creation = this.createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId).catch((error) => {
+@@ -268,6 +278,31 @@ var ApiSessionAgentController = class {
+ 		if (agent.session.header.cwd !== cwd) throw new ApiSessionCwdConflict(sessionId, cwd, agent.session.header.cwd);
+ 		return agent;
+ 	}
++	/** Retain the lifecycle capability for one Session Controller-owned Agent. */
++	retain(handle) {
++		this.handles.set(handle.agent.id, handle);
++		return handle.agent;
++	}
++	/**
++	* Drain in-flight activation and dispose one Controller-owned live Agent.
++	* A live Agent whose handle belongs to another owner is rejected rather
++	* than being force-stopped through a bare registry reference.
++	*/
++	async disposeOwned(sessionId) {
++		const inflight = [this.resumes.get(sessionId), this.creations.get(sessionId)].filter((operation) => operation !== void 0);
++		if (inflight.length > 0) await Promise.allSettled(inflight);
++		const live = this.ctx.agents.get(sessionId);
++		if (live === void 0) return false;
++		if (hasApiSessionSubagentOwner(this.ctx, live.session, live)) throw apiSessionSubagentOwnershipError(sessionId);
++		const handle = this.handles.get(sessionId);
++		if (handle === void 0 || handle.agent !== live) throw new RemoteError("session/agent-busy", `session "${sessionId}" is owned by another lifecycle`, { reason: "stop the owning client before deleting this session" });
++		try {
++			await handle.dispose();
++		} finally {
++			this.handles.delete(sessionId);
++		}
++		return true;
++	}
+ 	/**
+ 	* Install or return the Session-local model selection used by prompt assembly.
+ 	* @param agent - live Agent that owns the selection.
+@@ -398,11 +433,11 @@ var ApiSessionAgentController = class {
+ 		const published = this.ctx.sessions.get(sessionId);
+ 		const live = this.ctx.agents.get(sessionId);
+ 		if (published !== void 0 && hasApiSessionSubagentOwner(this.ctx, published, live)) throw new ApiSessionSubagentOwnership(sessionId);
+-		return (await this.ctx.agents.resume({
++		return this.retain(await this.ctx.agents.resume({
+ 			resumeSessionId: sessionId,
+ 			agentOptions: this.agentOptions(),
+ 			setup: composition.setup
+-		})).agent;
++		}));
+ 	}
+ 	async createOrAdopt(sessionId, cwd, checkPersistedIdentity, presetId) {
+ 		const attached = this.ctx.sessions.get(sessionId);
+@@ -422,11 +457,11 @@ var ApiSessionAgentController = class {
+ 				const storedPreset = this.presetForObservation(observation);
+ 				this.assertPresetUnchanged(sessionId, presetId, storedPreset);
+ 				const composition = await this.composeAgent(storedPreset);
+-				return (await this.ctx.agents.resume({
++				return this.retain(await this.ctx.agents.resume({
+ 					resumeSessionId: sessionId,
+ 					agentOptions: this.agentOptions(),
+ 					setup: composition.setup
+-				})).agent;
++				}));
+ 			} catch (e_3) {
+ 				env_3.error = e_3;
+ 				env_3.hasError = true;
+@@ -442,7 +477,7 @@ var ApiSessionAgentController = class {
+ 			throw new Error(`failed to ensure project directory "${cwd}": ${String(error)}`, { cause: error });
+ 		}
+ 		const composition = await this.composeAgent(presetId);
+-		return (await this.ctx.agents.create({
++		return this.retain(await this.ctx.agents.create({
+ 			sessionId,
+ 			agentOptions: this.agentOptions(),
+ 			meta: {
+@@ -450,7 +485,7 @@ var ApiSessionAgentController = class {
+ 				...composition.agentPreset === void 0 ? {} : { agentPreset: composition.agentPreset }
+ 			},
+ 			setup: composition.setup
+-		})).agent;
++		}));
+ 	}
+ 	agentOptions() {
+ 		const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
+@@ -692,7 +727,7 @@ var SessionCommandController = class {
+ 			const composition = await this.agents.composeAgent(this.agents.presetForObservation(source));
+ 			try {
+ 				const { provider, model } = this.ctx.agentDefaultModel.currentSelection();
+-				await this.ctx.agents.create({
++				this.agents.retain(await this.ctx.agents.create({
+ 					sessionId: childId,
+ 					seed: source.events.slice(0, cut),
+ 					inheritedEventCount: cut,
+@@ -707,7 +742,7 @@ var SessionCommandController = class {
+ 						model
+ 					},
+ 					setup: composition.setup
+-				});
++				}));
+ 			} catch (error) {
+ 				throw new RemoteError("gateway/internal", `failed to fork session "${request.sessionId}": ${String(error)}`, {});
+ 			}
+@@ -762,16 +797,16 @@ var SessionCommandController = class {
+ 						const model = await this.ctx.llm.resolveModelInfo(current.provider, current.model);
+ 						if (model.inputModalities !== void 0 && !model.inputModalities.includes("image")) throw new RemoteError("session/attachment-invalid", `Model "${current.model}" does not support image input.`, { reason: "MODEL_DOES_NOT_SUPPORT_IMAGES" });
+ 					}
+-					const admission = resolvePromptFileReceipts(request.content, (receiptId) => this.ctx.fileUploads.resolve(agent, receiptId));
++					const admission = resolvePromptFileReceipts(request.content, (receiptId) => (() => { const uploads = this.ctx.get("fileUploads"); if (uploads === void 0) throw new RemoteError("session/attachment-invalid", "file uploads are unavailable on this surface", {}); return uploads.resolve(agent, receiptId); })());
+ 					const message = createUserMessage({
+ 						content: await this.ctx.attachments.admitPromptContent(admission.content),
+ 						source
+ 					});
+ 					if (this.ctx.agents.get(agent.id) !== agent) throw new RemoteError("session/not-found", `session "${agent.id}" was disposed during prompt admission`, { sessionId: agent.id });
+-					const binding = __addDisposableResource$3(env_2, this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId), false);
++					const binding = __addDisposableResource$3(env_2, this.ctx.get("fileUploads")?.bindPrompt(agent, admission.receiptIds, request.requestId), false);
+ 					if (request.mode === "steer") agent.steer(message);
+ 					else agent.followup(message);
+-					binding.commit();
++					binding?.commit();
+ 				} catch (e_2) {
+ 					env_2.error = e_2;
+ 					env_2.hasError = true;
+@@ -851,7 +886,7 @@ var SessionCommandController = class {
+ 			case "remove": {
+ 				agent.inbox.remove(request.itemId);
+ 				const source = message.source;
+-				if (source.kind === "user" && "rpcId" in source) this.ctx.fileUploads.retirePrompt(agent, source.rpcId);
++				if (source.kind === "user" && "rpcId" in source) this.ctx.get("fileUploads")?.retirePrompt(agent, source.rpcId);
+ 				break;
+ 			}
+ 			case "steer":
+@@ -2484,6 +2519,7 @@ let SessionController = (() => {
+ 	let _canOpenWorkspacePath_decorators;
+ 	let _openWorkspacePath_decorators;
+ 	let _rename_decorators;
++	let _delete_decorators;
+ 	let _fork_decorators;
+ 	let _prompt_decorators;
+ 	let _attachment_decorators;
+@@ -2503,6 +2539,7 @@ let SessionController = (() => {
+ 			_canOpenWorkspacePath_decorators = [Remote];
+ 			_openWorkspacePath_decorators = [Remote("openWorkspacePath")];
+ 			_rename_decorators = [Remote("rename")];
++			_delete_decorators = [Remote("delete")];
+ 			_fork_decorators = [Remote("fork")];
+ 			_prompt_decorators = [Remote("prompt")];
+ 			_attachment_decorators = [Remote("attachment")];
+@@ -2599,6 +2636,17 @@ let SessionController = (() => {
+ 				},
+ 				metadata: _metadata
+ 			}, null, _instanceExtraInitializers);
++			__esDecorate(this, null, _delete_decorators, {
++				kind: "method",
++				name: "delete",
++				static: false,
++				private: false,
++				access: {
++					has: (obj) => "delete" in obj,
++					get: (obj) => obj.delete
++				},
++				metadata: _metadata
++			}, null, _instanceExtraInitializers);
+ 			__esDecorate(this, null, _fork_decorators, {
+ 				kind: "method",
+ 				name: "fork",
+@@ -2698,10 +2746,10 @@ let SessionController = (() => {
+ 			"agentDefaultModel",
+ 			"agents",
+ 			"attachments",
+-			"fileUploads",
+ 			"llm",
+ 			"sessions",
+ 			"sessionProjections",
++			"sessionPersistence",
+ 			"sessionQuery",
+ 			"typert",
+ 			"workspaceRegistry"
+@@ -2725,11 +2773,11 @@ let SessionController = (() => {
+ 			installModelSelectionProjection(ctx);
+ 			this.agents = new ApiSessionAgentController(ctx);
+ 			this.commands = new SessionCommandController(ctx, this.agents, process.cwd());
+-			ctx.effect(() => ctx.fileUploads.registerAgentResolver(async (sessionId) => {
++			ctx.inject(["fileUploads"], (inner) => inner.effect(() => inner.fileUploads.registerAgentResolver(async (sessionId) => {
+ 				const result = await this.agents.resolveAgent(sessionId);
+ 				if ("error" in result) throw result.error;
+ 				return result.agent;
+-			}), "session-controller: file-upload Agent resolver");
++			}), "session-controller: file-upload Agent resolver"));
+ 			this.controlState = new SessionControlController(ctx);
+ 			ctx.effect(() => async () => {
+ 				await Promise.allSettled([...this.promotions]);
+@@ -2888,6 +2936,47 @@ let SessionController = (() => {
+ 			return this.commands.rename(request);
+ 		}
+ 		/**
++		* Delete one ordinary Session after draining a Controller-owned live Agent.
++		* Subagent Sessions and Agents owned by another lifecycle are rejected.
++		*/
++		async delete(request) {
++			const sessionId = request.sessionId;
++			if (this.agents.deleting.has(sessionId)) throw new RemoteError("session/agent-busy", `session "${sessionId}" is being deleted`, {});
++			this.agents.deleting.add(sessionId);
++			let writer;
++			try {
++				const live = this.ctx.agents.get(sessionId);
++				const meta = live?.session.header ?? (await inspectApiSession(this.ctx, sessionId)).meta;
++				if (meta.origin === "subagent" || live !== void 0 && hasApiSessionSubagentOwner(this.ctx, live.session, live)) throw apiSessionSubagentOwnershipError(sessionId);
++				const location = this.ctx.sessionPersistence.locate(meta);
++				if (location?.kind !== "jsonl") throw new RemoteError("gateway/internal", `session "${sessionId}" uses an unsupported persistence location`, {});
++				const disposed = await this.agents.disposeOwned(sessionId);
++				try {
++					writer = await this.ctx.sessionPersistence.open(sessionId, "write");
++				} catch (error) {
++					if (!(disposed && error instanceof SessionPersistenceNotFoundError)) throw error;
++				}
++				if (writer !== void 0) {
++					const directory = dirname(location.path);
++					// Retain the official POSIX lock inode while deleting every log generation.
++					// Removing session.lock could admit another writer through a new inode.
++					for (const name of await readdir(directory)) {
++						if (name !== "session.lock") await rm(join(directory, name), { recursive: true, force: true });
++					}
++				}
++				await this.ctx.workspaceRegistry.forgetSession(sessionId);
++				this.ctx.emit("api-session/removed", sessionId);
++				return { sessionId };
++			} catch (error) {
++				if (error instanceof SessionAlreadyOwnedError) throw new RemoteError("session/agent-busy", error.message, { sessionId });
++				if (error instanceof ApiSessionNotFound || error instanceof SessionPersistenceNotFoundError) throw new RemoteError("session/not-found", error.message, { sessionId });
++				if (error instanceof RemoteError) throw error;
++				throw new RemoteError("gateway/internal", `failed to delete session "${sessionId}": ${String(error)}`, {});
++			} finally {
++				try { await writer?.close(); } finally { this.agents.deleting.delete(sessionId); }
++			}
++		}
++		/**
+ 		* Fork one cold-readable completed-turn prefix into a new Session.
+ 		* @param request - source Session and optional event anchor.
+ 		* @returns the new Session identity.
+diff --git a/@deepseek-ai/dsh-api-session-controller/lib/typert.host.js b/@deepseek-ai/dsh-api-session-controller/lib/typert.host.js
+index 9e6a07d..6f7793c 100644
+--- a/@deepseek-ai/dsh-api-session-controller/lib/typert.host.js
++++ b/@deepseek-ai/dsh-api-session-controller/lib/typert.host.js
+@@ -15,7 +15,7 @@ const ContentBlockRemoteCodec$schema = z.union([z.object({
+   'type': z.literal("image"),
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -56,7 +56,7 @@ const _deepseek_ai_dsh_api_session_controller_session_attachment_parameter_0$sch
+ const _deepseek_ai_dsh_api_session_controller_session_attachment_result$schema = z.object({
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -119,7 +119,7 @@ const _deepseek_ai_dsh_api_session_controller_session_control_result$schema = z.
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -210,6 +210,12 @@ const _deepseek_ai_dsh_api_session_controller_session_create_result$schema = z.o
+   'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
+   'agentPreset': z.string().readonly().optional(),
+ })
++const _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema = z.object({
++  'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
++})
++const _deepseek_ai_dsh_api_session_controller_session_delete_result$schema = z.object({
++  'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
++})
+ const _deepseek_ai_dsh_api_session_controller_session_follow_parameter_0$schema = z.object({
+   'address': z.union([z.object({
+   'kind': z.literal("session").readonly(),
+@@ -284,7 +290,7 @@ const _deepseek_ai_dsh_api_session_controller_session_follow_result$schema = z.u
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -415,7 +421,7 @@ const _deepseek_ai_dsh_api_session_controller_session_list_result$schema = z.obj
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -539,7 +545,7 @@ const _deepseek_ai_dsh_api_session_controller_session_prompt_parameter_0$schema
+   'text': z.string().readonly(),
+ }), z.object({
+   'type': z.literal("image").readonly(),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]).readonly(),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]).readonly(),
+   'data': z.string().readonly(),
+   'name': z.string().readonly().optional(),
+ }), z.object({
+@@ -601,7 +607,7 @@ const _deepseek_ai_dsh_api_session_controller_session_updateQueue_parameter_0$sc
+   'type': z.literal("image"),
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -800,6 +806,31 @@ export const TYPERT = {
+       },
+       sourceLocation: {"file":"packages/api/session-controller/src/index.ts","line":239,"column":3},
+     },
++    {
++      id: '@deepseek-ai/dsh-api-session-controller#session/delete',
++      service: 'sessionController',
++      namespace: 'session',
++      method: 'delete',
++      invocation: { kind: 'direct' },
++      parameters: [
++        {
++          name: 'request',
++          wire: 'request',
++          source: 'json',
++          codec: {
++            mode: 'strict',
++            typeSymbol: '@deepseek-ai/dsh-api-session-controller/types#SessionDeleteRequest',
++            schema: _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema,
++          },
++        },
++      ],
++      result: {
++        mode: 'strict',
++        typeSymbol: '@deepseek-ai/dsh-api-session-controller/types#SessionDeleteValue',
++        schema: _deepseek_ai_dsh_api_session_controller_session_delete_result$schema,
++      },
++      sourceLocation: {"file":"packages/api/session-controller/src/index.ts","line":317,"column":9},
++    },
+     {
+       id: '@deepseek-ai/dsh-api-session-controller#session/follow',
+       service: 'sessionController',
+@@ -1179,6 +1210,13 @@ export const TYPERT = {
+             "summary": "Rename one Session after explicitly resuming it.",
+             "jsDoc": "/**\n * Rename one Session after explicitly resuming it.\n * @param request - Session identity and proposed title.\n * @returns the accepted title and durable event sequence.\n */"
+           },
++          {
++            "kind": "method",
++            "name": "delete",
++            "signature": "@Remote('delete') async delete(request: SessionDeleteRequest): Promise<SessionDeleteValue>",
++            "summary": "Delete one ordinary Session after draining a Controller-owned live Agent.",
++            "jsDoc": "/**\n * Delete one ordinary Session after draining a Controller-owned live Agent.\n * Subagent Sessions and Agents owned by another lifecycle are rejected.\n */"
++          },
+           {
+             "kind": "method",
+             "name": "fork",
+@@ -1649,6 +1687,14 @@ export const TYPERT = {
+             "name": "SessionCreateValue",
+             "declaration": "export interface SessionCreateValue {\n    readonly sessionId: SessionId;\n    readonly agentPreset?: string;\n}"
+           },
++          {
++            "name": "SessionDeleteRequest",
++            "declaration": "export interface SessionDeleteRequest {\n    readonly sessionId: SessionId;\n}"
++          },
++          {
++            "name": "SessionDeleteValue",
++            "declaration": "export interface SessionDeleteValue {\n    readonly sessionId: SessionId;\n}"
++          },
+           {
+             "name": "SessionEvent",
+             "declaration": "export type SessionEvent<T extends SessionEventType = SessionEventType> = { [K in SessionEventType]: { type: K; seq: SessionSeq; time: number; data: SessionEventMap[K]; ignorable?: true; } & (K extends SurfaceEventType ? SurfaceIntent<K> : { surfaceOp?: never; sourceEventSeqs?: never; }) }[T];"
+diff --git a/@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.js b/@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.js
+index 5240894..60c89f4 100644
+--- a/@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.js
++++ b/@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.js
+@@ -15,7 +15,7 @@ const ContentBlockRemoteCodec$schema = z.union([z.object({
+   'type': z.literal("image"),
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -56,7 +56,7 @@ const _deepseek_ai_dsh_api_session_controller_session_attachment_parameter_0$sch
+ const _deepseek_ai_dsh_api_session_controller_session_attachment_result$schema = z.object({
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -119,7 +119,7 @@ const _deepseek_ai_dsh_api_session_controller_session_control_result$schema = z.
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -210,6 +210,12 @@ const _deepseek_ai_dsh_api_session_controller_session_create_result$schema = z.o
+   'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
+   'agentPreset': z.string().readonly().optional(),
+ })
++const _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema = z.object({
++  'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
++})
++const _deepseek_ai_dsh_api_session_controller_session_delete_result$schema = z.object({
++  'sessionId': z.intersection(z.string(), z.unknown()).readonly(),
++})
+ const _deepseek_ai_dsh_api_session_controller_session_follow_parameter_0$schema = z.object({
+   'address': z.union([z.object({
+   'kind': z.literal("session").readonly(),
+@@ -284,7 +290,7 @@ const _deepseek_ai_dsh_api_session_controller_session_follow_result$schema = z.u
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -415,7 +421,7 @@ const _deepseek_ai_dsh_api_session_controller_session_list_result$schema = z.obj
+   'maxMessageImageBytes': z.number(),
+   'maxImagePixels': z.number(),
+   'maxImageDimension': z.number(),
+-  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")])),
++  'mediaTypes': z.array(z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")])),
+ }).optional(),
+   'modelSelection': z.object({
+   'lastUsed': z.union([z.literal(null), z.object({
+@@ -539,7 +545,7 @@ const _deepseek_ai_dsh_api_session_controller_session_prompt_parameter_0$schema
+   'text': z.string().readonly(),
+ }), z.object({
+   'type': z.literal("image").readonly(),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]).readonly(),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]).readonly(),
+   'data': z.string().readonly(),
+   'name': z.string().readonly().optional(),
+ }), z.object({
+@@ -601,7 +607,7 @@ const _deepseek_ai_dsh_api_session_controller_session_updateQueue_parameter_0$sc
+   'type': z.literal("image"),
+   'attachment': z.object({
+   'attachmentId': z.intersection(z.string(), z.unknown()),
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'bytes': z.number(),
+   'width': z.number(),
+   'height': z.number(),
+@@ -797,6 +803,31 @@ export const TYPERT_REMOTE = {
+       },
+       sourceLocation: {"file":"packages/api/session-controller/src/index.ts","line":239,"column":3},
+     },
++    {
++      id: '@deepseek-ai/dsh-api-session-controller#session/delete',
++      service: 'sessionController',
++      namespace: 'session',
++      method: 'delete',
++      invocation: { kind: 'direct' },
++      parameters: [
++        {
++          name: 'request',
++          wire: 'request',
++          source: 'json',
++          codec: {
++            mode: 'strict',
++            typeSymbol: '@deepseek-ai/dsh-api-session-controller/types#SessionDeleteRequest',
++            schema: _deepseek_ai_dsh_api_session_controller_session_delete_parameter_0$schema,
++          },
++        },
++      ],
++      result: {
++        mode: 'strict',
++        typeSymbol: '@deepseek-ai/dsh-api-session-controller/types#SessionDeleteValue',
++        schema: _deepseek_ai_dsh_api_session_controller_session_delete_result$schema,
++      },
++      sourceLocation: {"file":"packages/api/session-controller/src/index.ts","line":317,"column":9},
++    },
+     {
+       id: '@deepseek-ai/dsh-api-session-controller#session/follow',
+       service: 'sessionController',
+diff --git a/@deepseek-ai/dsh-attachment-local/lib/index.js b/@deepseek-ai/dsh-attachment-local/lib/index.js
+index fec538f..54a8695 100644
+--- a/@deepseek-ai/dsh-attachment-local/lib/index.js
++++ b/@deepseek-ai/dsh-attachment-local/lib/index.js
+@@ -274,6 +274,28 @@ function displayName(value) {
+ 	const clean = value.slice(Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\")) + 1).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 255);
+ 	return clean === "" ? void 0 : clean;
+ }
++/** Minimal ISO-BMFF signature check for direct MP4 passthrough. */
++function isMp4Video(data) {
++	return data.byteLength >= 12 && String.fromCharCode(...data.subarray(4, 8)) === "ftyp";
++}
++/** Keep video bytes byte-for-byte; the model endpoint owns video decoding. */
++function prepareVideoFile(input, limits) {
++	if (input.data.byteLength > limits.maxImageBytes) throw new AttachmentError("Video exceeds the configured attachment byte limit.", "IMAGE_TOO_LARGE");
++	if (!isMp4Video(input.data)) throw new AttachmentError("Unsupported or malformed MP4 video data.", "INVALID_IMAGE");
++	const sha256 = digest$1(input.data);
++	const name = displayName(input.name);
++	return {
++		data: input.data,
++		ref: {
++			attachmentId: AttachmentId(`sha256:${sha256}`),
++			mediaType: "video/mp4",
++			width: 1,
++			height: 1,
++			bytes: input.data.byteLength,
++			...name !== void 0 ? { name } : {}
++		}
++	};
++}
+ function ensureReference(ref) {
+ 	const match = ID_PATTERN.exec(String(ref.attachmentId));
+ 	if (match?.[1] === void 0) throw new AttachmentError("Attachment reference is invalid.", "INVALID_ATTACHMENT_REF");
+@@ -318,6 +340,7 @@ async function validateImageFile(input, limits, policy) {
+ * @returns immutable reference facts beside bytes ready for atomic publication.
+ */
+ async function prepareImageFile(input, limits, policy) {
++	if (input.mediaType === "video/mp4") return prepareVideoFile(input, limits);
+ 	if (input.data.byteLength > limits.maxImageBytes) throw new AttachmentError("Image exceeds the configured byte limit.", "IMAGE_TOO_LARGE");
+ 	const detected = await inspectMetadata(input.data, input.mediaType, limits);
+ 	const normalized = await normalizeImage(input.data, detected, policy);
+@@ -596,14 +619,34 @@ async function readImageFile(root, ref, signal) {
+ 	}
+ 	signal?.throwIfAborted();
+ 	if (digest$1(data) !== sha256) throw new AttachmentError("Stored attachment failed integrity verification.", "ATTACHMENT_CORRUPT");
+-	const metadata = await probeImage(data);
+-	signal?.throwIfAborted();
+-	if (metadata.mediaType !== ref.mediaType || data.byteLength !== ref.bytes || metadata.width !== ref.width || metadata.height !== ref.height) throw new AttachmentError("Stored attachment metadata does not match its reference.", "ATTACHMENT_CORRUPT");
++	if (ref.mediaType === "video/mp4") {
++		if (!isMp4Video(data) || data.byteLength !== ref.bytes || ref.width !== 1 || ref.height !== 1) throw new AttachmentError("Stored video metadata does not match its reference.", "ATTACHMENT_CORRUPT");
++	} else {
++		const metadata = await probeImage(data);
++		signal?.throwIfAborted();
++		if (metadata.mediaType !== ref.mediaType || data.byteLength !== ref.bytes || metadata.width !== ref.width || metadata.height !== ref.height) throw new AttachmentError("Stored attachment metadata does not match its reference.", "ATTACHMENT_CORRUPT");
++	}
+ 	return {
+ 		ref,
+ 		data
+ 	};
+ }
++/** Project a verified MP4 without decoding or re-encoding it. */
++async function readVideoRequest(root, ref, signal) {
++	const stored = await readImageFile(root, ref, signal);
++	return {
++		variantId: ImageVariantId(`video-v1:${ref.attachmentId}`),
++		attachment: ref,
++		data: stored.data,
++		mediaType: "video/mp4",
++		bytes: stored.data.byteLength,
++		width: 1,
++		height: 1,
++		depth: "uchar",
++		space: "srgb",
++		hasAlpha: false
++	};
++}
+ //#endregion
+ //#region lib/types/file-store.js
+ /** Verbatim content-addressed local file storage. @module @deepseek-ai/dsh-attachment-local/file-store */
+@@ -994,7 +1037,8 @@ var LocalAttachmentStore = class extends AttachmentStore {
+ 				"image/png",
+ 				"image/jpeg",
+ 				"image/webp",
+-				"image/gif"
++				"image/gif",
++				"video/mp4"
+ 			])
+ 		});
+ 		this.normalizationPolicy = Object.freeze({
+@@ -1040,6 +1084,7 @@ var LocalAttachmentStore = class extends AttachmentStore {
+ 		return storedFilePath(this.root, ref);
+ 	}
+ 	async readImageRequest(ref, policy, signal) {
++		if (ref.mediaType === "video/mp4") return readVideoRequest(this.root, ref, signal);
+ 		return this.requestVersion(ref, policy, void 0, signal);
+ 	}
+ 	requestVersion(ref, policy, stored, signal) {
+diff --git a/@deepseek-ai/dsh-client-connection/lib/client.js b/@deepseek-ai/dsh-client-connection/lib/client.js
+index a5704fd..32d4877 100644
+--- a/@deepseek-ai/dsh-client-connection/lib/client.js
++++ b/@deepseek-ai/dsh-client-connection/lib/client.js
+@@ -3193,7 +3193,8 @@ window.__ModuleLoader__.load({
+ 					"image/png",
+ 					"image/jpeg",
+ 					"image/webp",
+-					"image/gif"
++					"image/gif",
++					"video/mp4"
+ 				]
+ 			};
+ 			return values;
+@@ -6423,4 +6424,4 @@ window.__ModuleLoader__.load({
+ 	}
+ });
+ 
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map
+diff --git a/@deepseek-ai/dsh-client-ui-attachment/lib/client.js b/@deepseek-ai/dsh-client-ui-attachment/lib/client.js
+index 6e62dc0..dcb2a56 100644
+--- a/@deepseek-ai/dsh-client-ui-attachment/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-attachment/lib/client.js
+@@ -477,7 +477,7 @@ window.__ModuleLoader__.load({
+ 		* @param props.onClose - dismiss callback owned by the opener.
+ 		* @returns the modal preview dialog.
+ 		*/
+-		function ImageLightbox({ src, alt, labels, onClose }) {
++		function ImageLightbox({ src, alt, labels, onClose, isVideo = false }) {
+ 			const closeRef = (0, react.useRef)(null);
+ 			const restoreRef = (0, react.useRef)(null);
+ 			(0, react.useEffect)(() => {
+@@ -503,7 +503,13 @@ window.__ModuleLoader__.load({
+ 						"aria-hidden": "true",
+ 						onMouseDown: onClose
+ 					}),
+-					(0, react_jsx_runtime.jsx)("img", {
++					isVideo ? (0, react_jsx_runtime.jsx)("video", {
++						className: ImageLightbox_module_css_default.image,
++						src,
++						controls: true,
++						autoPlay: true,
++						"aria-label": alt
++					}) : (0, react_jsx_runtime.jsx)("img", {
+ 						className: ImageLightbox_module_css_default.image,
+ 						src,
+ 						alt
+@@ -708,7 +714,13 @@ window.__ModuleLoader__.load({
+ 									onClick: () => {
+ 										setPreview(attachment);
+ 									},
+-									children: (0, react_jsx_runtime.jsx)("img", {
++									children: attachment.file.type === "video/mp4" ? (0, react_jsx_runtime.jsx)("video", {
++										src: attachment.previewUrl,
++										muted: true,
++										preload: "metadata",
++										style: { objectFit: "cover", width: "100%", height: "100%" },
++										"aria-label": attachment.file.name
++									}) : (0, react_jsx_runtime.jsx)("img", {
+ 										src: attachment.previewUrl,
+ 										alt: attachment.file.name || t("image.pending")
+ 									})
+@@ -729,7 +741,8 @@ window.__ModuleLoader__.load({
+ 					src: preview.previewUrl,
+ 					alt: preview.file.name || t("image.original"),
+ 					labels: lightboxLabels(t),
+-					onClose: closePreview
++					onClose: closePreview,
++					isVideo: preview.file.type.startsWith("video/")
+ 				})
+ 			] });
+ 		}
+@@ -737,11 +750,12 @@ window.__ModuleLoader__.load({
+ 		//#region \0dsh-css:/home/runner/work/deepseek-harness/deepseek-harness/packages/client/ui-attachment/src/MessageImage.module.css.mjs
+ 		const css = ".R_Yw7q_gallery{flex-wrap:wrap;gap:10px;max-width:100%;display:flex}.R_Yw7q_gallery[data-align=end]{justify-content:flex-end;align-self:flex-end}.R_Yw7q_gallery[data-align=start]{justify-content:flex-start;align-self:flex-start}.R_Yw7q_frame{border:.5px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-alias-interactive-bg-hover);cursor:zoom-in;border-radius:16px;flex:none;place-items:center;min-width:44px;min-height:44px;padding:0;display:grid;overflow:hidden}.R_Yw7q_frame[data-variant=tile]{width:64px;min-width:64px;height:64px;min-height:64px}.R_Yw7q_frame img{object-fit:cover;width:100%;height:100%;display:block}.R_Yw7q_loading,.R_Yw7q_error{color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}.R_Yw7q_error{border:.5px solid var(--dsw-alias-border-l2-darkmode-thin);background:var(--dsw-alias-interactive-bg-hover-danger);cursor:pointer;border-radius:10px;max-width:240px;padding:10px 12px}.R_Yw7q_error[data-variant=tile]{border-radius:16px;width:64px;height:64px;padding:4px;overflow:hidden}";
+ 		const tagId = "@deepseek-ai/dsh-client-ui-attachment/MessageImage.module.css";
++		const videoCss = ".R_Yw7q_frame video{object-fit:cover;width:100%;height:100%;display:block}";
+ 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
+ 			const tag = document.createElement("style");
+ 			tag.dataset.plugin = "@deepseek-ai/dsh-client-ui-attachment";
+ 			tag.dataset.pluginCss = tagId;
+-			tag.textContent = css;
++			tag.textContent = css + videoCss;
+ 			document.head.appendChild(tag);
+ 		}
+ 		var MessageImage_module_css_default = {
+@@ -836,6 +850,7 @@ window.__ModuleLoader__.load({
+ 			]);
+ 			const src = preview?.url ?? loaded;
+ 			const label = preview?.name ?? attachment?.name ?? labels.image;
++			const isVideo = (preview?.mediaType ?? attachment?.mediaType)?.startsWith("video/") === true || /\.mp4$/iu.test(label);
+ 			if (error) return (0, react_jsx_runtime.jsx)("button", {
+ 				type: "button",
+ 				className: MessageImage_module_css_default.error,
+@@ -859,6 +874,12 @@ window.__ModuleLoader__.load({
+ 				children: src === null ? (0, react_jsx_runtime.jsx)("span", {
+ 					className: MessageImage_module_css_default.loading,
+ 					children: labels.loading
++				}) : isVideo ? (0, react_jsx_runtime.jsx)("video", {
++					src,
++					muted: true,
++					preload: "metadata",
++					style: fit === void 0 ? void 0 : { objectPosition: fit.objectPosition },
++					"aria-label": label
+ 				}) : (0, react_jsx_runtime.jsx)("img", {
+ 					src,
+ 					alt: label,
+@@ -868,7 +889,8 @@ window.__ModuleLoader__.load({
+ 				src,
+ 				alt: label,
+ 				labels: labels.lightbox,
+-				onClose: close
++				onClose: close,
++				isVideo
+ 			})] });
+ 		}
+ 		/** Wrapping image group shared by user and assistant history: a lone image
+diff --git a/@deepseek-ai/dsh-client-ui-chat/lib/client.js b/@deepseek-ai/dsh-client-ui-chat/lib/client.js
+index 22ce21f..a2bc816 100644
+--- a/@deepseek-ai/dsh-client-ui-chat/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-chat/lib/client.js
+@@ -1336,6 +1336,7 @@ window.__ModuleLoader__.load({
+ 					type: "image",
+ 					image: { preview: {
+ 						url: attachment.value.previewUrl,
++						...attachment.value.mediaType === void 0 ? {} : { mediaType: attachment.value.mediaType },
+ 						...attachment.value.name === void 0 ? {} : { name: attachment.value.name },
+ 						...attachment.value.width === void 0 ? {} : { width: attachment.value.width },
+ 						...attachment.value.height === void 0 ? {} : { height: attachment.value.height }
+diff --git a/@deepseek-ai/dsh-client-ui-conversation/lib/client.js b/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
+index b08ee3f..7617c2e 100644
+--- a/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-conversation/lib/client.js
+@@ -2779,6 +2779,7 @@ window.__ModuleLoader__.load({
+ 		* does not require a store notification.
+ 		*/
+ 		function probeDimensions(attachment) {
++			if (attachment.file.type.startsWith("video/")) return;
+ 			if (typeof Image !== "function") return;
+ 			const probe = new Image();
+ 			probe.onload = () => {
+@@ -2909,6 +2910,7 @@ window.__ModuleLoader__.load({
+ 					type: "image",
+ 					value: {
+ 						previewUrl: attachment.previewUrl,
++						mediaType: attachment.file.type,
+ 						...attachment.file.name === "" ? {} : { name: attachment.file.name },
+ 						...attachment.width === void 0 ? {} : { width: attachment.width },
+ 						...attachment.height === void 0 ? {} : { height: attachment.height }
+@@ -3223,13 +3225,14 @@ window.__ModuleLoader__.load({
+ 				case "image/png":
+ 				case "image/jpeg":
+ 				case "image/webp":
+-				case "image/gif": return value;
++				case "image/gif":
++				case "video/mp4": return value;
+ 				default: throw new UnsupportedImageMediaTypeError(value);
+ 			}
+ 		}
+ 		/** Whether a browser-declared MIME selects the image draft path (all other files upload verbatim). */
+ 		function isImageMediaType(value) {
+-			return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif";
++			return value === "image/png" || value === "image/jpeg" || value === "image/webp" || value === "image/gif" || value === "video/mp4";
+ 		}
+ 		function revokePreview(url) {
+ 			if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+diff --git a/@deepseek-ai/dsh-client-ui-workspace/lib/client.js b/@deepseek-ai/dsh-client-ui-workspace/lib/client.js
+index 8b79f53..f786222 100644
+--- a/@deepseek-ai/dsh-client-ui-workspace/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-workspace/lib/client.js
+@@ -913,7 +913,7 @@ window.__ModuleLoader__.load({
+ 		* @param props.t - the browser root's locale seat.
+ 		* @returns the session row.
+ 		*/
+-		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onReveal, drag, flat = false, t }) {
++		function SessionNodeItem({ node, currentId, now, onOpen, onRename, onFork, onArchive, onDelete, onReveal, drag, flat = false, t }) {
+ 			const row = node;
+ 			const title = displayTitle(node, t);
+ 			const selected = node.id === currentId;
+@@ -941,7 +941,13 @@ window.__ModuleLoader__.load({
+ 					id: "archive",
+ 					label: t("menu.archiveSession"),
+ 					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconArchiveOutline20, { size: 16 })
+-				}
++				},
++				...onDelete === void 0 ? [] : [{
++					id: "delete",
++					label: t("menu.deleteSession"),
++					icon: (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.IconTrashOutline16, {}),
++					danger: true
++				}]
+ 			];
+ 			return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.HoverCard, {
+ 				anchor: (0, react_jsx_runtime.jsxs)("div", {
+@@ -997,6 +1003,7 @@ window.__ModuleLoader__.load({
+ 									if (id === "rename") onRename(node.id, row.title);
+ 									if (id === "fork") onFork(node.id);
+ 									if (id === "archive") onArchive(node.id);
++									if (id === "delete") onDelete?.(node.id, row.title);
+ 								},
+ 								portal: true,
+ 								closeOnPointerLeave: true,
+@@ -1442,7 +1449,7 @@ window.__ModuleLoader__.load({
+ 			return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+ 		}
+ 		/** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
+-		function SessionTree({ useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds, workspaceReady, onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t, revealSessionId, onSessionRevealed }) {
++		function SessionTree({ useSessions, useSessionPendingInteraction, startSession, open, forkSession, workspaces, archivedSessionIds, workspaceReady, onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive, onSessionDelete, insertWorkspaceBefore, insertSessionBefore, orderBy, groupExpansion, setGroupExpanded, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t, revealSessionId, onSessionRevealed }) {
+ 			const list = useSessions((s) => s);
+ 			const pendingInteractions = useSessionPendingInteraction((s) => s);
+ 			const current = list.current;
+@@ -1737,6 +1744,7 @@ window.__ModuleLoader__.load({
+ 											onRename: onSessionRename,
+ 											onFork: forkSession,
+ 											onArchive: onSessionArchive,
++											onDelete: onSessionDelete,
+ 											onReveal: node.id === revealSessionId && group.key === revealGroup ? () => {
+ 												onSessionRevealed(node.id);
+ 											} : void 0,
+@@ -1762,7 +1770,7 @@ window.__ModuleLoader__.load({
+ 			});
+ 		}
+ 		/** The flat "In one list" body: every session is one draggable top-level row. */
+-		function FlatList({ useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive, archivedSessionIds, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, revealSessionId, onSessionRevealed, t }) {
++		function FlatList({ useSessions, useSessionPendingInteraction, open, forkSession, onSessionRename, onSessionArchive, onSessionDelete, archivedSessionIds, orderBy, sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, revealSessionId, onSessionRevealed, t }) {
+ 			const list = useSessions((s) => s);
+ 			const pendingInteractions = useSessionPendingInteraction((s) => s);
+ 			const baseRows = (0, react.useMemo)(() => deriveFlat(list, archivedSessionIds, pendingInteractions), [
+@@ -1845,6 +1853,7 @@ window.__ModuleLoader__.load({
+ 							onRename: onSessionRename,
+ 							onFork: forkSession,
+ 							onArchive: onSessionArchive,
++							onDelete: onSessionDelete,
+ 							onReveal: node.id === revealSessionId ? () => {
+ 								onSessionRevealed(node.id);
+ 							} : void 0,
+@@ -1951,7 +1960,7 @@ window.__ModuleLoader__.load({
+ 		* @param props - composed slot props (shell owner share + store + injected actions).
+ 		* @returns the region element tree.
+ 		*/
+-		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, useHostInfo, renderSlot, t }) {
++		function WorkspaceBrowser({ wide, expandSidebar, useSessions, useSessionPendingInteraction, useWorkspaces, useStore, actions, startSession, open, renameSession, forkSession, deleteSession, renameWorkspace, deleteWorkspace, insertWorkspaceBefore, archiveSession, insertSessionBefore, createWorkspace, searchSessions, searchResultLimit, useDirectoryFlow, useHostInfo, renderSlot, t }) {
+ 			const home = useHostInfo((info) => info.home);
+ 			const workspaces = useWorkspaces((state) => state.items);
+ 			const workspacePhase = useWorkspaces((state) => state.phase);
+@@ -2168,6 +2177,30 @@ window.__ModuleLoader__.load({
+ 					console.warn("session archive rejected:", reason);
+ 				});
+ 			};
++			const [sessionDeleteTarget, setSessionDeleteTarget] = (0, react.useState)(null);
++			const [sessionDeleting, setSessionDeleting] = (0, react.useState)(false);
++			const [sessionDeleteError, setSessionDeleteError] = (0, react.useState)(null);
++			const closeSessionDelete = () => {
++				if (sessionDeleting) return;
++				setSessionDeleteTarget(null);
++				setSessionDeleteError(null);
++			};
++			const confirmSessionDelete = () => {
++				if (sessionDeleting || sessionDeleteTarget === null) return;
++				setSessionDeleting(true);
++				setSessionDeleteError(null);
++				deleteSession(sessionDeleteTarget.sessionId).then(() => {
++					setSessionDeleting(false);
++					setSessionDeleteTarget(null);
++				}).catch((reason) => {
++					setSessionDeleting(false);
++					setSessionDeleteError(reason instanceof Error ? reason.message : String(reason));
++				});
++			};
++			const onSessionDelete = (sessionId, title) => {
++				setSessionDeleteTarget({ sessionId, title });
++				setSessionDeleteError(null);
++			};
+ 			const [deleteTarget, setDeleteTarget] = (0, react.useState)(null);
+ 			const [deleting, setDeleting] = (0, react.useState)(false);
+ 			const [deleteCommittedId, setDeleteCommittedId] = (0, react.useState)(null);
+@@ -2349,6 +2382,7 @@ window.__ModuleLoader__.load({
+ 							forkSession,
+ 							onSessionRename,
+ 							onSessionArchive,
++							onSessionDelete,
+ 							archivedSessionIds,
+ 							orderBy,
+ 							sessionOrderByAccount,
+@@ -2363,6 +2397,7 @@ window.__ModuleLoader__.load({
+ 							useSessionPendingInteraction,
+ 							onSessionRename,
+ 							onSessionArchive,
++							onSessionDelete,
+ 							forkSession,
+ 							workspaces,
+ 							workspaceReady: workspacePhase === "ready" && workspaceStreamState !== "loading",
+@@ -2528,6 +2563,34 @@ window.__ModuleLoader__.load({
+ 							role: "alert",
+ 							children: deleteError
+ 						})]
++					}),
++					(0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
++						open: sessionDeleteTarget !== null,
++						onClose: closeSessionDelete,
++						closeLabel: t("close"),
++						title: t("delete.session"),
++						...sessionDeleteTarget === null ? {} : { description: t("delete.session.desc", { name: sessionDeleteTarget.title }) },
++						footer: (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++							variant: "outline",
++							disabled: sessionDeleting,
++							onClick: closeSessionDelete,
++							children: t("cancel")
++						}), (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++							variant: "outline",
++							className: WorkspaceBrowser_module_css_default.deleteAction,
++							disabled: sessionDeleting,
++							onClick: confirmSessionDelete,
++							children: t("delete.session")
++						})] }),
++						children: [sessionDeleting && (0, react_jsx_runtime.jsx)("div", {
++							className: WorkspaceBrowser_module_css_default.deleteStatus,
++							role: "status",
++							children: t("delete.session.pending")
++						}), sessionDeleteError !== null && (0, react_jsx_runtime.jsx)("div", {
++							className: WorkspaceBrowser_module_css_default.renameError,
++							role: "alert",
++							children: sessionDeleteError
++						})]
+ 					})
+ 				]
+ 			});
+@@ -2578,6 +2641,10 @@ window.__ModuleLoader__.load({
+ 			"delete.workspace": "删除工作区",
+ 			"delete.desc": "将把“{name}”从工作区列表中移除。文件夹与会话记录会保留，其会话将显示在“未分组”下。",
+ 			"delete.pending": "正在删除工作区…",
++			"delete.session": "删除会话",
++			"delete.session.desc": "将永久删除“{name}”及其本地会话记录，此操作无法撤销。",
++			"delete.session.pending": "正在删除会话…",
++			"menu.deleteSession": "删除会话",
+ 			"menu.fork": "分叉会话",
+ 			"menu.archiveSession": "归档会话",
+ 			"sessions.count.one": "{n} 个会话",
+@@ -2644,6 +2711,10 @@ window.__ModuleLoader__.load({
+ 			"delete.workspace": "Delete workspace",
+ 			"delete.desc": "This removes “{name}” from the workspace list. The folder and session logs will be kept. Its sessions will appear under Ungrouped.",
+ 			"delete.pending": "Deleting workspace…",
++			"delete.session": "Delete session",
++			"delete.session.desc": "This permanently deletes “{name}” and its local session log. This cannot be undone.",
++			"delete.session.pending": "Deleting session…",
++			"menu.deleteSession": "Delete session",
+ 			"menu.fork": "Fork session",
+ 			"menu.archiveSession": "Archive session",
+ 			"sessions.count.one": "{n} session",
+@@ -2736,6 +2807,9 @@ window.__ModuleLoader__.load({
+ 					const result = await session.rename(title);
+ 					if (!result.ok) throw new Error(result.error.message);
+ 				},
++				deleteSession: async (sessionId) => {
++					await sessions.delete(sessionId);
++				},
+ 				forkSession: (sessionId) => {
+ 					sessions.fork({
+ 						sessionId,
+diff --git a/@deepseek-ai/dsh-commands/lib/typert.host.js b/@deepseek-ai/dsh-commands/lib/typert.host.js
+index 3f74bc9..b753d23 100644
+--- a/@deepseek-ai/dsh-commands/lib/typert.host.js
++++ b/@deepseek-ai/dsh-commands/lib/typert.host.js
+@@ -6,7 +6,7 @@ const _deepseek_ai_dsh_commands_commands_execute_parameter_1$schema = z.string()
+ const _deepseek_ai_dsh_commands_commands_execute_parameter_2$schema = z.array(z.union([z.intersection(z.object({
+   'type': z.literal("image").readonly(),
+ }), z.object({
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'data': z.string(),
+   'name': z.string().optional(),
+ })), z.object({
+@@ -375,7 +375,7 @@ export const TYPERT = {
+           },
+           {
+             "name": "ImageMediaType",
+-            "declaration": "export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';"
++            "declaration": "export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif' | 'video/mp4';"
+           },
+           {
+             "name": "Inbox",
+diff --git a/@deepseek-ai/dsh-commands/lib/typert.remote-client.js b/@deepseek-ai/dsh-commands/lib/typert.remote-client.js
+index 9c42547..80ce4c4 100644
+--- a/@deepseek-ai/dsh-commands/lib/typert.remote-client.js
++++ b/@deepseek-ai/dsh-commands/lib/typert.remote-client.js
+@@ -6,7 +6,7 @@ const _deepseek_ai_dsh_commands_commands_execute_parameter_1$schema = z.string()
+ const _deepseek_ai_dsh_commands_commands_execute_parameter_2$schema = z.array(z.union([z.intersection(z.object({
+   'type': z.literal("image").readonly(),
+ }), z.object({
+-  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif")]),
++  'mediaType': z.union([z.literal("image/png"), z.literal("image/jpeg"), z.literal("image/webp"), z.literal("image/gif"), z.literal("video/mp4")]),
+   'data': z.string(),
+   'name': z.string().optional(),
+ })), z.object({
+diff --git a/@deepseek-ai/dsh-llm/lib/index.js b/@deepseek-ai/dsh-llm/lib/index.js
+index 4ed780e..1a91066 100644
+--- a/@deepseek-ai/dsh-llm/lib/index.js
++++ b/@deepseek-ai/dsh-llm/lib/index.js
+@@ -527,10 +527,12 @@ function extension(mediaType) {
+ 		case "image/jpeg": return ".jpg";
+ 		case "image/webp": return ".webp";
+ 		case "image/gif": return ".gif";
++		case "video/mp4": return ".mp4";
+ 		default: return assertNever(mediaType, "image extension");
+ 	}
+ }
+ function normalizedAccessText(ref, access) {
++	if (ref.mediaType === "video/mp4") return ` Original video (read-only): ${quoted(access.readonlyPath)} (${ref.bytes} bytes, ${ref.mediaType}). Copy to a writable path ending in .mp4 before editing.`;
+ 	return ` Normalized copy (read-only; may be resized or re-encoded): ${quoted(access.readonlyPath)} (${ref.width}x${ref.height}px, ${ref.mediaType}). Source dimensions, format, and byte size may differ. Copy to a writable path ending in ${extension(ref.mediaType)} before editing.`;
+ }
+ /**
+@@ -552,6 +554,10 @@ function textOnlyImageText(ref) {
+ * @returns attachment handle and request-image dimensions.
+ */
+ function requestImageHandleText(ref, version, access) {
++	if (ref.mediaType === "video/mp4") {
++		const video = `Video ${imageIdentity(ref)}; original MP4, ${ref.bytes} bytes.`;
++		return access === void 0 ? video : video + normalizedAccessText(ref, access);
++	}
+ 	const preview = `Image ${imageIdentity(ref)}; request preview ${version.width}x${version.height}px.`;
+ 	return access === void 0 ? `${preview} It may be resized or re-encoded; source dimensions, format, and byte size may differ.` : preview + normalizedAccessText(ref, access);
+ }
+diff --git a/@deepseek-ai/dsh-session/lib/index.js b/@deepseek-ai/dsh-session/lib/index.js
+index b7ff0c5..ffdfbc0 100644
+--- a/@deepseek-ai/dsh-session/lib/index.js
++++ b/@deepseek-ai/dsh-session/lib/index.js
+@@ -1169,7 +1169,8 @@ var Session = class Session {
+ 		const surfaceOpts = opts[0];
+ 		const surfaceMetadata = {
+ 			...surfaceOpts?.sourceEventSeqs === void 0 ? {} : { sourceEventSeqs: surfaceOpts.sourceEventSeqs },
+-			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp }
++			...surfaceOpts?.surfaceOp === void 0 ? {} : { surfaceOp: surfaceOpts.surfaceOp },
++			...surfaceOpts?.ignorable === true ? { ignorable: true } : {}
+ 		};
+ 		const dataSnapshot = snapshotJsonValue(data);
+ 		if (dataSnapshot === void 0) throw new Error(`session event "${type}" carries non-JSON-serializable data`);
+diff --git a/@deepseek-ai/dsh-session/lib/types/index.d.ts b/@deepseek-ai/dsh-session/lib/types/index.d.ts
+index e2f91a6..4f80101 100644
+--- a/@deepseek-ai/dsh-session/lib/types/index.d.ts
++++ b/@deepseek-ai/dsh-session/lib/types/index.d.ts
+@@ -208,7 +208,8 @@ export declare class Session {
+      *
+      * @param type - The event type (key of {@link SessionEventMap}).
+      * @param data - The event payload; must be JSON-serializable.
+-     * @param opts - Surface metadata: `surfaceOp` controls how the event enters
++     * @param opts - Event metadata. `ignorable` marks a purely informational
++     *   event safe for older readers to skip. For surface events, `surfaceOp` controls how the event enters
+      *   the ordered surface; `sourceEventSeqs` lists the seq numbers of earlier
+      *   events this one derives from. REQUIRED for
+      *   {@link SurfaceEventType} events (every message-producing event must
+@@ -235,7 +236,7 @@ export declare class Session {
+      *   append reentered while this acceptance/publication boundary is open also
+      *   rejects before the log changes.
+      */
+-    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []): SessionEvent<T>;
++    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T> & { readonly ignorable?: true }] : [opts?: { readonly ignorable?: true }]): SessionEvent<T>;
+     /** Cached fold of the request-header events — see {@link requestHeader}. */
+     private headerFold;
+     /** Log position (events consumed) the header fold has reached. */
+diff --git a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js b/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
+index d7e4496..4480e3a 100644
+--- a/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
++++ b/@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js
+@@ -25,6 +25,8 @@ const disposition = defineReleasedPayloadDisposition;
+ * unknown variants as owner-opaque JSON.
+ */
+ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
++	// Local router diagnostics are lossless metadata; they never alter Session coordinates.
++	"auto-router/classified": disposition([], ["classifierProvider", "classifierModel", "rawOutput", "finalPreset", "fallbackUsed", "errorCode", "latencyMs", "capabilitySelection", "toolHints", "skillHints"], ["rawOutput", "capabilitySelection", "toolHints", "skillHints"]),
+ 	"agent-preset/selected": disposition(["agentPreset"]),
+ 	"agent/inbox/spliced": disposition([
+ 		"target",
+@@ -116,7 +118,7 @@ const RELEASED_V0_EVENT_DISPOSITIONS = Object.freeze({
+ 		"retry"
+ 	]),
+ 	"model/selection": disposition(["provider", "model"], ["reasoningEffort"]),
+-	"permission/preset": disposition(["preset"]),
++	"permission/preset": disposition(["preset"], ["origin"], ["origin"]),
+ 	"plan/mode": disposition(["active"]),
+ 	"request/context": disposition(["provider", "model"], ["contextWindow"]),
+ 	"request/header": disposition(["header", "reason"], ["startsSeries"]),
+@@ -396,6 +398,9 @@ function assertReleasedPayloadSemantics(event, version) {
+ 			nonEmptyString(data["model"], `${label} model`);
+ 			if (data["reasoningEffort"] !== void 0) nonEmptyString(data["reasoningEffort"], `${label} reasoningEffort`);
+ 			return;
++		case "auto-router/classified":
++			if (!isJsonValue(data)) throw new SessionFormatError(`${label} must be lossless JSON`);
++			return;
+ 		case "permission/preset":
+ 			nonEmptyString(data["preset"], `${label} preset`);
+ 			return;
+@@ -700,7 +705,8 @@ function imageAttachmentValue(value, label) {
+ 		"image/png",
+ 		"image/jpeg",
+ 		"image/webp",
+-		"image/gif"
++		"image/gif",
++		"video/mp4"
+ 	], `${label} mediaType`);
+ 	countValue(attachment["bytes"], `${label} bytes`);
+ 	positiveIntegerValue(attachment["width"], `${label} width`);
+@@ -1524,7 +1530,7 @@ function assertReleasedArtifactCoordinates(artifact, allowLegacySteering, knownE
+ 		if (typeof type !== "string") throw new SessionFormatError(`Session event ${index} type must be a string`);
+ 		const disposition = RELEASED_V0_EVENT_DISPOSITIONS[type];
+ 		const legacy = allowLegacySteering && LEGACY_SOURCE_TYPES.has(type);
+-		const currentKnown = knownEventTypes?.has(type) === true;
++		const currentKnown = knownEventTypes?.has(type) === true || type === "auto-router/classified";
+ 		const ignorableCurrent = !allowLegacySteering && !currentKnown && record["ignorable"] === true;
+ 		if (!currentKnown && !legacy && !ignorableCurrent && !vocabularyNeutral) {
+ 			if (allowLegacySteering) throw new SessionFormatUnsupportedMigrationError(`format v0 contains unknown historical event type ${JSON.stringify(type)} at seq ${index}; migration refuses unknown historical events even when ignorable`);
+diff --git a/@deepseek-ai/dsh-session-persistence/lib/index.js b/@deepseek-ai/dsh-session-persistence/lib/index.js
+index 8c9444c..0a8d918 100644
+--- a/@deepseek-ai/dsh-session-persistence/lib/index.js
++++ b/@deepseek-ai/dsh-session-persistence/lib/index.js
+@@ -181,7 +181,7 @@ function assertVersion(meta, location) {
+ */
+ function validateStoredEvents(meta, events, location) {
+ 	for (const event of events) {
+-		if (!KNOWN_SESSION_EVENT_TYPES.has(event.type) && event.ignorable !== true) throw unsupported(`session "${meta.id}" contains event type "${event.type}" (seq ${event.seq}) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness`, location);
++		if (!KNOWN_SESSION_EVENT_TYPES.has(event.type) && event.ignorable !== true && event.type !== "auto-router/classified") throw unsupported(`session "${meta.id}" contains event type "${event.type}" (seq ${event.seq}) unknown to this harness and not marked ignorable; refusing to interpret the log — it was likely written by a newer harness`, location);
+ 		if (event.type === "request/header") {
+ 			const data = event.data;
+ 			if (typeof data === "object" && data !== null && data["reason"] === "fallback") throw unsupported(`session "${meta.id}" contains a request/header event (seq ${event.seq}) with the unsupported legacy reason "fallback"; refusing to interpret the log — it was written by a retired pre-release harness`, location);
+diff --git a/@deepseek-ai/dsh-workspace/lib/index.js b/@deepseek-ai/dsh-workspace/lib/index.js
+index 42486dc..00fe7d3 100644
+--- a/@deepseek-ai/dsh-workspace/lib/index.js
++++ b/@deepseek-ai/dsh-workspace/lib/index.js
+@@ -455,6 +455,24 @@ var WorkspaceRegistry = class extends Service {
+ 		});
+ 	}
+ 	/**
++	* Forget one deleted Session from every durable workspace projection.
++	* The caller owns removal of the Session artifact itself; this operation
++	* only removes workspace accounting, archive state, and cached headers.
++	*/
++	forgetSession(sessionId) {
++		return this.enqueueOperation(async () => {
++			for (const workspace of this.entities.values()) await workspace.detachSession(sessionId);
++			const state = this.requireState();
++			if (state.archivedSessionIds.includes(sessionId)) await this.setState({
++				...state,
++				archivedSessionIds: state.archivedSessionIds.filter((id) => id !== sessionId)
++			});
++			this.headers.delete(sessionId);
++			this.sessionPaths.delete(sessionId);
++			this.invalidSessionPaths.delete(sessionId);
++		});
++	}
++	/**
+ 	* Whether a session is live, header-indexed, or present in a fresh
+ 	* persistence listing. Only a definite miss returns false — a failing
+ 	* `sessionPersistence.list()` propagates so storage faults never
+diff --git a/@earendil-works/pi-ai/dist/api/openai-completions.js b/@earendil-works/pi-ai/dist/api/openai-completions.js
+index 48464f2..6306422 100644
+--- a/@earendil-works/pi-ai/dist/api/openai-completions.js
++++ b/@earendil-works/pi-ai/dist/api/openai-completions.js
+@@ -937,6 +937,14 @@ export function convertMessages(model, context, compat, options) {
+                             text: sanitizeSurrogates(item.text),
+                         };
+                     }
++                    else if (item.mimeType?.startsWith("video/")) {
++                        return {
++                            type: "video_url",
++                            video_url: {
++                                url: `data:${item.mimeType};base64,${item.data}`,
++                            },
++                        };
++                    }
+                     else {
+                         return {
+                             type: "image_url",
+diff --git a/@deepseek-ai/dsh-client-connection/lib/index.js b/@deepseek-ai/dsh-client-connection/lib/index.js
+index d78f1ff..4f4d9bb 100644
+--- a/@deepseek-ai/dsh-client-connection/lib/index.js
++++ b/@deepseek-ai/dsh-client-connection/lib/index.js
+@@ -615,7 +615,9 @@ var HostConnectionService = class extends Service {
+ 				await bridge(req, res, fetchHandler);
+ 			}
+ 		};
+-		return owner.effect(() => owner.webServer.register(route), `client-connection: ${channel} rpc channel`);
++		return owner.inject(["webServer"], (webCtx) => {
++			webCtx.effect(() => webCtx.get("webServer").register(route), `client-connection: ${channel} rpc channel`);
++		}).dispose;
+ 	}
+ 	registerInterceptor(owner, channel, matches, handler) {
+ 		if (channel !== "/api") throw new Error(`connection: invalid shared RPC channel ${JSON.stringify(channel)}`);

@@ -1,4 +1,7 @@
-export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
+import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
+import type { UpdateSchedule, UpdateState } from './updates.ts';
+
+export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details' | 'updates';
 
 export type DesktopInfo = {
   name: string;
@@ -12,6 +15,12 @@ export type DesktopInfo = {
 };
 
 export interface DesktopAPI {
+  getUpdateState(): Promise<UpdateState>;
+  setUpdateSchedule(schedule: UpdateSchedule): Promise<UpdateState>;
+  checkForUpdates(): Promise<UpdateState>;
+  downloadUpdate(): Promise<UpdateState>;
+  installUpdate(): Promise<UpdateState>;
+  onUpdateState(listener: (state: UpdateState) => void): () => void;
   getInfo(): Promise<DesktopInfo>;
   getBoot(): Promise<unknown>;
   connect(input: string): Promise<{ ok: boolean; error?: string }>;
@@ -20,6 +29,13 @@ export interface DesktopAPI {
   ready(): Promise<void>;
   setColorScheme(scheme: 'light' | 'dark'): Promise<void>;
   openExternal(url: string): Promise<void>;
+  browserOpen(id: string, target: BrowserTarget, navigation: string): Promise<BrowserState>;
+  browserBounds(id: string, bounds: unknown): Promise<void>;
+  browserNavigate(id: string, url: string): Promise<void>;
+  browserAction(id: string, action: BrowserAction): Promise<void>;
+  browserClose(id: string): Promise<void>;
+  onOpenLink(listener: (url: string) => void): () => void;
+  onBrowserState(listener: (state: BrowserState) => void): () => void;
   onCommand(listener: (command: DesktopCommand) => void): () => void;
 }
 
@@ -31,7 +47,7 @@ declare global {
 }
 
 export function isDesktopCommand(value: unknown): value is DesktopCommand {
-  return ['new-session', 'search', 'settings', 'sidebar', 'details'].includes(value as string);
+  return ['new-session', 'search', 'settings', 'sidebar', 'details', 'updates'].includes(value as string);
 }
 
 export function externalWebUrl(value: unknown): string | undefined {

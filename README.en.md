@@ -29,6 +29,8 @@ Each release includes `SHA256SUMS.txt`. Starting with v0.1.1, the macOS package 
 
 The Windows installer is not code-signed, so Windows may ask you to confirm its source. Uninstalling removes the program while preserving DSH sessions and user configuration.
 
+Starting with v0.1.2, the app offers two automatic check modes: once at each startup (the default), or once daily at a chosen local time while the app is running. Published GitHub previews are included. You can also check from the application menu or **Settings → General → Desktop application**. Choose **Download update**, then **Restart and install** after verification. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. Versions v0.1.1 and earlier require a one-time manual upgrade.
+
 ## Features
 
 - Workspace and session lists, history, renaming, branching, deletion, search, and log export.
@@ -36,8 +38,10 @@ The Windows installer is not code-signed, so Windows may ask you to confirm its 
 - Model provider configuration, permission approvals, plans, goals, questions, workflows, and subagents.
 - Standard, PTC, Minimal, Creative, Auto, and Audit presets; model reasoning effort is configured separately.
 - Native menus, file and directory pickers, download saving, zoom, window state, and recovery from core failures.
+- Conversation links open in right-sidebar browser tabs; the file sidebar previews HTML/Canvas, SVG, images, and PDFs, with a source-view action.
+- Existing file paths in replies open directly, images have thumbnails, and the right sidebar collapses when its last file or browser tab closes.
 
-The app bundles DSH `0.1.3-alpha.2`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
+The app bundles DSH `0.1.5-alpha.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 
 Some features depend on your model or external tools. MP4 attachments require a provider that supports `video_url`. Audit's Codex and Claude Code backends require their respective CLIs; a DSH model backend can also be configured. The installer does not include model accounts, API keys, or these external CLIs.
 
@@ -45,9 +49,11 @@ Some features depend on your model or external tools. MP4 attachments require a 
 
 The app, Web, and TUI can share the same `DSH_HOME`, which defaults to `~/.dsh`. Sessions, attachments, workspaces, and model configuration are stored there. The app's own window and port state is stored in the `DSH Desktop` directory under the system's Application Support or AppData folder.
 
+Codex sign-in uses DSH's authorization service and shared credential store. The existing provider refreshes expired tokens. See [build instructions](docs/BUILDING.md) to enable it in Web/TUI. In TUI, use `/login openai-codex` (`--device` for remote terminals), `/auth` for status, and `/logout openai-codex` to sign out. Authorization input is excluded from chat and input history.
+
 The official session lifecycle lock allows only one process to write to a session at a time. Other interfaces receive an ownership error when they try to resume, modify, or delete a session that is in use. They can take over after the owning process exits. Switching pages does not guarantee that a session is released, and following an active stream live across separate processes is not currently supported.
 
-Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.3-alpha.2).
+Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.5-alpha.1).
 
 ## Build from source
 

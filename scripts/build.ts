@@ -6,8 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const nativeExternals = ['electron', ...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
+const artifactInstaller = await import(new URL('install-artifact-links.mjs', import.meta.url).href);
+await artifactInstaller.applyArtifactLinks();
+const sidebarInstaller = await import(new URL('install-sidebar-autoclose.mjs', import.meta.url).href);
+await sidebarInstaller.applySidebarAutoclose();
 
-for (const entry of ['main', 'preload']) {
+for (const entry of ['main', 'preload', 'updater']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 

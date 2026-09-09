@@ -1,0 +1,21 @@
+{
+  "dsh": "0.1.5-alpha.1",
+  "files": [
+    {
+      "kind": "chat",
+      "package": "@deepseek-ai/dsh-client-ui-chat",
+      "path": "@deepseek-ai/dsh-client-ui-chat/lib/client.js",
+      "before": "7d7e231e11afa53fc43b1fd91eae43fa0092f462f6a21a20ca8a905862afb6f9",
+      "after": "2809e8b7653802dbe9108e721bab683f9ad3fed2b6a3d66d01d629ef2fa17deb",
+      "patchSha256": "b49188933767504caa2acd985797da3f228ad43a2bde426c207dcb5ef37a6567"
+    },
+    {
+      "kind": "primitives",
+      "package": "@deepseek-ai/dsh-client-ui-primitives",
+      "path": "@deepseek-ai/dsh-client-ui-primitives/lib/index.js",
+      "before": "853e6f9227e8608db50f971dfc97874c7612a1aea9a6176bf753339ab54871e7",
+      "after": "0903be162f81be4a75e4bb5e14287a45fe3979cc472f7ebfe52c997bf842cfc0",
+      "patchSha256": "02095c2e34f591229424d3553d116d4dc4a0ec16c9ec5430483d1fc79135d430"
+    }
+  ]
+}

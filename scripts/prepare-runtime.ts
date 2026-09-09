@@ -10,7 +10,8 @@ const installed = process.env.DSH_INSTALL_ROOT ?? dirname(await realpath(join(ho
 const source = installed.replaceAll('\\', '/').endsWith('/lib') ? dirname(installed) : installed;
 const destination = join(root, '.runtime');
 const pkg = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
-if (pkg.name !== '@deepseek-ai/dsh' || pkg.version !== '0.1.3-alpha.2') throw new Error('Runtime snapshot requires the verified DSH 0.1.3-alpha.2 installation.');
+const pins = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+if (pkg.name !== '@deepseek-ai/dsh' || pkg.version !== pins.dsh) throw new Error(`Runtime snapshot requires the verified DSH ${pins.dsh} installation.`);
 try {
   await rename(destination, join(root, `.runtime-before-${Date.now()}`));
 } catch (error) {
@@ -35,6 +36,12 @@ await cp(process.execPath, join(destination, 'bin', nodeName));
 if (process.platform !== 'win32') await chmod(join(destination, 'bin', nodeName), 0o755);
 await writeFile(join(destination, 'package.json'), JSON.stringify({ name: 'dsh-desktop-runtime', version: '0.1.0', private: true, type: 'module' }));
 const req = createRequire(join(destination, 'package.json'));
+const auditInstaller = await import(new URL('install-audit-compat.mjs', import.meta.url).href);
+await auditInstaller.applyAuditCompat({ nodeModules: join(destination, 'node_modules'), pluginRoot: join(destination, 'node_modules/dsh-audit-mode'), backupHome: join(root, '.build-runtime') });
+const artifactInstaller = await import(new URL('install-artifact-links.mjs', import.meta.url).href);
+await artifactInstaller.applyArtifactLinks();
+const sidebarInstaller = await import(new URL('install-sidebar-autoclose.mjs', import.meta.url).href);
+await sidebarInstaller.applySidebarAutoclose();
 for (const name of ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-base', 'dsh-auto-preset-router', 'dsh-audit-mode', 'dsh-progressive-tools']) req.resolve(name);
 await writeFile(join(destination, 'snapshot.json'), JSON.stringify({ dsh: pkg.version, node: process.version, nodeSha256: createHash('sha256').update(await readFile(process.execPath)).digest('hex'), createdAt: new Date().toISOString() }, null, 2));
 console.log('Prepared independent DSH runtime and Node binary; no user data copied.');

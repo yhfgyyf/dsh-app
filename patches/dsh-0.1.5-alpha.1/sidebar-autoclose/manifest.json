@@ -1,0 +1,7 @@
+{
+  "package": "@deepseek-ai/dsh-client-ui-sidebar-right",
+  "path": "@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
+  "before": "e77235cd72975baf113214f6d96e8238066a4882e3785ea8d83d9489a94b037a",
+  "after": "377746684d60659421c09b867d433d726eedd3ca52c8a8c68a886823d5a8d72e",
+  "patchSha256": "dcfaef13f0b2df30b367829520fe660d35a53420800ecc7c142edca6a86d3317"
+}

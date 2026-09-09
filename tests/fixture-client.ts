@@ -16,9 +16,9 @@ export async function connectFixture(connectionFile: string | URL = new URL('../
   const cookie = response.headers.getSetCookie().map(value => value.split(';')[0]).join('; ');
   assert.ok(cookie);
   const headers = { cookie, origin: config.endpoint, 'content-type': 'application/json' };
-  const rpc = async (method: string, args: object = {}, allowFailure = false) => {
+  const rpc = async (method: string, args: object = {}, allowFailure = false, channel = '/api') => {
     const rpcId = randomUUID();
-    const response = await fetch(config.endpoint + '/api/' + method, { method: 'POST', headers, body: JSON.stringify({ type: 'client-request', rpcId, method, payload: { args } }), signal: AbortSignal.timeout(20000) });
+    const response = await fetch(config.endpoint + channel + '/' + method, { method: 'POST', headers, body: JSON.stringify({ type: 'client-request', rpcId, method, payload: { args } }), signal: AbortSignal.timeout(20000) });
     assert.equal(response.status, 200, `${method}: HTTP ${response.status}`);
     const body = await response.json();
     assert.equal(body.rpcId, rpcId);

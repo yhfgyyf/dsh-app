@@ -1,0 +1,57 @@
+--- a/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
++++ b/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
+@@ -6655,7 +6655,7 @@
+ 		case "link": return renderAnchor(node.url, renderChildren(node.children, {
+ 			...context,
+ 			inLink: true
+-		}), key, !anchorWrapsOnlyImages(node.children));
++		}), key, !anchorWrapsOnlyImages(node.children), context);
+ 		case "linkReference": return renderLinkReference(node, key, context);
+ 		case "image": return renderImage(node.url, node.alt ?? "", key, context);
+ 		case "imageReference": return renderImageReference(node, key, context);
+@@ -6775,7 +6775,17 @@
+ 	}, key);
+ }
+ /** Anchor over a parsed markdown destination, which hast normalized before the allowlist saw it. */
+-function renderAnchor(url, children, key, glyph = true) {
++function localDestinationMention(url, context, kind) {
++	let decoded;
++	try { decoded = decodeURIComponent(url); } catch { decoded = url; }
++	return context?.fileMentions?.resolve(decoded, kind);
++}
++function renderAnchor(url, children, key, glyph = true, context) {
++	const mention = localDestinationMention(url, context);
++	if (mention) return jsx("button", {
++		type: "button", className: css$22.fileMention, title: mention.title,
++		"aria-label": mention.label, onClick: mention.open, children
++	}, key);
+ 	return renderSafeLink(normalizeUri(url), children, key, glyph);
+ }
+ /**
+@@ -6797,11 +6807,16 @@
+ 		className: css$22.imageAlt,
+ 		children: alt
+ 	}, key);
+-	return jsx(MarkdownImage, {
++	const mention = localDestinationMention(url, context, "image");
++	const picture = jsx(MarkdownImage, {
+ 		src: imageSrc,
+ 		alt,
+ 		destination: url
+ 	}, `${key}:${imageSrc}`);
++	return mention && !context.inLink ? jsx("button", {
++		type: "button", className: "desktop-file-image", title: mention.title,
++		"aria-label": mention.label, onClick: mention.open, children: picture
++	}, key) : picture;
+ }
+ /** Failed loads retain the authored alt or destination; a new source remounts the image. */
+ function MarkdownImage({ src, alt, destination }) {
+@@ -6839,7 +6854,7 @@
+ 		...context,
+ 		inLink: true
+ 	});
+-	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children));
++	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context);
+ }
+ function renderImageReference(node, key, context) {
+ 	const definition = context.targets.definitions.get(node.identifier.toUpperCase());

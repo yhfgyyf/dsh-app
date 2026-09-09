@@ -38,4 +38,6 @@ for (const [name, value] of Object.entries(pins.plugins) as [string, { repositor
   if (pkg.name !== name || pkg.version !== value.version) throw new Error(`Plugin identity differs: ${name}`);
 }
 await writeFile(join(build, 'source.json'), JSON.stringify({ installRoot, pluginRoot }, null, 2));
+const auditInstaller = await import(new URL('install-audit-compat.mjs', import.meta.url).href);
+await auditInstaller.applyAuditCompat({ nodeModules: join(installRoot, 'node_modules'), pluginRoot: join(pluginRoot, 'dsh-audit-mode'), backupHome: build });
 await run(process.execPath, [join(root, 'scripts/prepare-runtime.ts')], { env });
