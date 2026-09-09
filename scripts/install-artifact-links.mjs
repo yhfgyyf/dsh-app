@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, resolve, dirname } from 'node:path';
+import { join, resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -28,7 +28,7 @@ export async function applyArtifactLinks({ runtimeNodeModules = join(root, '.run
   if (mode === 'verify') throw new Error('Artifact-link adapter is missing');
   const backup = join(backupHome, 'backups', 'artifact-links-' + new Date().toISOString().replace(/[:.]/g, '-'));
   for (const file of pending) {
-    const path = join(backup, file.path);
+    const path = join(backup, file.kind, relative(file.base, file.path));
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, file.bytes);
     if (sha(await readFile(path)) !== file.before) throw new Error('Artifact-link backup verification failed');

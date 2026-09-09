@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const requireRuntime = createRequire(new URL('../.runtime/package.json', import.meta.url));
 const paths = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/dsh-util-workspace-path')).href);
@@ -40,4 +44,27 @@ test('artifact package adapter is idempotent and verifies both runtime and bundl
   const { applyArtifactLinks } = await import(new URL('../scripts/install-artifact-links.mjs', import.meta.url).href);
   assert.deepEqual(await applyArtifactLinks({ mode: 'check' }), { pending: 0 });
   assert.deepEqual(await applyArtifactLinks(), { changed: 0, verified: true });
+});
+
+test('first artifact adapter installation keeps verified relative backup paths on every platform', async () => {
+  const { applyArtifactLinks } = await import(new URL('../scripts/install-artifact-links.mjs', import.meta.url).href);
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const scratch = await realpath(await mkdtemp(join(tmpdir(), 'dsh-artifact-backup-')));
+  const patchRoot = join(root, 'patches/dsh-0.1.5-alpha.1/artifact-links');
+  const manifest = JSON.parse(await readFile(join(patchRoot, 'manifest.json'), 'utf8'));
+  for (const file of manifest.files) {
+    const base = join(scratch, file.kind);
+    const target = join(base, file.path);
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(join(base, file.package, 'package.json'), JSON.stringify({ name: file.package, version: manifest.dsh }));
+    await writeFile(target, await readFile(join(root, file.kind === 'chat' ? '.runtime/node_modules' : 'node_modules', file.path)));
+    const reverted = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + base.replaceAll('\\', '/'), join(patchRoot, file.kind + '.patch')], { cwd: scratch, encoding: 'utf8' });
+    assert.equal(reverted.status, 0, reverted.stderr);
+  }
+  const result = await applyArtifactLinks({ runtimeNodeModules: join(scratch, 'chat'), clientNodeModules: join(scratch, 'primitives'), backupHome: join(scratch, 'backup') });
+  assert.equal(result.changed, 2);
+  for (const file of manifest.files) {
+    const bytes = await readFile(join(result.backup, file.kind, file.path));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), file.before);
+  }
 });
