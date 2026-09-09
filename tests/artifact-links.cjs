@@ -94,11 +94,11 @@ async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
   const js = code => host.executeJavaScript(code, true);
-  await js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续')?.click()`);
+  await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await js(`(async()=>{const method='workspace/create';const body=await(await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:{request:{path:${JSON.stringify(workspace)}}}}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));})()`);
   await js(`(async()=>{const method='session/rename';const body=await(await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:{request:{sessionId:${JSON.stringify(sessionId)},title:'Artifact link acceptance'}}}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));})()`);
   await sleep(500);
-  await js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='稍后配置')?.click();document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
+  await js(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click();document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
   await until(() => js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).some(row=>row.textContent.includes('Artifact link acceptance'))`), 'Historical fixture session missing');
   await js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Artifact link acceptance')).click()`);
   await until(() => js(`!!document.querySelector('.hWmORq_body code button[title$="/pelican.svg"]')`), 'Bare SVG filename did not become a file link');
@@ -131,12 +131,12 @@ async function run(event) {
   await until(() => js(`document.body.innerText.includes('Readable report content.')`), 'Markdown document did not open in text sidebar');
   report.checks.push('Other generated documents use the existing sidebar text viewer');
   // Closing content leaves the seeded Start tab, but must release the column.
-  await js(`Array.from(document.querySelectorAll('[data-dockkit-tab]')).filter(t=>!t.textContent.startsWith('开始')).forEach(t=>document.querySelector('[data-dockkit-tab-close="'+t.getAttribute('data-dockkit-tab')+'"]').click())`);
+  await js(`Array.from(document.querySelectorAll('[data-dockkit-tab]')).filter(t=>!/^(开始|Start)/.test(t.textContent)).forEach(t=>document.querySelector('[data-dockkit-tab-close="'+t.getAttribute('data-dockkit-tab')+'"]').click())`);
   await until(() => js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the last document left the sidebar open');
   await until(() => svgPage.isDestroyed() && pngPage.isDestroyed() && canvasPage.isDestroyed(), 'Closed sidebar retained native previews');
   const reopened = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
-  await js(`{const guide=Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(t=>t.textContent.startsWith('开始'));document.querySelector('[data-dockkit-tab-close="'+guide.getAttribute('data-dockkit-tab')+'"]').click()}`);
+  await js(`{const guide=Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(t=>/^(开始|Start)/.test(t.textContent));document.querySelector('[data-dockkit-tab-close="'+guide.getAttribute('data-dockkit-tab')+'"]').click()}`);
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
   await js(`document.querySelector('[data-dockkit-tab-close]').click()`);
   await until(() => reopened.isDestroyed() && js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the sole preview failed to collapse');

@@ -1,7 +1,7 @@
 import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
 import type { UpdateSchedule, UpdateState } from './updates.ts';
 
-export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details' | 'updates';
+export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
 
 export type DesktopInfo = {
   name: string;
@@ -47,7 +47,7 @@ declare global {
 }
 
 export function isDesktopCommand(value: unknown): value is DesktopCommand {
-  return ['new-session', 'search', 'settings', 'sidebar', 'details', 'updates'].includes(value as string);
+  return ['new-session', 'search', 'settings', 'sidebar', 'details'].includes(value as string);
 }
 
 export function externalWebUrl(value: unknown): string | undefined {

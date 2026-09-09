@@ -29,7 +29,7 @@ Each release includes `SHA256SUMS.txt`. Starting with v0.1.1, the macOS package 
 
 The Windows installer is not code-signed, so Windows may ask you to confirm its source. Uninstalling removes the program while preserving DSH sessions and user configuration.
 
-Starting with v0.1.2, the app offers two automatic check modes: once at each startup (the default), or once daily at a chosen local time while the app is running. Published GitHub previews are included. You can also check from the application menu or **Settings → General → Desktop application**. Choose **Download update**, then **Restart and install** after verification. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. Versions v0.1.1 and earlier require a one-time manual upgrade.
+Starting with v0.1.2, the app automatically checks published GitHub Releases, including previews. A small title-bar icon appears when an update is available: click to download, then click again after verification to restart and install. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. In Settings, the Desktop application section offers checks once at each startup (the default) or daily at a chosen local time while the app runs. Versions v0.1.1 and earlier require a one-time manual upgrade.
 
 ## Features
 

@@ -58,7 +58,7 @@ async function run(event) {
   const url = `http://127.0.0.1:${server.address().port}/`;
   const workspace = join(data, 'workspace');
   mkdirSync(workspace, { recursive: true });
-  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续')?.click()`);
+  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await host.executeJavaScript(`(async()=>{
     const rpc=async(method,args)=>{const body=await (await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));return body.result.value;};
     const adopted=await rpc('workspace/create',{request:{path:${JSON.stringify(workspace)}}});
@@ -66,7 +66,7 @@ async function run(event) {
     await rpc('session/rename',{request:{sessionId:created.sessionId,title:'Sidebar native acceptance'}});
   })()`);
   await sleep(500);
-  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='稍后配置')?.click(); document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
+  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click(); document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
   await sleep(300);
   await until(() => host.executeJavaScript(`document.title.includes('Sidebar native acceptance')`), 'Fixture session missing');
   await sleep(400);
@@ -112,7 +112,7 @@ async function run(event) {
   await invoke('browser-close', 'fixture:preview');
   await until(() => preview.isDestroyed(), 'Closed preview retained its renderer');
   report.checks.push('Closing preview releases its web contents');
-  await host.executeJavaScript(`Array.from(document.querySelectorAll('[role="tab"]')).find(t=>t.textContent.startsWith('开始')).click()`);
+  await host.executeJavaScript(`Array.from(document.querySelectorAll('[role="tab"]')).find(t=>/^(开始|Start)/.test(t.textContent)).click()`);
   await until(() => host.executeJavaScript(`!!document.querySelector('[data-sidebar-right-guide-entry="files"]')`), 'Files guide missing');
   await host.executeJavaScript(`document.querySelector('[data-sidebar-right-guide-entry="files"]').click()`);
   await until(() => host.executeJavaScript(`!!document.querySelector('[data-files-path$="/canvas.html"] button, [data-files-path="canvas.html"] button')`), 'Canvas missing from files sidebar');

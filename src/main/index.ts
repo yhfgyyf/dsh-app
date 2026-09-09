@@ -75,7 +75,7 @@ else {
   }
 
   function sendCommand(command: DesktopCommand) {
-    if (window && !window.isDestroyed() && (isEndpointDocument(window.webContents.getURL(), preferences.endpoint) || (command === 'updates' && isSetupDocument(window.webContents.getURL())))) {
+    if (window && !window.isDestroyed() && isEndpointDocument(window.webContents.getURL(), preferences.endpoint)) {
       window.webContents.send('desktop:command', command);
     }
   }
@@ -93,7 +93,7 @@ else {
 
   function installMenu() {
     const template: MenuItemConstructorOptions[] = [
-      { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '检查更新…', click: () => { sendCommand('updates'); void updates.check(); } }, { type: 'separator' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
+      { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
       { label: '文件', submenu: [{ label: '新建会话', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new-session') }, { label: '搜索会话', accelerator: 'CmdOrCtrl+F', click: () => sendCommand('search') }, { type: 'separator' }, { role: 'close', label: '关闭窗口' }] },
       { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
       { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开右侧面板', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },

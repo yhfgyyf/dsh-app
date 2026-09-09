@@ -56,7 +56,13 @@ ipcMain.handle = (channel, listener) => handle(channel, async (...args) => {
       try {
         if (!app.isPackaged || app.getVersion() !== '0.1.1') throw new Error('Old packaged fixture identity is wrong');
         if (existsSync(join(fixture.directory, 'before-install.json'))) throw new Error('Old app relaunched after installation');
-        const discovered = await js('window.dshDesktop.checkForUpdates()');
+        let discovered;
+        const deadline = Date.now() + 25000;
+        do {
+          discovered = await js('window.dshDesktop.getUpdateState()');
+          if (discovered.status === 'available' || discovered.status === 'error') break;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } while (Date.now() < deadline);
         if (discovered.status !== 'available') throw new Error(JSON.stringify(discovered));
         const ready = await js('window.dshDesktop.downloadUpdate()');
         if (ready.status !== 'ready') throw new Error(JSON.stringify(ready));
@@ -105,7 +111,7 @@ try {
   const result = await until(async () => { try { return JSON.parse(await readFile(resultPath, 'utf8')); } catch (error) { if (error.code === 'ENOENT') return; throw error; } }, 'Installer did not complete', 180000);
   assert.equal(result.status, 'installed', JSON.stringify(result)); assert.equal(result.version, version);
   assert.equal(alive(child.pid), false); assert.equal(alive(oldCore), false);
-  report.checks.push('Packaged 0.1.1 discovers, downloads and validates the complete new release ZIP');
+  report.checks.push('Packaged 0.1.1 automatically discovers the new release at startup and validates its complete ZIP');
   report.checks.push('App and owned core exit before the external helper replaces the installation');
   assert.equal(await sha(archive), wantedHash);
   assert.equal(await sha(join(result.backup, 'Contents/Resources/app.asar')), oldHash);

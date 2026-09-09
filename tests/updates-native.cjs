@@ -1,4 +1,4 @@
-// Real desktop menu, IPC and React UI with a local release fixture; no model requests.
+// Production title-bar icon and IPC with a local release fixture; no model requests.
 const { app, BrowserWindow, ipcMain, Menu, webContents } = require('electron');
 const assert = require('node:assert/strict');
 const { copyFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -62,29 +62,34 @@ ipcMain.handle = (channel, listener) => {
 async function run(event) {
   const host = event.sender;
   const js = code => host.executeJavaScript(code, true);
-  await js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='继续')?.click()`);
+  await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await sleep(250);
-  await js(`Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='稍后配置')?.click()`);
-  const menu = Menu.getApplicationMenu().items[0].submenu.items.find(item => item.label === '检查更新…');
-  assert.ok(menu); menu.click();
-  await until(() => js(`!!document.querySelector('dialog[open][aria-label="应用更新"]')`), 'Native menu did not open updater');
-  await until(() => js(`document.querySelector('dialog[open]').innerText.includes('发现新版本 99.99.99')`), 'Published preview not shown');
+  await js(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click()`);
+  assert.equal(Menu.getApplicationMenu().items[0].submenu.items.some(item => item.label.includes('检查更新')), false);
+  assert.equal(await js(`!!document.querySelector('dialog[aria-label="应用更新"]')`), false);
+  assert.equal(await js(`!!document.querySelector('.desktop-update-icon')`), false);
+  // The packaged test exercises the startup timer; this fixture injects discovery through IPC.
+  await js('window.dshDesktop.checkForUpdates()');
+  await until(() => js(`!!document.querySelector('.desktop-update-icon[data-update-state="available"]')`), 'Available update icon missing');
   assert.equal(report.requests, 1);
-  report.checks.push('Native Check for Updates menu opens the in-app dialog and discovers a published GitHub preview');
+  assert.equal(await js(`document.querySelector('.desktop-update-icon').textContent.trim()`), '');
+  assert.equal(await js(`!!document.querySelector('.desktop-update-icon svg')`), true);
+  assert.equal(await js(`Array.from(document.querySelectorAll('button')).some(button => button.textContent.includes('检查更新'))`), false);
+  report.checks.push('GitHub discovery shows only a title-bar icon; no updater dialog or manual check entry exists');
+  await js(`document.querySelector('.desktop-update-icon').click()`);
+  await until(() => js(`!!document.querySelector('.desktop-update-icon[data-update-state="ready"]')`), 'One click did not download and validate the update');
+  assert.match(await js(`document.querySelector('.desktop-update-icon').title`), /点击重启安装/);
+  report.checks.push('One icon click downloads and validates the update, then offers restart through the same icon');
   assert.equal((await js('window.dshDesktop.getUpdateState()')).schedule.mode, 'startup');
-  await js(`(() => { const select = document.querySelector('dialog[open] select[aria-label="更新检查模式"]'); select.value = 'daily'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(() => js(`!!document.querySelector('dialog[open] input[aria-label="每日检查时间"]')`), 'Daily time control did not appear');
   await js(`window.dshDesktop.setUpdateSchedule({mode:'daily',time:'18:45'})`);
-  await until(() => js(`document.querySelector('dialog[open] input[aria-label="每日检查时间"]').value === '18:45'`), 'Daily time did not persist in UI');
-  await js(`(() => { const select = document.querySelector('dialog[open] select'); select.value = 'startup'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  await until(() => js(`!document.querySelector('dialog[open] input[aria-label="每日检查时间"]')`), 'Startup mode should hide the daily time control');
-  report.checks.push('Update settings switch between startup and a persisted local daily time');
-  await js(`Array.from(document.querySelectorAll('dialog[open] button')).find(b=>b.textContent==='下载更新').click()`);
-  await until(() => js(`document.querySelector('dialog[open]').innerText.includes('已下载并通过校验')`), 'Download did not become ready');
-  report.checks.push('Update download passes SHA-256 and platform validation before enabling Restart and Install');
-  await js(`Array.from(document.querySelectorAll('dialog[open] button')).find(b=>b.textContent==='重启并安装').click()`);
-  await until(() => js(`document.querySelector('dialog[open]').innerText.includes('已安装的 DSH Desktop')`), 'Development app should not replace an installation');
-  report.checks.push('A development build cannot replace the installed app');
+  assert.deepEqual((await js('window.dshDesktop.getUpdateState()')).schedule, { mode: 'daily', time: '18:45' });
+  await js(`window.dshDesktop.setUpdateSchedule({mode:'startup',time:'18:45'})`);
+  report.checks.push('Automatic update schedule persists between startup and a chosen local daily time');
+  writeFileSync(join(data, 'update-icon.png'), (await host.capturePage()).toPNG());
+  await js(`document.querySelector('.desktop-update-icon').click()`);
+  await until(() => js(`document.querySelector('.desktop-update-icon').title.includes('已安装的 DSH Desktop')`), 'Development app should not replace an installation');
+  assert.equal(await js(`!!document.querySelector('dialog[aria-label="应用更新"]')`), false);
+  report.checks.push('Installation errors stay on the icon and a development build cannot replace the installed app');
   const foreign = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   await foreign.loadURL('about:blank');
   assert.throws(() => handles.get('desktop:update-install')({ sender: foreign.webContents, senderFrame: foreign.webContents.mainFrame }), /不能调用/);
