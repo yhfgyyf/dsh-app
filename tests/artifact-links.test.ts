@@ -58,7 +58,7 @@ test('first artifact adapter installation keeps verified relative backup paths o
     await mkdir(dirname(target), { recursive: true });
     await writeFile(join(base, file.package, 'package.json'), JSON.stringify({ name: file.package, version: manifest.dsh }));
     await writeFile(target, await readFile(join(root, file.kind === 'chat' ? '.runtime/node_modules' : 'node_modules', file.path)));
-    const reverted = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + base.replaceAll('\\', '/'), join(patchRoot, file.kind + '.patch')], { cwd: scratch, encoding: 'utf8' });
+    const reverted = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + base.replaceAll('\\', '/'), join(patchRoot, file.kind + '.patch')], { cwd: scratch, encoding: 'utf8' });
     assert.equal(reverted.status, 0, reverted.stderr);
   }
   const result = await applyArtifactLinks({ runtimeNodeModules: join(scratch, 'chat'), clientNodeModules: join(scratch, 'primitives'), backupHome: join(scratch, 'backup') });
