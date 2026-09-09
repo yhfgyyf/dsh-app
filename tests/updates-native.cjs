@@ -1,5 +1,5 @@
 // Production title-bar icon and IPC with a local release fixture; no model requests.
-const { app, BrowserWindow, ipcMain, Menu, webContents } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, session, webContents } = require('electron');
 const assert = require('node:assert/strict');
 const { copyFileSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { execFileSync } = require('node:child_process');
@@ -25,17 +25,22 @@ if (process.platform === 'darwin') {
 } else writeFileSync(asset, 'installer fixture; never executed');
 const bytes = readFileSync(asset);
 const digest = 'sha256:' + createHash('sha256').update(bytes).digest('hex');
-const report = { checks: [], failures: [], requests: 0 };
-const originalFetch = globalThis.fetch;
-globalThis.fetch = async (input, options) => {
+const report = { checks: [], failures: [], requests: 0, downloads: 0 };
+let failCheck = true;
+app.whenReady().then(() => {
+const updates = session.fromPartition('dsh-updates');
+const originalFetch = updates.fetch.bind(updates);
+updates.fetch = async (input, options) => {
   const url = String(input);
   if (url.startsWith('https://api.github.com/repos/yhfgyyf/dsh-app/releases')) {
     report.requests++;
+    if (failCheck) { failCheck = false; throw new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } }); }
     return Response.json([{ tag_name: 'v' + version, draft: false, prerelease: true, published_at: '2026-09-09T00:00:00Z', assets: [{ name, state: 'uploaded', size: bytes.length, digest, browser_download_url: `https://github.com/yhfgyyf/dsh-app/releases/download/v${version}/${name}` }] }]);
   }
-  if (url === `https://github.com/yhfgyyf/dsh-app/releases/download/v${version}/${name}`) return new Response(bytes);
+  if (url === `https://github.com/yhfgyyf/dsh-app/releases/download/v${version}/${name}`) { report.downloads++; return new Response(bytes); }
   return originalFetch(input, options);
 };
+});
 let finished = false, failed = false, started = false;
 const timeout = setTimeout(() => finish(new Error('Update UI test timed out')), 55000);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -70,8 +75,12 @@ async function run(event) {
   assert.equal(await js(`!!document.querySelector('.desktop-update-icon')`), false);
   // The packaged test exercises the startup timer; this fixture injects discovery through IPC.
   await js('window.dshDesktop.checkForUpdates()');
+  await until(() => js(`document.querySelector('.desktop-update-icon')?.title.includes('点击重试检查更新')`), 'A failed startup check must expose its retry action even without a version');
+  assert.match(await js(`document.querySelector('.desktop-update-icon').title`), /api.github.com.*ECONNRESET/);
+  await js(`document.querySelector('.desktop-update-icon').click()`);
   await until(() => js(`!!document.querySelector('.desktop-update-icon[data-update-state="available"]')`), 'Available update icon missing');
-  assert.equal(report.requests, 1);
+  assert.equal(report.requests, 2);
+  report.checks.push('A failed version check shows a network error and its icon retries discovery');
   assert.equal(await js(`document.querySelector('.desktop-update-icon').textContent.trim()`), '');
   assert.equal(await js(`!!document.querySelector('.desktop-update-icon svg')`), true);
   assert.equal(await js(`Array.from(document.querySelectorAll('button')).some(button => button.textContent.includes('检查更新'))`), false);
@@ -88,6 +97,11 @@ async function run(event) {
   writeFileSync(join(data, 'update-icon.png'), (await host.capturePage()).toPNG());
   await js(`document.querySelector('.desktop-update-icon').click()`);
   await until(() => js(`document.querySelector('.desktop-update-icon').title.includes('已安装的 DSH Desktop')`), 'Development app should not replace an installation');
+  assert.match(await js(`document.querySelector('.desktop-update-icon').title`), /点击重试安装/);
+  await js(`document.querySelector('.desktop-update-icon').click()`);
+  await until(() => js(`document.querySelector('.desktop-update-icon').title.includes('点击重试安装')`), 'Install retry action was lost');
+  assert.equal(report.downloads, 1, 'Installation errors must not redownload a verified package');
+  report.checks.push('Retry after installation failure reuses the verified package and retries installation');
   assert.equal(await js(`!!document.querySelector('dialog[aria-label="应用更新"]')`), false);
   report.checks.push('Installation errors stay on the icon and a development build cannot replace the installed app');
   const foreign = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });

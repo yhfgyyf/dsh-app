@@ -121,7 +121,24 @@ test('update service deduplicates requests, reports errors, retries and only ins
   assert.equal((await updater.download()).status, 'ready');
   assert.equal((await updater.install()).status, 'error');
   assert.match(updater.state.error!, /已安装/);
+  assert.equal(updater.state.retry, 'install');
   await updater.setSchedule({ mode: 'daily', time: '09:00' });
   assert.match(updater.state.error!, /已安装/);
+  assert.equal(updater.state.retry, 'install');
+  const downloadedCalls = calls;
+  assert.equal((await updater.check()).status, 'error');
+  assert.equal((await updater.download()).status, 'ready');
+  assert.equal(calls, downloadedCalls, 'An installation error must not download the same verified package again');
   assert.ok(states.includes('downloading') && states.includes('ready'));
+});
+
+test('network failures identify the GitHub host and code without exposing URL parameters or nested secrets', async () => {
+  await assert.rejects(githubFetch('https://release-assets.githubusercontent.com/asset?secret=private', async () => {
+    throw new TypeError('fetch failed secret=private', { cause: { code: 'ECONNREFUSED', token: 'private' } });
+  }, AbortSignal.timeout(1000)), error => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /release-assets.githubusercontent.com.*ECONNREFUSED/);
+    assert.doesNotMatch(error.message, /private|secret|token/);
+    return true;
+  });
 });

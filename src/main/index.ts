@@ -11,6 +11,7 @@ import { createDshTransport } from './transport.ts';
 import { DesktopRuntime } from './runtime.ts';
 import { SidebarBrowser } from './sidebar-browser.ts';
 import { DesktopUpdates } from './updates.ts';
+import { createUpdateFetch } from './update-network.ts';
 import { installTextContextMenu } from './context-menu.ts';
 import { openLocal } from './local-open.ts';
 
@@ -273,6 +274,8 @@ else {
       home: join(app.getPath('userData'), 'updates'), appPath: app.getAppPath(),
       runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'),
       executable: process.execPath, packaged: app.isPackaged,
+      userApplications: join(app.getPath('home'), 'Applications'),
+      fetch: createUpdateFetch(),
       corePid: () => runtime.child?.pid, quit: () => app.quit(),
       publish: state => { if (window && !window.isDestroyed()) window.webContents.send('desktop:update-state', state); },
     });

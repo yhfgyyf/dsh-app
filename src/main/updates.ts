@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { DEFAULT_UPDATE_SCHEDULE, RELEASES_URL, localDay, nextDailyCheck, selectUpdate, validateUpdateSchedule, type UpdateRelease, type UpdateSchedule, type UpdateState } from '../shared/updates.ts';
 import { downloadUpdate, githubFetch, type UpdateFetch } from './update-download.ts';
 import { fileSha256, physicalFs, run, type InstallPlan } from '../updater/install.ts';
+import { macUpdateTarget } from './update-target.ts';
 
 const execute = promisify(execFile);
 type Options = {
@@ -18,6 +19,7 @@ type Options = {
   runtimeRoot: string;
   executable: string;
   packaged: boolean;
+  userApplications?: string;
   corePid: () => number | undefined;
   quit: () => void;
   publish: (state: UpdateState) => void;
@@ -69,7 +71,7 @@ export class DesktopUpdates {
     this.fetch = options.fetch ?? globalThis.fetch;
   }
   private set(state: Partial<UpdateState>) {
-    this.state = { ...this.state, error: undefined, ...state };
+    this.state = { ...this.state, error: undefined, retry: undefined, ...state };
     this.options.publish(this.state);
     return this.state;
   }
@@ -99,7 +101,7 @@ export class DesktopUpdates {
       const temporary = join(this.options.home, `preferences-${randomUUID()}.tmp`);
       await writeFile(temporary, JSON.stringify({ ...(schedule ?? this.state.schedule), lastDailyCheck: this.lastDailyCheck }), { mode: 0o600 });
       await rename(temporary, join(this.options.home, 'preferences.json'));
-      if (schedule) this.set({ schedule, error: this.state.error });
+      if (schedule) this.set({ schedule, error: this.state.error, retry: this.state.retry });
     });
     this.preferenceWrites = write.catch(() => {});
     return write;
@@ -110,14 +112,14 @@ export class DesktopUpdates {
     if (this.started) this.scheduleNext();
     return this.state;
   }
-  private work(task: () => Promise<UpdateState>): Promise<UpdateState> {
+  private work(retry: NonNullable<UpdateState['retry']>, task: () => Promise<UpdateState>): Promise<UpdateState> {
     if (this.busy) return this.busy;
-    this.busy = task().catch(error => this.set({ status: 'error', error: error instanceof Error ? error.message : '更新失败，请重试。' })).finally(() => { this.busy = undefined; });
+    this.busy = task().catch(error => this.set({ status: 'error', retry: retry === 'install' && !this.downloaded ? 'download' : retry, error: error instanceof Error ? error.message : '更新失败，请重试。' })).finally(() => { this.busy = undefined; });
     return this.busy;
   }
   check(): Promise<UpdateState> {
-    if (this.state.status === 'ready' || this.state.status === 'installing') return Promise.resolve(this.state);
-    return this.work(async () => {
+    if (this.downloaded || this.state.status === 'installing') return Promise.resolve(this.state);
+    return this.work('check', async () => {
       this.set({ status: 'checking' });
       const response = await githubFetch(RELEASES_URL, this.fetch, AbortSignal.timeout(15000));
       let text = '';
@@ -134,7 +136,8 @@ export class DesktopUpdates {
   }
   download(): Promise<UpdateState> {
     if (this.state.status === 'ready' || this.state.status === 'installing') return Promise.resolve(this.state);
-    return this.work(async () => {
+    if (this.downloaded) return Promise.resolve(this.set({ status: 'ready', progress: 100 }));
+    return this.work('download', async () => {
       if (!this.release) throw new Error('请先检查应用更新。');
       this.set({ status: 'downloading', progress: 0 });
       await mkdir(this.options.home, { recursive: true });
@@ -147,17 +150,18 @@ export class DesktopUpdates {
     });
   }
   install(): Promise<UpdateState> {
-    return this.work(async () => {
+    return this.work('install', async () => {
       if (!this.options.packaged) throw new Error('请从已安装的 DSH Desktop 中执行更新。');
       if (!this.downloaded || !this.release) throw new Error('请先下载并校验更新。');
       const { directory, path, bundle } = this.downloaded;
       const platform = this.options.platform;
       if (platform !== 'darwin' && platform !== 'win32') throw new Error('此系统暂不支持安装更新。');
-      const target = platform === 'darwin' ? dirname(dirname(dirname(this.options.executable))) : dirname(this.options.executable);
+      let target = platform === 'darwin' ? dirname(dirname(dirname(this.options.executable))) : dirname(this.options.executable);
       if (platform === 'darwin' && !relative(target, this.options.appPath).startsWith('Contents' + sep)) throw new Error('请将 DSH Desktop 放入应用程序目录后再更新。');
+      if (await fileSha256(path).catch(() => undefined) !== this.release.sha256) { this.downloaded = undefined; throw new Error('已下载的安装包缺失或发生变化，请重新下载。'); }
+      if (platform === 'darwin') target = await macUpdateTarget(target, this.options.userApplications, this.release.version);
       try { await access(platform === 'darwin' ? dirname(target) : target, constants.W_OK); }
       catch { throw new Error('应用所在目录不可写，请将应用安装到当前用户可写的目录。'); }
-      if (await fileSha256(path) !== this.release.sha256) throw new Error('已下载的安装包发生变化，请重新下载。');
       let payload = path;
       const id = randomUUID();
       const backup = platform === 'darwin' ? join(dirname(target), `.DSH-Desktop-backup-${this.options.currentVersion}-${id}.app`) : join(directory, 'previous-app');

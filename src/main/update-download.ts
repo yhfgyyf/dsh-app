@@ -4,12 +4,22 @@ import type { UpdateRelease } from '../shared/updates.ts';
 
 export type UpdateFetch = typeof globalThis.fetch;
 
+export function isGitHubUpdateUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password && ['api.github.com', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(url.hostname);
+  } catch { return false; }
+}
+
 /** GitHub redirects assets to its release CDN; no application credentials are sent. */
 export async function githubFetch(url: string, fetch: UpdateFetch, signal: AbortSignal): Promise<Response> {
   for (let redirects = 0; redirects < 6; redirects++) {
     const address = new URL(url);
-    if (address.protocol !== 'https:' || address.username || address.password || !['api.github.com', 'github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com'].includes(address.hostname)) throw new Error('更新下载地址不属于 GitHub。');
-    const response = await fetch(url, { redirect: 'manual', credentials: 'omit', signal, headers: { 'User-Agent': 'DSH-Desktop-Updater', Accept: address.hostname === 'api.github.com' ? 'application/vnd.github+json' : 'application/octet-stream' } });
+    if (!isGitHubUpdateUrl(url)) throw new Error('更新下载地址不属于 GitHub。');
+    const response = await fetch(url, { redirect: 'manual', credentials: 'omit', signal, headers: { 'User-Agent': 'DSH-Desktop-Updater', Accept: address.hostname === 'api.github.com' ? 'application/vnd.github+json' : 'application/octet-stream' } }).catch(error => {
+      const code = String(error?.cause?.code ?? error?.message ?? '').match(/(?:ERR_[A-Z_]+|E(?:CONNRESET|CONNREFUSED|TIMEDOUT|NOTFOUND))/)?.[0];
+      throw new Error(`无法连接 ${address.hostname}${code ? `（${code}）` : ''}，请检查网络或系统代理后重试。`);
+    });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       await response.body?.cancel();

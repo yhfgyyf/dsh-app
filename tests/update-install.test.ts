@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { access, chmod, cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileSha256, installUpdate, run, validatePlan, waitForExit, type InstallPlan } from '../src/updater/install.ts';
 import { prepareMacUpdate } from '../src/main/updates.ts';
+import { macUpdateTarget } from '../src/main/update-target.ts';
 
 const mac = { skip: process.platform !== 'darwin' };
 async function fixture() {
@@ -51,6 +53,38 @@ test('macOS installer rejects tampering and restores the original if the replace
   let launches = 0;
   await assert.rejects(installUpdate(plan, async () => { launches++; throw new Error('launch failed'); }), /launch failed/);
   assert.equal(launches, 2);
+  assert.equal(await readFile(join(plan.target, 'Contents/Resources/app.asar'), 'utf8'), 'old version');
+});
+
+test('a read-only translocated app updates through a writable copy, preserving its source and rollback backup', mac, async () => {
+  const { directory, plan } = await fixture();
+  const parent = join(directory, 'AppTranslocation/id/d');
+  const current = join(parent, 'DSH Desktop.app');
+  await cp(plan.target, current, { recursive: true });
+  await chmod(parent, 0o555);
+  try {
+    await assert.rejects(access(parent, constants.W_OK));
+    const applications = join(directory, 'User Home/Applications');
+    const target = await macUpdateTarget(current, applications, '0.1.3');
+    assert.equal(target, join(applications, 'DSH Desktop.app'));
+    assert.equal(await macUpdateTarget(target, applications, '0.1.3'), target);
+    const backup = join(applications, 'previous.app');
+    await installUpdate({ ...plan, target, backup }, async () => {});
+    assert.equal(await readFile(join(target, 'Contents/Resources/app.asar'), 'utf8'), 'new version');
+    for (const previous of [current, backup]) assert.equal(await readFile(join(previous, 'Contents/Resources/app.asar'), 'utf8'), 'old version');
+  } finally { await chmod(parent, 0o755); }
+});
+
+test('macOS relocation refuses a same-version app or a symlink without replacing it', mac, async () => {
+  const { directory, plan } = await fixture();
+  const current = join(directory, 'AppTranslocation/id/d/DSH Desktop.app');
+  await cp(plan.target, current, { recursive: true });
+  const applications = join(directory, 'Applications');
+  await mkdir(applications);
+  const target = join(applications, 'DSH Desktop.app');
+  await symlink(plan.target, target);
+  await assert.rejects(macUpdateTarget(current, applications, '0.1.3'), /同名文件/);
+  await assert.rejects(macUpdateTarget(current, join(directory, 'installed'), '0.1.2'), /相同、新版本/);
   assert.equal(await readFile(join(plan.target, 'Contents/Resources/app.asar'), 'utf8'), 'old version');
 });
 

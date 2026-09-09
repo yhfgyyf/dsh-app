@@ -35,17 +35,17 @@ export function UpdateScheduleSettings() {
 export function UpdateIcon() {
   const state = useUpdateState();
   const [error, setError] = useState('');
-  if (!state?.version || !['available', 'downloading', 'ready', 'installing', 'error'].includes(state.status)) return null;
+  if (!state || !['available', 'downloading', 'ready', 'installing', 'error'].includes(state.status)) return null;
   const downloading = state.status === 'downloading';
-  const ready = state.status === 'ready';
+  const ready = state.status === 'ready' || state.status === 'error' && state.retry === 'install';
   const busy = downloading || state.status === 'installing';
-  const label = error || (state.status === 'error' ? `${state.error} 点击重试下载 ${state.version}`
+  const label = error || (state.status === 'error' ? `${state.error} 点击重试${state.retry === 'check' ? '检查更新' : ready ? '安装' : '下载'} ${state.version ?? ''}`
     : downloading ? state.progress === 100 ? '正在校验更新…' : `正在下载 ${state.version} · ${state.progress ?? 0}%`
     : ready ? `${state.version} 已下载，点击重启安装（请先等待当前任务完成）`
     : state.status === 'installing' ? '正在重启安装更新…' : `下载更新 ${state.version}`);
   async function activate() {
     setError('');
-    try { await window.dshDesktop?.[ready ? 'installUpdate' : 'downloadUpdate'](); }
+    try { await window.dshDesktop?.[state?.retry === 'check' ? 'checkForUpdates' : ready ? 'installUpdate' : 'downloadUpdate'](); }
     catch { setError('更新操作未完成，点击重试。'); }
   }
   return <button className="desktop-update-icon" data-update-state={state.status} title={label} aria-label={label} aria-busy={busy} disabled={busy} onClick={() => { void activate(); }}>

@@ -31,6 +31,8 @@ The Windows installer is not code-signed, so Windows may ask you to confirm its 
 
 Starting with v0.1.2, the app automatically checks published GitHub Releases, including previews. A small title-bar icon appears when an update is available: click to download, then click again after verification to restart and install. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. In Settings, the Desktop application section offers checks once at each startup (the default) or daily at a chosen local time while the app runs. Versions v0.1.1 and earlier require a one-time manual upgrade.
 
+Update downloads use the system proxy. Failed installations can be retried using the verified download. On macOS, an app running from a read-only temporary location is copied into the user's `~/Applications` folder before updating, with an old-version backup; the original app stays in place.
+
 ## Features
 
 - Workspace and session lists, history, renaming, branching, deletion, search, and log export.

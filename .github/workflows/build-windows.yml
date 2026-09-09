@@ -31,6 +31,9 @@ jobs:
       - name: Native updater
         timeout-minutes: 3
         run: npm run test:updates
+      - name: Update download through a proxy
+        timeout-minutes: 5
+        run: npm run test:update-network
       - name: Native file previews
         timeout-minutes: 3
         run: npm run test:artifact-links

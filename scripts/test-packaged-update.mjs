@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, writeFile, stat } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, writeFile, stat } from 'node:fs/promises';
 import { appendFileSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { extractAll, createPackage } from '@electron/asar';
 
@@ -15,7 +15,10 @@ const exec = promisify(execFile);
 const artifact = JSON.parse(await readFile(join(root, 'release/latest.json'), 'utf8'));
 const version = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version;
 const directory = await mkdtemp(join(root, '.test-data/packaged-update-'));
-const target = join(directory, 'installed/DSH Desktop.app');
+const translocated = process.argv.includes('--translocated');
+const target = join(directory, translocated ? 'AppTranslocation/id/d/DSH Desktop.app' : 'installed/DSH Desktop.app');
+const userHome = join(directory, 'User Home');
+const installed = translocated ? join(userHome, 'Applications/DSH Desktop.app') : target;
 const data = join(directory, 'desktop');
 const config = join(directory, 'config');
 await mkdir(data, { recursive: true });
@@ -29,22 +32,29 @@ extractAll(archive, unpacked);
 const pkg = JSON.parse(await readFile(join(unpacked, 'package.json'), 'utf8'));
 pkg.version = '0.1.1'; pkg.main = 'dist/updates-e2e.cjs';
 await writeFile(join(unpacked, 'package.json'), JSON.stringify(pkg));
-const fixture = { data, config, directory, artifact, version, name: basename(artifact.archive) };
+const fixture = { data, config, directory, artifact, version, name: basename(artifact.archive), userHome, translocated };
 await writeFile(join(unpacked, 'dist/updates-e2e.cjs'), `
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, session } = require('electron');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const fixture = ${JSON.stringify(fixture)};
 process.env.DSH_DESKTOP_DATA_DIR = fixture.data;
 process.env.DSH_DESKTOP_CONFIG_HOME = fixture.config;
 process.env.DSH_HOME = fixture.config;
-const originalFetch = globalThis.fetch;
-globalThis.fetch = async (input, options) => {
+if (fixture.translocated) {
+  const getPath = app.getPath.bind(app);
+  app.getPath = name => name === 'home' ? fixture.userHome : getPath(name);
+}
+app.whenReady().then(() => {
+const updates = session.fromPartition('dsh-updates');
+const originalFetch = updates.fetch.bind(updates);
+updates.fetch = async (input, options) => {
   const url = String(input);
   if (url.startsWith('https://api.github.com/repos/yhfgyyf/dsh-app/releases')) return Response.json([{ tag_name: 'v' + fixture.version, draft: false, prerelease: true, published_at: new Date().toISOString(), assets: [{ name: fixture.name, state: 'uploaded', size: fixture.artifact.bytes, digest: 'sha256:' + fixture.artifact.sha256, browser_download_url: 'https://github.com/yhfgyyf/dsh-app/releases/download/v' + fixture.version + '/' + fixture.name }] }]);
   if (url === 'https://github.com/yhfgyyf/dsh-app/releases/download/v' + fixture.version + '/' + fixture.name) return new Response(readFileSync(fixture.artifact.archive));
   return originalFetch(input, options);
 };
+});
 let started = false;
 const handle = ipcMain.handle.bind(ipcMain);
 ipcMain.handle = (channel, listener) => handle(channel, async (...args) => {
@@ -81,10 +91,13 @@ await createPackage(unpacked, archive);
 for (const key of ['CFBundleVersion', 'CFBundleShortVersionString']) await exec('/usr/bin/plutil', ['-replace', key, '-string', '0.1.1', join(target, 'Contents/Info.plist')]);
 await exec('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', target]);
 await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', target]);
+await mkdir(userHome, { recursive: true });
+if (translocated) await chmod(dirname(target), 0o555);
 const sha = async path => createHash('sha256').update(await readFile(path)).digest('hex');
 const oldHash = await sha(archive);
 const wantedHash = await sha(join(artifact.app, 'Contents/Resources/app.asar'));
 const executable = join(target, 'Contents/MacOS/DSH Desktop');
+const installedExecutable = join(installed, 'Contents/MacOS/DSH Desktop');
 const child = spawn(executable, [], { env: { ...process.env, DSH_DESKTOP_DATA_DIR: data, DSH_DESKTOP_CONFIG_HOME: config, DSH_HOME: config, DSH_TELEMETRY_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
 let logs = '';
 for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { const text = String(chunk).replace(/token=[^\s]+/g, 'token=[redacted]'); logs += text; appendFileSync(join(directory, 'live-app.log'), text); });
@@ -113,11 +126,15 @@ try {
   assert.equal(alive(child.pid), false); assert.equal(alive(oldCore), false);
   report.checks.push('Packaged 0.1.1 automatically discovers the new release at startup and validates its complete ZIP');
   report.checks.push('App and owned core exit before the external helper replaces the installation');
-  assert.equal(await sha(archive), wantedHash);
+  assert.equal(await sha(join(installed, 'Contents/Resources/app.asar')), wantedHash);
   assert.equal(await sha(join(result.backup, 'Contents/Resources/app.asar')), oldHash);
-  await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', target]);
+  await exec('/usr/bin/codesign', ['--verify', '--deep', '--strict', installed]);
   report.checks.push('Installed app matches the release bytes and signature; old app backup matches its original hash');
-  newPid = await until(async () => (await processes()).find(p => p.command === executable && p.pid !== child.pid)?.pid, 'New app was not relaunched');
+  if (translocated) {
+    assert.equal(await sha(archive), oldHash);
+    report.checks.push('Read-only AppTranslocation source is preserved while the update installs in the user Applications folder');
+  }
+  newPid = await until(async () => (await processes()).find(p => p.command === installedExecutable && p.pid !== child.pid)?.pid, 'New app was not relaunched');
   const newCore = await until(async () => (await processes()).find(p => p.parent === newPid && p.command.includes('/runtime/bin/node'))?.pid, 'New app core did not start');
   await until(async () => {
     if ((await stat(transport)).mtimeMs < new Date(result.time).getTime()) return false;
@@ -133,11 +150,12 @@ try {
   report.status = 'pass'; report.oldPid = child.pid; report.oldCore = oldCore; report.newPid = newPid; report.newCore = newCore; report.backup = result.backup;
 } catch (error) { report.status = 'fail'; report.error = String(error.stack ?? error); process.exitCode = 1; }
 finally {
-  const owned = (await processes()).filter(p => p.command === executable);
+  const owned = (await processes()).filter(p => [executable, installedExecutable].includes(p.command));
   for (const processInfo of owned) { if (alive(processInfo.pid)) process.kill(processInfo.pid, 'SIGTERM'); }
   await sleep(1200);
-  const remaining = (await processes()).filter(p => p.command.startsWith(join(target, 'Contents/Resources/runtime/bin/node')));
+  const remaining = (await processes()).filter(p => [target, installed].some(path => p.command.startsWith(join(path, 'Contents/Resources/runtime/bin/node'))));
   for (const processInfo of remaining) process.kill(processInfo.pid, 'SIGTERM');
+  if (translocated) await chmod(dirname(target), 0o755);
   await writeFile(join(directory, 'app.log'), logs);
   await writeFile(join(directory, 'report.json'), JSON.stringify(report, null, 2));
   await writeFile(join(root, '.test-data/packaged-update-latest.json'), JSON.stringify(report, null, 2));

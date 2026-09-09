@@ -30,6 +30,7 @@ export type UpdateState = {
   progress?: number;
   checkedAt?: string;
   error?: string;
+  retry?: 'check' | 'download' | 'install';
 };
 
 export type UpdateRelease = { version: string; releaseUrl: string; assetUrl: string; name: string; bytes: number; sha256: string };
