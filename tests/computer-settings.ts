@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fixture } from './computer-settings-driver.ts';
+import { PreferencesFile } from '../src/main/preferences.ts';
 
 const root = process.env.DSH_SETTINGS_TEST_ROOT!;
 const data = join(root, '.test-data/computer-settings', String(Date.now()));
@@ -26,7 +27,7 @@ function finish(error?: unknown) {
   writeFileSync(join(root, '.test-data/computer-settings-latest.json'), json);
   console.log(json); app.quit();
 }
-app.on('quit', () => { if (report.failures.length) process.exitCode = 1; });
+app.on('quit', () => { if (report.failures.length) process.exit(1); });
 const original = ipcMain.handle.bind(ipcMain);
 const handlers = new Map<string, (...args: any[]) => any>();
 let started = false;
@@ -59,7 +60,25 @@ async function run(event: IpcMainInvokeEvent) {
   assert.deepEqual(await evaluate("Array.from(document.querySelectorAll('.desktop-computer-controls')).map(n=>({text:n.innerText,paragraphs:n.querySelectorAll('p').length,switches:n.querySelectorAll('[role=switch]').length}))"), [{ text: '电脑操作', paragraphs: 0, switches: 1 }]);
   assert.equal(fixture.starts, 0);
   report.checks.push('Production renderer shows only the computer label and one disabled-state switch');
-  await click(); await settled(); assert.equal((await state()).checked, 'false'); assert.equal(fixture.prompts, 1);
+  // Delay the first write's completion while a real window-state autosave runs.
+  const save = PreferencesFile.prototype.save;
+  let releaseSave!: () => void;
+  let delayed = false;
+  let completedWrites = 0;
+  PreferencesFile.prototype.save = async function (preferences) {
+    await save.call(this, preferences);
+    completedWrites++;
+    if (!delayed && preferences.computerEnabled) {
+      delayed = true;
+      await new Promise<void>(resolve => { releaseSave = resolve; });
+    }
+  };
+  await click(); await until(async () => !!releaseSave, 'Preference write was not reached');
+  BrowserWindow.fromWebContents(host)!.emit('resize');
+  await until(async () => completedWrites > 1, 'Window autosave did not complete'); releaseSave(); await settled();
+  PreferencesFile.prototype.save = save;
+  assert.equal(JSON.parse(readFileSync(join(data, 'desktop.json'), 'utf8')).computerEnabled, true, 'Window autosave overwrote the requested computer preference');
+  assert.equal((await state()).checked, 'false'); assert.equal(fixture.prompts, 1);
   fixture.permissions.accessibility = true;
   await click(); await settled(); assert.equal((await state()).checked, 'false'); assert.equal(fixture.starts, 0);
   fixture.permissions.screenRecording = true; fixture.fail = true;

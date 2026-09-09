@@ -231,9 +231,10 @@ else {
       if (typeof value !== 'boolean') throw new Error('电脑操作开关值无效。');
       const revision = ++computerSettingRevision;
       if (!value) await computer.setEnabled(false);
-      await preferencesFile.save({ ...preferences, computerEnabled: value });
       if (revision !== computerSettingRevision) return computer.state;
       preferences.computerEnabled = value;
+      await preferencesFile.save(preferences);
+      if (revision !== computerSettingRevision) return computer.state;
       return value ? computer.setEnabled(true) : computer.state;
     });
     handle('desktop:computer-stop', () => computer.stop());
