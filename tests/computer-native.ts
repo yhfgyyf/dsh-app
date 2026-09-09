@@ -91,6 +91,7 @@ void app.whenReady().then(async () => {
     await request('act', { action: 'bring_to_front', observation_id: snapshot.observation_id, arguments: {} });
     await until(async () => window.isFocused());
     snapshot = await observe();
+    assert.equal(await window.webContents.executeJavaScript('document.querySelector("#input").value'), '', 'Late or partial input must not be appended to blindly');
     typed = await typeText('foreground');
     await writeFile(join(data, 'typing-recovery.json'), JSON.stringify({ typed, focused: window.isFocused() }, null, 2));
     report.checks.push('Verified empty input recovered with an explicit foreground window and a fresh observation');
