@@ -21,6 +21,13 @@ html[data-dsh-desktop] .pI_x6G_frame { border-top: 1px solid var(--dsw-alias-bor
 .desktop-settings-row button { flex: none; background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l3); color: inherit; padding: 7px 12px; border-radius: 7px; cursor: pointer; }
 .desktop-boot-error { position: fixed; z-index: 10000; inset: 60px 20px auto; background: #fff4df; color: #533e18; padding: 18px; border-radius: 10px; }
 .desktop-boot-error button { margin-left: 16px; }
+.desktop-local-open { position: relative; }
+.desktop-local-open-buttons { display: inline-flex; height: 26px; border: .5px solid var(--dsw-alias-border-l4); border-radius: 13px; overflow: hidden; }
+.desktop-local-open-buttons button { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.desktop-local-open-buttons button + button { border-left: .5px solid var(--dsw-alias-border-l4); }
+.desktop-local-open-buttons button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.desktop-local-open-buttons button:disabled { opacity: .5; cursor: wait; }
+.desktop-local-open-error { position: absolute; right: 0; top: 32px; z-index: 30; width: 280px; padding: 8px 12px; border: 1px solid var(--dsw-alias-border-l4); border-radius: 8px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-state-error-primary); font-size: 12px; overflow-wrap: anywhere; user-select: text; }
 html[data-dsh-desktop] .hHd-Xa_root { --dsh-sidebar-inline-padding: 10px; font-size: 13px; }
 html[data-dsh-desktop] .hHd-Xa_logoRow { height: 42px; margin-bottom: 2px; padding: 4px; }
 html[data-dsh-desktop] .hHd-Xa_newSession { justify-content: flex-start; height: 34px; border: 0; background: transparent; border-radius: 7px; padding: 6px 8px; font-size: 13px; font-weight: 400; }

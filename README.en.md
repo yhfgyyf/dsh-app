@@ -40,6 +40,8 @@ Starting with v0.1.2, the app automatically checks published GitHub Releases, in
 - Native menus, file and directory pickers, download saving, zoom, window state, and recovery from core failures.
 - Conversation links open in right-sidebar browser tabs; the file sidebar previews HTML/Canvas, SVG, images, and PDFs, with a source-view action.
 - Existing file paths in replies open directly, images have thumbnails, and the right sidebar collapses when its last file or browser tab closes.
+- Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
+- Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.
 
 The app bundles DSH `0.1.5-alpha.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 

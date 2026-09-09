@@ -24,7 +24,7 @@ await build({
     emptyOutDir: true,
     lib: { entry: resolve(root, 'src/renderer/plugin.tsx'), formats: ['cjs'], fileName: () => 'plugin.js' },
     rolldownOptions: {
-      external: ['react', 'react/jsx-runtime'],
+      external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives'],
       output: {
         banner: 'window.__ModuleLoader__.load({id:"dsh-desktop-shell",factory:(require)=>{const module={exports:{}};const exports=module.exports;',
         footer: 'return module.exports;}});',

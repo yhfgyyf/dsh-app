@@ -5,6 +5,8 @@ const { mkdirSync, writeFileSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { zstdCompressSync } = require('node:zlib');
+const interactions = require('./desktop-interactions.cjs');
+interactions.install();
 const root = join(__dirname, '..');
 const data = join(root, '.test-data', 'artifact-links-native', String(Date.now()));
 const home = join(data, 'core');
@@ -25,7 +27,7 @@ const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><titl
 writeFileSync(join(workspace, 'pelican.svg'), svg);
 writeFileSync(join(workspace, 'report.md'), '# Artifact report\n\nReadable report content.');
 writeFileSync(join(workspace, 'my image.svg'), svg);
-writeFileSync(join(workspace, 'canvas.html'), '<title>Artifact Canvas</title><canvas id="chart" width="10" height="10"></canvas><script>chart.getContext("2d").fillRect(0,0,10,10)</script>');
+writeFileSync(join(workspace, 'canvas.html'), '<title>Artifact Canvas</title><p>Preview selection works.</p><canvas id="chart" width="10" height="10"></canvas><script>chart.getContext("2d").fillRect(0,0,10,10)</script>');
 const text = [
   '**文件：** `pelican.svg`',
   '图片路径：`' + join(workspace, 'preview.png') + '`',
@@ -71,6 +73,7 @@ function finish(error) {
   writeFileSync(join(data, 'report.json'), JSON.stringify(report, null, 2));
   writeFileSync(join(root, '.test-data', 'artifact-links-native', 'latest.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
+  interactions.restore();
   app.quit();
 }
 app.on('quit', () => { if (failure) process.exit(1); });
@@ -95,6 +98,7 @@ async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
   window.setSize(980, 720);
+  window.show(); window.focus();
   const js = code => host.executeJavaScript(code, true);
   await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await js(`(async()=>{const method='workspace/create';const body=await(await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:{request:{path:${JSON.stringify(workspace)}}}}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));})()`);
@@ -118,6 +122,8 @@ async function run(event) {
   await until(() => js(`!!document.querySelector('.desktop-artifact-previews button[title$="/preview.png"] img')?.naturalWidth`), 'PNG preview card missing or image failed to load');
   assert.equal(await js(`document.querySelectorAll('.desktop-artifact-previews button[title$="/pelican.svg"]').length`), 0);
   report.checks.push('Plain image path gains a loaded thumbnail; authored inline images avoid duplicate preview cards');
+  await interactions.verifySelection(host, '普通代码', until);
+  report.checks.push('Dragging part of a chat reply and right-clicking offers Copy for exactly the selected text');
   const opened = async (selector, marker) => {
     await js(`document.querySelector(${JSON.stringify(selector)}).click()`);
     const contents = await until(() => webContents.getAllWebContents().find(c => c !== host && c.getURL().startsWith('dsh-preview:') && c.getURL().endsWith(marker)), 'Sidebar preview missing: ' + marker);
@@ -128,19 +134,31 @@ async function run(event) {
   assert.equal(await svgPage.executeJavaScript(`document.documentElement.localName`), 'svg');
   assert.equal(await svgPage.executeJavaScript(`document.querySelector('animate').getAttribute('dur')`), '2s');
   report.checks.push('Clicking the actual inline SVG opens its animated document in the native right sidebar');
+  await interactions.verifyLocalFile(host, workspace, 'pelican.svg', until);
   const pngPage = await opened('.desktop-artifact-previews button[title$="/preview.png"]', 'preview.png');
   assert.equal(await pngPage.executeJavaScript(`document.querySelector('img').naturalWidth`), 32);
   report.checks.push('Clicking the generated PNG thumbnail opens the full image in the right sidebar');
+  await interactions.verifyLocalFile(host, workspace, 'preview.png', until);
   const canvasPage = await opened('.hWmORq_body button[title$="/canvas.html"]', 'canvas.html');
   assert.equal(await canvasPage.executeJavaScript(`chart.getContext('2d').getImageData(0,0,1,1).data[3]`), 255);
   report.checks.push('Authored relative HTML link opens the working Canvas preview');
+  await interactions.verifySelection(canvasPage, 'Preview selection', until);
+  await interactions.verifyLocalFile(host, workspace, 'canvas.html', until);
+  report.checks.push('Native sidebar HTML supports drag selection and right-click Copy independently of chat');
   await js(`document.querySelector('.hWmORq_body code button[title$="/report.md"]').click()`);
   await until(() => js(`document.body.innerText.includes('Readable report content.')`), 'Markdown document did not open in text sidebar');
   report.checks.push('Other generated documents use the existing sidebar text viewer');
+  await interactions.verifySelection(host, 'Readable report content.', until);
+  await interactions.verifyLocalFile(host, workspace, 'report.md', until);
+  await interactions.verifyLocalMenu(host, workspace, until);
+  report.checks.push('Text sidebar supports drag selection and Copy; header opens each active SVG, PNG, HTML and Markdown file instead of the workspace');
+  report.checks.push('Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
   // Closing content leaves the seeded Start tab, but must release the column.
   await js(`Array.from(document.querySelectorAll('[data-dockkit-tab]')).filter(t=>!/^(开始|Start)/.test(t.textContent)).forEach(t=>document.querySelector('[data-dockkit-tab-close="'+t.getAttribute('data-dockkit-tab')+'"]').click())`);
   await until(() => js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the last document left the sidebar open');
   await until(() => svgPage.isDestroyed() && pngPage.isDestroyed() && canvasPage.isDestroyed(), 'Closed sidebar retained native previews');
+  await interactions.verifyNoActiveFile(host, workspace, until);
+  report.checks.push('With no active file, local open uses the file picker rather than silently opening the workspace');
   const reopened = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
   await js(`{const guide=Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(t=>/^(开始|Start)/.test(t.textContent));document.querySelector('[data-dockkit-tab-close="'+guide.getAttribute('data-dockkit-tab')+'"]').click()}`);

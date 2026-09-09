@@ -23,6 +23,7 @@ const api: DesktopAPI = {
   ready: () => ipcRenderer.invoke('desktop:ready'),
   setColorScheme: (scheme) => ipcRenderer.invoke('desktop:color-scheme', scheme),
   openExternal: (url) => ipcRenderer.invoke('desktop:external', url),
+  openLocal: (request) => ipcRenderer.invoke('desktop:local-open', request),
   browserOpen: (id, target, navigation) => ipcRenderer.invoke('desktop:browser-open', id, target, navigation),
   browserBounds: (id, bounds) => ipcRenderer.invoke('desktop:browser-bounds', id, bounds),
   browserNavigate: (id, url) => ipcRenderer.invoke('desktop:browser-navigate', id, url),

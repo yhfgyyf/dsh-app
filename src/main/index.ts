@@ -11,6 +11,8 @@ import { createDshTransport } from './transport.ts';
 import { DesktopRuntime } from './runtime.ts';
 import { SidebarBrowser } from './sidebar-browser.ts';
 import { DesktopUpdates } from './updates.ts';
+import { installTextContextMenu } from './context-menu.ts';
+import { openLocal } from './local-open.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
@@ -119,6 +121,7 @@ else {
       webPreferences: { preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'), partition: 'persist:dsh', contextIsolation: true, sandbox: true, nodeIntegration: false, webSecurity: true, spellcheck: false },
     });
     if (bounds.maximized) window.maximize();
+    installTextContextMenu(window.webContents, window);
     browser = new SidebarBrowser(window, () => preferences.endpoint, openSidebarLink);
     window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) browser?.clear(); });
     window.once('ready-to-show', () => window?.show());
@@ -234,6 +237,10 @@ else {
       const url = externalWebUrl(value);
       if (!url) throw new Error('此链接不能在外部浏览器打开。');
       return shell.openExternal(url);
+    });
+    handle('desktop:local-open', request => {
+      if (!window) throw new Error('窗口已关闭。');
+      return openLocal(window, request);
     });
     handle('desktop:browser-open', (id, target, navigation) => browser?.open(id, target, navigation));
     handle('desktop:browser-bounds', (id, bounds) => browser?.bounds(id, bounds));

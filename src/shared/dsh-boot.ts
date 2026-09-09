@@ -67,7 +67,7 @@ export function withDesktopPlugin(value: unknown, revision: string): BootGraph {
   if (value.batches.some((batch) => batch.url === url)) throw new Error('桌面插件资源地址冲突。');
   const result: BootGraph = {
     ...value,
-    entries: [...value.entries, { id: DESKTOP_PLUGIN_ID, url, rev: revision, inject: required, external: ['react'] }],
+    entries: [...value.entries, { id: DESKTOP_PLUGIN_ID, url, rev: revision, inject: required, external: ['react', '@deepseek-ai/dsh-client-ui-primitives'] }],
     batches: [...value.batches, { url, rev: revision, phase: 'application', entries: [DESKTOP_PLUGIN_ID] }],
   };
   assertBootGraph(result);

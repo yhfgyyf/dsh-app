@@ -9,6 +9,7 @@ export interface BrowserContext {
   effect(factory: () => Disposer, label?: string): void;
   sidebarRight: {
     isExpanded(): boolean; toggleExpanded(): void;
+    active(): { contentId: string } | undefined;
     openResource(address: string, options?: { kind?: string }): void;
   };
   sidebarRightTabs: { register(definition: { id: string; kind: string; patterns?: string[]; priority: 'extension'; title(address: string): string; guide?: { order: number; title(): string; description(): string }[] }): Disposer };

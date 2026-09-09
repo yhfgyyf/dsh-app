@@ -5,6 +5,7 @@ import { externalWebUrl } from '../shared/desktop-api.ts';
 import { browserBounds, validBrowserId } from '../shared/sidebar-browser.ts';
 import type { BrowserAction, BrowserState, BrowserTarget } from '../shared/sidebar-browser.ts';
 import { previewGrant } from './preview-files.ts';
+import { installTextContextMenu } from './context-menu.ts';
 
 type Page = { view: WebContentsView; targetKey: string; preview?: Awaited<ReturnType<typeof previewGrant>>; state: BrowserState };
 
@@ -52,6 +53,7 @@ export class SidebarBrowser {
     view.setVisible(false);
     this.window.contentView.addChildView(view);
     const contents = view.webContents;
+    installTextContextMenu(contents, this.window);
     const allowed = (value: string) => externalWebUrl(value) !== undefined || (preview !== undefined && value.startsWith('dsh-preview://' + preview.host + '/'));
     contents.on('will-navigate', (event, value) => { if (!allowed(value)) event.preventDefault(); });
     contents.on('will-redirect', (event, value) => { if (!allowed(value)) event.preventDefault(); });

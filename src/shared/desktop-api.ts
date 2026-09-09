@@ -1,5 +1,6 @@
 import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
 import type { UpdateSchedule, UpdateState } from './updates.ts';
+import type { LocalOpenRequest } from './local-open.ts';
 
 export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
 
@@ -29,6 +30,7 @@ export interface DesktopAPI {
   ready(): Promise<void>;
   setColorScheme(scheme: 'light' | 'dark'): Promise<void>;
   openExternal(url: string): Promise<void>;
+  openLocal(request: LocalOpenRequest): Promise<void>;
   browserOpen(id: string, target: BrowserTarget, navigation: string): Promise<BrowserState>;
   browserBounds(id: string, bounds: unknown): Promise<void>;
   browserNavigate(id: string, url: string): Promise<void>;

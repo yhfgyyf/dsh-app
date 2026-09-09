@@ -3,6 +3,7 @@ import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
 import { installSidebarBrowser } from './sidebar-browser.tsx';
 import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
+import { installLocalOpen } from './local-open.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
@@ -101,6 +102,7 @@ export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
 
 export function apply(ctx: DesktopContext) {
   installSidebarBrowser(ctx);
+  installLocalOpen(ctx);
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };
