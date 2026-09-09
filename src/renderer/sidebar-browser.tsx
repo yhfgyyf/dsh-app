@@ -66,8 +66,10 @@ function BrowserTab({ sessionId, useSessions, useTabInfo, ctx, retain }: TabProp
       let bounds: { x: number; y: number; width: number; height: number } | null = null;
       if (element?.isConnected) {
         const rect = element.getBoundingClientRect();
-        // Native views sit above DOM content. Hide behind menus, dialogs and other panels.
-        const obstructed = [...document.querySelectorAll('[role="dialog"], [role="menu"], [aria-modal="true"]')].some(node => node.getClientRects().length > 0);
+        // Native views sit above DOM content. Hide only when an overlay intersects this viewport.
+        const obstructed = [...document.querySelectorAll('[role="dialog"], [role="menu"], [aria-modal="true"]')].some(node =>
+          node.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true }) && [...node.getClientRects()].some(overlay =>
+            overlay.width > 0 && overlay.height > 0 && overlay.left < rect.right && overlay.right > rect.left && overlay.top < rect.bottom && overlay.bottom > rect.top));
         const uncovered = [[.5, .5], [.01, .01], [.99, .01], [.01, .99], [.99, .99]].every(([x, y]) => {
           const top = document.elementFromPoint(rect.x + rect.width * x, rect.y + rect.height * y);
           return top && element.contains(top);

@@ -115,7 +115,22 @@ async function run(event) {
   assert.deepEqual(safety, { node: 'undefined', preload: 'undefined', pixel: 255 });
   assert.notEqual(page.session, host.session);
   report.checks.push('Remote page runs Canvas with no Node or DSH preload and a separate cookie session');
-  await host.executeJavaScript(`{const dialog=document.createElement('div');dialog.id='test-modal';dialog.role='dialog';dialog.textContent='Modal';document.body.append(dialog);}`);
+  await host.executeJavaScript(`document.querySelector('.desktop-computer summary').click()`);
+  assert.equal(await host.executeJavaScript(`(() => {
+    const popup = document.querySelector('.desktop-computer-popover').getBoundingClientRect();
+    const viewport = document.querySelector('.desktop-browser-viewport').getBoundingClientRect();
+    return document.querySelector('.desktop-computer details').open && popup.height > 0 && popup.bottom <= viewport.top;
+  })()`), true, 'The actual computer popover should sit above the preview');
+  await sleep(250);
+  assert.equal(nativeView.getVisible(), true, 'Computer popover outside the preview hid the native page');
+  await host.executeJavaScript(`document.querySelector('.desktop-computer summary').click()`);
+  report.checks.push('Opening the actual computer popover above the preview keeps the native page visible');
+  await host.executeJavaScript(`{
+    const rect = document.querySelector('.desktop-browser-viewport').getBoundingClientRect();
+    const dialog=document.createElement('div');dialog.id='test-modal';dialog.role='dialog';dialog.textContent='Modal';
+    Object.assign(dialog.style, {position:'fixed', left:rect.x + 20 + 'px', top:rect.y + 20 + 'px', width:'120px', height:'80px', zIndex:'9999'});
+    document.body.append(dialog);
+  }`);
   await until(() => !nativeView.getVisible(), 'Native view covered a modal');
   await host.executeJavaScript(`document.getElementById('test-modal').remove()`);
   await until(() => nativeView.getVisible(), 'Native view failed to return after modal');
