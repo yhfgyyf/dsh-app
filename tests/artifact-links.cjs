@@ -10,7 +10,12 @@ const data = join(root, '.test-data', 'artifact-links-native', String(Date.now()
 const home = join(data, 'core');
 const workspace = join(data, 'workspace');
 const sessionId = 'session-' + randomUUID();
-const projectKey = '--' + workspace.replaceAll('/', '-').replace(/^-+/, '').slice(0, 251) + '--';
+// Use the pinned persistence implementation for Windows drive letters and separators too.
+const persistence = readFileSync(join(root, '.runtime/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js'), 'utf8');
+const projectKeyStart = persistence.indexOf('function projectKey(cwd)');
+const projectKeyEnd = persistence.indexOf('function projectDir(', projectKeyStart);
+assert.ok(projectKeyStart >= 0 && projectKeyEnd > projectKeyStart);
+const projectKey = new Function(persistence.slice(projectKeyStart, projectKeyEnd) + '; return projectKey;')()(workspace);
 const sessionDir = join(home, 'sessions', projectKey, sessionId);
 mkdirSync(workspace, { recursive: true });
 mkdirSync(sessionDir, { recursive: true });
@@ -98,7 +103,7 @@ async function run(event) {
   await js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Artifact link acceptance')).click()`);
   await until(() => js(`!!document.querySelector('.hWmORq_body code button[title$="/pelican.svg"]')`), 'Bare SVG filename did not become a file link');
   const titles = await js(`Array.from(document.querySelectorAll('.hWmORq_body button[title]')).map(b=>b.title)`);
-  for (const name of ['pelican.svg', 'preview.png', 'report.md', 'canvas.html', 'my image.svg']) assert.ok(titles.includes(join(workspace, name)), name);
+  for (const name of ['pelican.svg', 'preview.png', 'report.md', 'canvas.html', 'my image.svg']) assert.ok(titles.includes(join(workspace, name).replaceAll('\\', '/')), name);
   assert.equal(titles.some(path => path.endsWith('missing.png') || path.endsWith('missing-fenced.png')), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body pre button[title]')`), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body button button')`), false);
