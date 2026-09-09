@@ -2,6 +2,12 @@ name: Build Windows installer
 
 on:
   workflow_dispatch:
+    inputs:
+      runtimeSource:
+        description: Runtime source (use the verified release for updater-only fixes)
+        type: choice
+        options: [registry, v0.1.5]
+        default: registry
 
 permissions:
   contents: read
@@ -19,7 +25,21 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
       - name: Build pinned runtime and apply verified patch
+        if: inputs.runtimeSource != 'v0.1.5'
         run: npm run setup:runtime
+      - name: Restore the verified v0.1.5 Windows runtime
+        if: inputs.runtimeSource == 'v0.1.5'
+        shell: pwsh
+        run: |
+          $setup = Join-Path $env:RUNNER_TEMP 'DSH-Desktop-0.1.5-Windows-x64-Setup.exe'
+          $donor = Join-Path $env:RUNNER_TEMP 'DSH Runtime Source'
+          Invoke-WebRequest -Uri 'https://github.com/yhfgyyf/dsh-app/releases/download/v0.1.5/DSH-Desktop-0.1.5-Windows-x64-Setup.exe' -OutFile $setup
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne '098ad90e145097d351d843995a458a422ce7f3f0139a51c245d4144e7b1fcce7') { throw 'Runtime source installer checksum mismatch' }
+          $process = Start-Process $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $donor + '"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Runtime source installation failed' }
+          Copy-Item (Join-Path $donor 'resources/runtime') '.runtime' -Recurse
+          node --input-type=module -e "import {runtimeManifest} from './scripts/runtime-manifest.ts'; const m = await runtimeManifest('.runtime'); if (m.fileCount !== 26256 || m.sha256 !== '2c4d11c050b720fe5d24224166c49da18a70045a2a46b8b06e9ed0127a7872ea') throw Error('Runtime source contents differ'); console.log('Verified all', m.fileCount, 'runtime files');"
+          if ($LASTEXITCODE -ne 0) { throw 'Runtime source verification failed' }
       - name: Typecheck, unit tests and production build
         run: npm run check
       - name: Shared model settings
