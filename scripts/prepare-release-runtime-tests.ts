@@ -1,0 +1,30 @@
+// Supply the CLI-only test fixtures without resolving newer DSH dependencies.
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+
+const execute = promisify(execFile);
+const root = resolve('.');
+const pins = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+const fixture = join(root, '.test-runtime/release-cli');
+const plugins = join(fixture, 'plugins');
+await mkdir(plugins, { recursive: true });
+const npm = process.env.npm_execpath;
+if (!npm) throw new Error('Run through npm exec');
+const { stdout } = await execute(process.execPath, [npm, 'pack', `@deepseek-ai/dsh@${pins.dsh}`, '--json', '--pack-destination', fixture]);
+await execute('tar', ['-xf', join(fixture, JSON.parse(stdout)[0].filename), '-C', fixture]);
+const installRoot = join(fixture, 'package');
+if (JSON.parse(await readFile(join(installRoot, 'package.json'), 'utf8')).version !== pins.dsh) throw new Error('CLI fixture version differs');
+const modules = join(root, '.runtime/node_modules');
+const link = process.platform === 'win32' ? 'junction' : 'dir';
+await symlink(modules, join(installRoot, 'node_modules'), link);
+await symlink(modules, join(plugins, 'node_modules'), link);
+for (const name of ['dsh-auto-preset-router', 'dsh-audit-mode', 'dsh-progressive-tools']) await symlink(join(modules, name), join(plugins, name), link);
+const tui = join(plugins, 'dsh-tui-app');
+await mkdir(tui);
+await execute('git', ['init', '--quiet'], { cwd: tui });
+await execute('git', ['fetch', '--quiet', '--depth=1', `https://github.com/${pins.plugins['dsh-tui-app'].repository}.git`, pins.plugins['dsh-tui-app'].commit], { cwd: tui });
+await execute('git', ['-c', 'core.autocrlf=false', 'checkout', '--quiet', '--detach', pins.plugins['dsh-tui-app'].commit], { cwd: tui });
+await mkdir(join(root, '.build-runtime'), { recursive: true });
+await writeFile(join(root, '.build-runtime/source.json'), JSON.stringify({ installRoot, pluginRoot: plugins }));
