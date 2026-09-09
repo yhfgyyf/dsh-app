@@ -74,6 +74,14 @@ jobs:
           name: dsh-app-windows-diagnostics
           path: |
             .test-data/installer-*/install.log
+            .test-data/installer-*/updates/report.json
+            .test-data/installer-*/updates/failure.txt
+            .test-data/installer-*/updates/old-app.log
+            .test-data/installer-*/updates/before-install.json
+            .test-data/installer-*/desktop-state/updates/install-result.json
+            .test-data/installer-*/desktop-state/updates/inno-update.log
+            .test-data/installer-*/desktop-state/updates/download-*/install.log
+            .test-data/installer-*/desktop-state/updates/download-*/install.json
             .test-data/computer-native/**
             .test-data/computer-*-latest.json
             .test-data/computer-tools-*/**
