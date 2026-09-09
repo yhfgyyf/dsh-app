@@ -6,7 +6,8 @@ import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import assert from 'node:assert/strict';
 import { extractAll, createPackage } from '@electron/asar';
-import { fileSha256 } from '../src/updater/install.ts';
+import { fileSha256, waitForExit } from '../src/updater/install.ts';
+import { holdWindowsDll } from '../tests/windows-dll-fixture.ts';
 
 if (process.platform !== 'win32') throw new Error('This test runs on Windows.');
 const [target, installer, output] = process.argv.slice(2).map(value => resolve(value));
@@ -72,6 +73,7 @@ const executable = join(target, 'DSH Desktop.exe');
 const node = join(target, 'resources/runtime/bin/node.exe');
 const data = process.env.DSH_DESKTOP_DATA_DIR!;
 assert.ok(data, 'An isolated desktop profile is required');
+const holder = await holdWindowsDll(join(target, 'd3dcompiler_47.dll'), output);
 const log = openSync(join(output, 'old-app.log'), 'a');
 const child = spawn(executable, [], { windowsHide: false, cwd: target, stdio: ['ignore', log, log] });
 closeSync(log);
@@ -115,6 +117,9 @@ try {
     try { return (await fetch('http://127.0.0.1:' + port + '/')).status === 401; } catch { return false; }
   }, 'Relaunched core did not serve its protected transport');
   report.checks.push('Unmodified new application automatically relaunches with a new PID and a serving owned core');
+  assert.equal(holder.exitCode, null);
+  assert.equal(await fileSha256(join(target, 'd3dcompiler_47.dll')), await fileSha256(join(result.backup, 'd3dcompiler_47.dll')));
+  report.checks.push('The old d3dcompiler DLL remains mapped throughout installation and automatic restart without blocking either');
   const preferences = JSON.parse(await readFile(join(data, 'updates/preferences.json'), 'utf8'));
   assert.equal(preferences.mode, 'daily'); assert.equal(preferences.time, '18:45');
   report.checks.push('The update preserves the configured daily update schedule');
@@ -123,6 +128,7 @@ try {
   report.status = 'fail'; report.error = String((error as Error).stack ?? error); process.exitCode = 1;
   for (const processInfo of await processes()) { try { process.kill(processInfo.ProcessId); } catch {} }
 } finally {
+  holder.stdin.end('\n'); await waitForExit(holder.pid!);
   await writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 }

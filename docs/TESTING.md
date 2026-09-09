@@ -97,3 +97,7 @@ providers, Audit backends, network tools or every input method combination.
 `npm run test:updates` 用独立数据目录和本地 Release 数据验证标题栏小图标、预览版发现、点击下载、校验后重启操作及 IPC 边界，并确认没有更新弹窗或手动检查入口，不调用模型，也不替换用户已安装的 App。`node --test tests/updates.test.ts tests/update-install.test.ts` 验证版本比较、平台选择、下载损坏、重试、进程退出等待以及 macOS 签名校验、备份和失败回退。Electron 中额外验证磁盘上的 `app.asar`，避免将其当作虚拟目录处理。
 
 检查计划测试覆盖启动仅检查一次、每日本地时间、当天去重、并发设置保存和重启恢复。macOS 打包后运行 `node scripts/test-packaged-update.mjs`，在隔离的旧版应用副本上执行启动自动检测、完整下载、退出、外部安装、旧版备份和新版重启，并验证新旧文件哈希、核心启动及用户数据保留。
+
+Windows 安装测试从隔离的已安装旧版窗口点击更新图标，下载完整安装包并点击重启，验证未修改的新版自动启动、原生窗口和核心服务恢复、备份哈希及配置保留。测试期间另一个进程持续映射旧版 `d3dcompiler_47.dll`，覆盖文件占用时更新和回退的情况；失败回退测试还确认旧版重新启动且最初的安装错误不会被回退错误遮盖。
+
+仅修复更新器时，Windows workflow 可选择 `runtimeSource=v0.1.5`，从已发布安装包恢复运行时并校验全部 26,256 个文件，避免重新解析上游依赖。CLI 和 TUI 测试仍使用固定版本和提交；应用、更新器和安装包从当前源码重新构建并验证。

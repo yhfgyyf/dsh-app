@@ -28,3 +28,5 @@ await execute('git', ['fetch', '--quiet', '--depth=1', `https://github.com/${pin
 await execute('git', ['-c', 'core.autocrlf=false', 'checkout', '--quiet', '--detach', pins.plugins['dsh-tui-app'].commit], { cwd: tui });
 await mkdir(join(root, '.build-runtime'), { recursive: true });
 await writeFile(join(root, '.build-runtime/source.json'), JSON.stringify({ installRoot, pluginRoot: plugins }));
+const { applyArtifactLinks } = await import(new URL('install-artifact-links.mjs', import.meta.url).href);
+await applyArtifactLinks();

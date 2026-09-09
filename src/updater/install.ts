@@ -1,4 +1,4 @@
-import { cp, rename, stat, writeFile } from 'node:fs/promises';
+import { rename, stat, writeFile } from 'node:fs/promises';
 import * as nodeFs from 'node:fs';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
@@ -38,7 +38,7 @@ export function validatePlan(plan: InstallPlan) {
   if (!['darwin', 'win32'].includes(plan.platform) || !Number.isSafeInteger(plan.parentPid) || plan.parentPid < 1 || !/^[0-9a-f]{64}$/.test(plan.sha256) || !/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(plan.version)) throw new Error('更新安装计划无效。');
   if (plan.corePid !== undefined && (!Number.isSafeInteger(plan.corePid) || plan.corePid < 1)) throw new Error('更新进程信息无效。');
   for (const path of [plan.target, plan.payload, plan.backup, plan.result]) if (!isAbsolute(path)) throw new Error('更新安装路径无效。');
-  if (plan.target === plan.payload || plan.target === plan.backup || (plan.platform === 'darwin' && (basename(plan.target) !== 'DSH Desktop.app' || basename(plan.payload) !== 'DSH Desktop.app' || dirname(plan.target) !== dirname(plan.backup)))) throw new Error('更新目标无效。');
+  if (plan.target === plan.payload || plan.target === plan.backup || dirname(plan.target) !== dirname(plan.backup) || (plan.platform === 'darwin' && (basename(plan.target) !== 'DSH Desktop.app' || basename(plan.payload) !== 'DSH Desktop.app'))) throw new Error('更新目标无效。');
 }
 
 export async function waitForExit(pid: number) {
@@ -48,6 +48,17 @@ export async function waitForExit(pid: number) {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ESRCH') return; throw error; }
     if (Date.now() > deadline) throw new Error('应用尚未退出，已取消安装。');
     await new Promise(resolve => setTimeout(resolve, 250));
+  }
+}
+
+async function moveWindowsDirectory(from: string, to: string) {
+  const deadline = Date.now() + 30000;
+  for (;;) {
+    try { await rename(from, to); return; }
+    catch (error) {
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '') || Date.now() >= deadline) throw error;
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
   }
 }
 
@@ -66,22 +77,35 @@ export async function installUpdate(plan: InstallPlan, launch = launchApp) {
       backedUp = true;
       await rename(plan.payload, plan.target);
     } else {
-      await cp(plan.target, plan.backup, { recursive: true, errorOnExist: true, force: false });
+      // Mapped DLLs can outlive the old main process. Keep that entire directory;
+      // never delete or overwrite its files during installation or rollback.
+      await moveWindowsDirectory(plan.target, plan.backup);
       backedUp = true;
       await run(plan.payload, ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/NOCLOSEAPPLICATIONS', '/NORESTARTAPPLICATIONS', `/DIR=${plan.target}`, `/LOG=${join(dirname(plan.result), 'inno-update.log')}`]);
     }
     await writeFile(plan.result, JSON.stringify({ status: 'installed', version: plan.version, backup: plan.backup, time: new Date().toISOString() }), { mode: 0o600 });
     await launch(plan);
   } catch (error) {
+    let failure = error;
+    let restored = !backedUp;
     if (backedUp) {
-      if (plan.platform === 'darwin') {
-        // Keep the failed new bundle for inspection; restore the original atomically.
-        try { await stat(plan.target); await rename(plan.target, plan.payload); } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== 'ENOENT') throw failure; }
-        await rename(plan.backup, plan.target);
-      } else await cp(plan.backup, plan.target, { recursive: true });
-      await launch(plan).catch(() => {});
+      try {
+        if (plan.platform === 'darwin') {
+          // Keep the failed new bundle for inspection; restore the original atomically.
+          try { await stat(plan.target); await rename(plan.target, plan.payload); } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== 'ENOENT') throw failure; }
+          await rename(plan.backup, plan.target);
+        } else {
+          try { await stat(plan.target); await moveWindowsDirectory(plan.target, plan.backup + '-failed'); } catch (failure) { if ((failure as NodeJS.ErrnoException).code !== 'ENOENT') throw failure; }
+          await moveWindowsDirectory(plan.backup, plan.target);
+        }
+        restored = true;
+      } catch (rollbackError) {
+        failure = new Error(`${error instanceof Error ? error.message : String(error)} 回退未完成：${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}；旧版备份保留在 ${plan.backup}。`);
+      }
     }
-    throw error;
+    await writeFile(plan.result, JSON.stringify({ status: 'error', error: failure instanceof Error ? failure.message : String(failure), backup: plan.backup }), { mode: 0o600 }).catch(() => {});
+    if (restored) await launch(plan).catch(() => {});
+    throw failure;
   }
 }
 

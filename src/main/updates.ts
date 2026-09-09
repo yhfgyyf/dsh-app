@@ -160,11 +160,11 @@ export class DesktopUpdates {
       if (platform === 'darwin' && !relative(target, this.options.appPath).startsWith('Contents' + sep)) throw new Error('请将 DSH Desktop 放入应用程序目录后再更新。');
       if (await fileSha256(path).catch(() => undefined) !== this.release.sha256) { this.downloaded = undefined; throw new Error('已下载的安装包缺失或发生变化，请重新下载。'); }
       if (platform === 'darwin') target = await macUpdateTarget(target, this.options.userApplications, this.release.version);
-      try { await access(platform === 'darwin' ? dirname(target) : target, constants.W_OK); }
+      try { await access(dirname(target), constants.W_OK); }
       catch { throw new Error('应用所在目录不可写，请将应用安装到当前用户可写的目录。'); }
       let payload = path;
       const id = randomUUID();
-      const backup = platform === 'darwin' ? join(dirname(target), `.DSH-Desktop-backup-${this.options.currentVersion}-${id}.app`) : join(directory, 'previous-app');
+      const backup = join(dirname(target), `.DSH-Desktop-backup-${this.options.currentVersion}-${id}${platform === 'darwin' ? '.app' : ''}`);
       if (platform === 'darwin') {
         if (!bundle) throw new Error('更新包尚未完成校验。');
         const stage = await mkdtemp(join(dirname(target), '.DSH-Desktop-update-'));
