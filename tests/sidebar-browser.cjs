@@ -66,7 +66,12 @@ async function run(event) {
     await rpc('session/rename',{request:{sessionId:created.sessionId,title:'Sidebar native acceptance'}});
   })()`);
   await sleep(500);
-  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click(); document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
+  await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click()`);
+  if (await host.executeJavaScript(`!!document.querySelector('[data-sidebar-collapsed]')`)) {
+    host.send('desktop:command', 'sidebar');
+    await until(() => host.executeJavaScript(`!document.querySelector('[data-sidebar-collapsed]')`), 'Sidebar did not expand in the narrow test window');
+  }
+  await host.executeJavaScript(`document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
   await sleep(300);
   await until(() => host.executeJavaScript(`document.title.includes('Sidebar native acceptance')`), 'Fixture session missing');
   await sleep(400);

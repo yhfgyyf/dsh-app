@@ -85,6 +85,7 @@ ipcMain.handle = (channel, listener) => originalHandle(channel, async (...args) 
     started = true;
     setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
       report.ui = await args[0].sender.executeJavaScript('document.body.innerText.slice(0, 3000)').catch(() => 'unavailable');
+      report.layout = await args[0].sender.executeJavaScript(`({width:innerWidth,collapsed:!!document.querySelector('[data-sidebar-collapsed]'),buttons:Array.from(document.querySelectorAll('button')).map(b=>b.getAttribute('aria-label')||b.title||b.textContent).filter(Boolean).slice(0,25)})`).catch(() => null);
       finish(error);
     }), 300);
   }
@@ -93,12 +94,18 @@ ipcMain.handle = (channel, listener) => originalHandle(channel, async (...args) 
 async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
+  window.setSize(980, 720);
   const js = code => host.executeJavaScript(code, true);
   await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await js(`(async()=>{const method='workspace/create';const body=await(await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:{request:{path:${JSON.stringify(workspace)}}}}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));})()`);
   await js(`(async()=>{const method='session/rename';const body=await(await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:{request:{sessionId:${JSON.stringify(sessionId)},title:'Artifact link acceptance'}}}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));})()`);
   await sleep(500);
-  await js(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click();document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
+  await js(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click()`);
+  if (await js(`!!document.querySelector('[data-sidebar-collapsed]')`)) {
+    host.send('desktop:command', 'sidebar');
+    await until(() => js(`!document.querySelector('[data-sidebar-collapsed]')`), 'Sidebar did not expand in the narrow test window');
+  }
+  await js(`document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
   await until(() => js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).some(row=>row.textContent.includes('Artifact link acceptance'))`), 'Historical fixture session missing');
   await js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Artifact link acceptance')).click()`);
   await until(() => js(`!!document.querySelector('.hWmORq_body code button[title$="/pelican.svg"]')`), 'Bare SVG filename did not become a file link');
