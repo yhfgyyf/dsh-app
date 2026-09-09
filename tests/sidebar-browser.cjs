@@ -1,14 +1,36 @@
 // Exercise the production Electron window, preload and DSH sidebar without a model request.
 const { app, ipcMain, BrowserWindow, webContents } = require('electron');
 const assert = require('node:assert/strict');
-const { mkdirSync, writeFileSync } = require('node:fs');
+const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
 const { createServer } = require('node:http');
+const { randomUUID } = require('node:crypto');
+const { zstdCompressSync } = require('node:zlib');
 const root = join(__dirname, '..');
-const data = join(root, '.test-data', 'sidebar-browser-native');
+const reports = join(root, '.test-data', 'sidebar-browser-native');
+const data = join(reports, String(Date.now()));
 mkdirSync(data, { recursive: true });
 process.env.DSH_DESKTOP_DATA_DIR = data;
 process.env.DSH_DESKTOP_CONFIG_HOME = join(data, 'core');
+const workspace = join(data, 'workspace');
+const sessionId = 'session-' + randomUUID();
+mkdirSync(workspace, { recursive: true });
+const persistence = readFileSync(join(root, '.runtime/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js'), 'utf8');
+const start = persistence.indexOf('function projectKey(cwd)'), end = persistence.indexOf('function projectDir(', start);
+assert.ok(start >= 0 && end > start);
+const projectKey = new Function(persistence.slice(start, end) + '; return projectKey;')()(workspace);
+const sessionDirectory = join(data, 'core/sessions', projectKey, sessionId);
+mkdirSync(sessionDirectory, { recursive: true });
+let seq = 0;
+const event = (type, data, surface = false) => ({ type, seq: seq++, time: Date.now(), data, ...(surface ? { surfaceOp: 'append' } : {}) });
+const history = [
+  { type: 'session', version: 3, id: sessionId, createdAt: Date.now(), cwd: workspace, isSeeded: false, delegationDepth: 0, agentPreset: 'standard' },
+  event('session/title', { title: 'Sidebar native acceptance', messageSeqs: [], source: { kind: 'user' } }),
+  event('turn/start', { turn: 1 }), event('step/start', { turn: 1, step: 1 }),
+  event('user/message', { role: 'user', id: randomUUID(), source: { kind: 'user' }, content: [{ type: 'text', text: 'Preview the local and remote documents.' }] }, true),
+  event('step/end', { turn: 1, step: 1 }), event('turn/end', { turn: 1, reason: { kind: 'completed' } }),
+];
+writeFileSync(join(sessionDirectory, 'session.v3.jsonl.zstd'), Buffer.concat(history.map(row => zstdCompressSync(Buffer.from(JSON.stringify(row) + '\n')))));
 const report = { checks: [], failures: [], console: [] };
 const handlers = new Map();
 let finished = false;
@@ -35,6 +57,7 @@ function finish(error) {
   clearTimeout(timeout);
   server.close();
   writeFileSync(join(data, 'report.json'), JSON.stringify(report, null, 2));
+  writeFileSync(join(reports, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   app.quit();
 }
@@ -47,23 +70,24 @@ ipcMain.handle = (channel, listener) => {
   handlers.set(channel, listener);
   return originalHandle(channel, async (...args) => {
     const result = await listener(...args);
-    if (channel === 'desktop:ready') setTimeout(() => run(args[0]).then(() => finish()).catch(finish), 300);
+    if (channel === 'desktop:ready') setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
+      report.ui = await args[0].sender.executeJavaScript(`({text:document.body.innerText.slice(0,2500),width:innerWidth,collapsed:!!document.querySelector('[data-sidebar-collapsed]'),buttons:Array.from(document.querySelectorAll('button')).map(b=>b.getAttribute('aria-label')||b.title||b.textContent).filter(Boolean).slice(0,25)})`).catch(() => null);
+      finish(error);
+    }), 300);
     return result;
   });
 };
 async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
+  window.setSize(980, 720);
   const invoke = (channel, ...args) => handlers.get('desktop:' + channel)({ sender: host, senderFrame: host.mainFrame }, ...args);
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const workspace = join(data, 'workspace');
-  mkdirSync(workspace, { recursive: true });
   await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
   await host.executeJavaScript(`(async()=>{
     const rpc=async(method,args)=>{const body=await (await fetch('/api/'+method,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args}})})).json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));return body.result.value;};
-    const adopted=await rpc('workspace/create',{request:{path:${JSON.stringify(workspace)}}});
-    const created=await rpc('session/create',{request:{workspaceId:adopted.workspace.workspaceId,agentPreset:'standard'}});
-    await rpc('session/rename',{request:{sessionId:created.sessionId,title:'Sidebar native acceptance'}});
+    await rpc('workspace/create',{request:{path:${JSON.stringify(workspace)}}});
+    await rpc('session/rename',{request:{sessionId:${JSON.stringify(sessionId)},title:'Sidebar native acceptance'}});
   })()`);
   await sleep(500);
   await host.executeJavaScript(`Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click()`);
@@ -72,7 +96,8 @@ async function run(event) {
     await until(() => host.executeJavaScript(`!document.querySelector('[data-sidebar-collapsed]')`), 'Sidebar did not expand in the narrow test window');
   }
   await host.executeJavaScript(`document.querySelector('.YDXeBa_projectRow[aria-expanded="false"]')?.click()`);
-  await sleep(300);
+  await until(() => host.executeJavaScript(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).some(row=>row.textContent.includes('Sidebar native acceptance'))`), 'Created fixture session missing from the sidebar');
+  await host.executeJavaScript(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Sidebar native acceptance')).click()`);
   await until(() => host.executeJavaScript(`document.title.includes('Sidebar native acceptance')`), 'Fixture session missing');
   await sleep(400);
   await host.executeJavaScript(`{ const a = document.createElement('a'); a.href=${JSON.stringify(url)}; a.target='_blank'; document.body.append(a); a.click(); a.remove(); }`);
@@ -125,7 +150,8 @@ async function run(event) {
   const routed = await until(() => webContents.getAllWebContents().find(contents => contents.getTitle() === 'Local Canvas'), 'File click did not route to rendered preview');
   const routedView = window.contentView.children.find(view => view.webContents === routed);
   await until(() => routedView.getVisible() && !nativeView.getVisible(), 'File preview not visible or old web page remained above it');
-  const previewTab = await host.executeJavaScript(`document.querySelector('[role="tab"][aria-selected="true"]').getAttribute('data-dockkit-tab')`);
+  const previewTab = await host.executeJavaScript(`document.querySelector('[data-dockkit-tab][aria-selected="true"]')?.getAttribute('data-dockkit-tab')`);
+  assert.ok(previewTab, 'The selected preview must be a sidebar content tab');
   await host.executeJavaScript(`Array.from(document.querySelectorAll('.desktop-browser button')).find(b=>b.textContent==='源码').click()`);
   await until(() => !routedView.getVisible() && host.executeJavaScript(`document.body.innerText.includes('canvas.js')`), 'Source view did not replace rendered content');
   await host.executeJavaScript(`document.querySelector('[data-dockkit-tab="${previewTab}"]').click()`);
