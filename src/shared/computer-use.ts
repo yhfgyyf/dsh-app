@@ -2,12 +2,15 @@ export const COMPUTER_DRIVER_VERSION = '0.25.0';
 
 export type ComputerPermissions = { supported: boolean; accessibility: boolean; screenRecording: boolean };
 export type ComputerOwner = { sessionId: string; reason: string; applicationPid?: number };
+export type ComputerTarget = { pid: number; windowId: number; appName: string; windowTitle: string };
+export type ComputerPreview = { target: ComputerTarget; capturedAt: number; image?: ComputerImage; error?: string };
 export type ComputerState = {
   enabled: boolean;
-  phase: 'idle' | 'active' | 'stopping' | 'error';
+  phase: 'idle' | 'starting' | 'active' | 'stopping' | 'error';
   driverVersion: string;
   permissions: ComputerPermissions;
   owner?: ComputerOwner;
+  target?: ComputerTarget;
   action?: string;
   error?: string;
   stopShortcutAvailable?: boolean;

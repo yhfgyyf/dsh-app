@@ -1,0 +1,31 @@
+{
+  "dsh": "0.1.5-rc.1",
+  "plugin": "dsh-progressive-tools",
+  "version": "0.3.2",
+  "commit": "3df3e891d9b75dd3d5e3c70b0ba471857ad5166f",
+  "scope": "TypeScript source and development tests only; generated production lib is byte-identical.",
+  "patch": "dsh-progressive-tools-development.patch",
+  "sha256": "d4b9e73087c4307d36f5bc4ec3510df04de4d74b94a2bd59e5267bd47041d03c",
+  "files": [
+    {
+      "path": "src/index.ts",
+      "before": "f5cfed60bb00bff84d24d80c5e598d9e0dc30816cbff2e2e2cf256fb819eecf3",
+      "after": "f095d9147a6c0552b2831faf7cad8b6521b1ca321e67e5d0b864b4ae3f4e62d5"
+    },
+    {
+      "path": "tests/agent-progressive-tools.spec.ts",
+      "before": "23dc162cdb033ab76fd6f418a5ee28f17da9c56278fad3116d6a914a0b849197",
+      "after": "05c8ffd2f2e890088bad4c5b52f893c634bca70722b48a77ffd58c0c90162b97"
+    },
+    {
+      "path": "tests/loader-composition.spec.ts",
+      "before": "d0d63767e263d7ad21cfbc4c03220158e99cb01229897a2a47e728d894b7c1be",
+      "after": "b04ecba3b97193f059d1c3e6f57d2b07952c146261ba5c1f2ecf32dc904021f2"
+    },
+    {
+      "path": "tests/native-deferred.spec.ts",
+      "before": "be509b5ac86196076c1fa0f1532c6b9ba6b00d475ebd8effe27aa4aebad17a1b",
+      "after": "be0d18e01a47dff0bd115a4334cd33546389eb876e89eed6b9d7dde0a3d6b66d"
+    }
+  ]
+}

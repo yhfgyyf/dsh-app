@@ -1,4 +1,4 @@
-/* DSH 0.1.2-rc.1 CSS-module adapter. Contracts are verified in tests/upstream.test.ts. */
+/* DSH CSS-module adapter. Contracts are verified in tests/upstream.test.ts. */
 html[data-dsh-desktop] { --desktop-titlebar-height: 44px; height: 100%; }
 html[data-dsh-desktop] body { height: 100%; margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
 html[data-dsh-desktop] #root { height: 100%; }

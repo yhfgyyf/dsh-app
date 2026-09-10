@@ -3,8 +3,10 @@ import { builtinModules } from 'node:module';
 import { copyFile, mkdir, cp } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { verifyComputerDriverBuild } from './build-computer-driver.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+if (process.platform === 'darwin') await verifyComputerDriverBuild(resolve(root, '.runtime/computer-use'));
 const nativeExternals = ['electron', ...builtinModules, ...builtinModules.map((name) => `node:${name}`)];
 const auditInstaller = await import(new URL('install-audit-compat.mjs', import.meta.url).href);
 await auditInstaller.applyAuditCompat({ nodeModules: resolve(root, '.runtime/node_modules'), pluginRoot: resolve(root, '.runtime/node_modules/dsh-audit-mode'), backupHome: resolve(root, '.build-runtime') });
@@ -15,7 +17,7 @@ await sidebarInstaller.applySidebarAutoclose();
 const progressiveImageInstaller = await import(new URL('install-progressive-images.mjs', import.meta.url).href);
 await progressiveImageInstaller.applyProgressiveImages();
 
-for (const entry of ['main', 'preload', 'updater']) {
+for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 
@@ -45,6 +47,7 @@ await build({
   base: './',
   build: { outDir: resolve(root, 'dist/renderer/setup'), target: 'chrome148', emptyOutDir: true },
 });
+await build({ configFile: false, root: resolve(root, 'src/renderer/computer-preview'), base: './', build: { outDir: resolve(root, 'dist/renderer/computer-preview'), target: 'chrome148', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
 for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'cordis.yml', 'desktop.patch.yml']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));

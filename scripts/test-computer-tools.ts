@@ -18,16 +18,16 @@ let driverCalls = 0;
 const driver: ComputerDriver = {
   permissions: async () => ({ supported: true, accessibility: true, screenRecording: true }),
   start: async () => {}, stop: async () => {}, describe: async () => ({ tools: [] }),
+  capturePreview: async () => { throw new Error('Tool fixture must never capture a preview'); },
   call: async (name) => {
     ++driverCalls;
     return { text: 'fixture computer evidence', data: { snapshot_id: 's12345678', elements: [{ element_index: 1, element_token: 's12345678:1', label: 'Fixture button' }], effect: 'confirmed', tool: name }, images: name === 'get_window_state' ? [{ mimeType: 'image/png', dataBase64: pngFixture().toString('base64') }] : [] };
   },
 };
 const broker = new DesktopComputerUse(driver);
-await broker.setEnabled(true, false);
 const names = ['computer_status', 'computer_start', 'computer_observe', 'computer_act', 'computer_stop'];
 const report: { checks: string[]; failures: string[] } = { checks: [], failures: [] };
-let current: { face: string; decision: string; step: number; observation?: string; imageSeen: boolean };
+let current: { face: string; mode: string; step: number; observation?: string; imageSeen: boolean };
 const uploaded = new Map<string, Record<string, unknown>>();
 const mock = createServer(async (req, res) => {
   try {
@@ -49,14 +49,14 @@ const mock = createServer(async (req, res) => {
     }
     const request = JSON.parse(body);
     if (!req.url?.endsWith('/chat/completions') || !current) throw new Error('Unexpected model request.');
-    await writeFile(join(data, `${current.face}-${current.decision}-request-${current.step}.json`), JSON.stringify(request, null, 2));
+    await writeFile(join(data, `${current.face}-${current.mode}-request-${current.step}.json`), JSON.stringify(request, null, 2));
     const hasImage = request.messages?.some((message: any) => Array.isArray(message.content) && message.content.some((block: any) => block.type === 'image_url' && /^data:image\//.test(block.image_url?.url) || block.type === 'file' && uploaded.has(block.file_id)));
     current.imageSeen ||= hasImage;
     const calls = [
       { name: 'search_tools', arguments: { query: 'computer' } },
       { name: 'describe_tools', arguments: { names } },
       { name: 'computer_start', arguments: { reason: 'Only the disposable computer tool fixture', application_pid: 123 } },
-      ...(current.decision === 'allowed-once' ? [
+      ...(current.mode === 'enabled' ? [
         { name: 'computer_observe', arguments: { kind: 'window', pid: 123, window_id: 456 } },
         { name: 'computer_act', arguments: { action: 'click', observation_id: current.observation, arguments: { element_index: 1 } } },
         { name: 'computer_stop', arguments: {} },
@@ -76,9 +76,15 @@ const mock = createServer(async (req, res) => {
 await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
 await writeFile(join(home, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:\n    baseURL: http://127.0.0.1:${(mock.address() as { port: number }).port}\n    apiKeyEnv: DSH_DESKTOP_COMPUTER_FIXTURE_KEY\n    maxTokens: 4096\n`);
 process.env.DSH_DESKTOP_COMPUTER_FIXTURE_KEY = 'disposable-local-fixture';
+// File/shell approval=never must not suppress access granted by the App switch.
+process.env.DSH_PERMISSION_MODE = 'danger-full-access';
 const core = new DesktopRuntime({ runtimeRoot: join(root, '.runtime'), entry: join(root, '.runtime/app/index.ts'), home, cwd: data, onExit: () => {}, computerRequest: async (request, signal) => {
   const result = await broker.request(request, signal);
   if (request.operation === 'observe') current.observation = (result.data as any)?.observation_id;
+  if (request.operation === 'act') {
+    assert.ok(result.images.length, 'Action must return a verification image');
+    assert.ok((result.data as any)?.observation_id !== current.observation, 'Action must return a fresh observation');
+  }
   return result;
 }, computerStop: () => broker.stop() });
 let client: Awaited<ReturnType<typeof connectFixture>> | undefined;
@@ -88,8 +94,9 @@ try {
   client = await connectFixture(connection);
   const events = client.follow('$events'); await events.wait(frames => frames.some(frame => frame.type === 'ready'));
   const clientId = events.frames.find(frame => frame.type === 'ready').clientId;
-  for (const face of ['native', 'invoke', 'ptc']) for (const decision of ['rejected', 'allowed-once']) {
-    current = { face, decision, step: 0, imageSeen: false };
+  for (const face of ['native', 'invoke', 'ptc']) for (const mode of ['disabled', 'enabled']) {
+    current = { face, mode, step: 0, imageSeen: false };
+    await broker.setEnabled(mode === 'enabled', false);
     const created = await client.rpc('session/create', { request: { cwd: data, agentPreset: face === 'ptc' ? 'ptc' : 'standard' } });
     const sessionId = created.sessionId;
     await client.rpc('session/selectModel', { request: { sessionId, provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', reasoningEffort: 'high' } });
@@ -103,26 +110,26 @@ try {
       for (const event of events.frames.slice(eventStart)) {
         if (event.type !== 'waterfall' || event.event !== 'approval/request' || event.agentId !== sessionId || handled.has(event.eventId)) continue;
         handled.add(event.eventId); ++approvalCount;
-        void client!.rpc('$events/result', { clientId, eventId: event.eventId, outcome: { kind: 'result', value: decision } }).catch(error => report.failures.push(String(error)));
+        void client!.rpc('$events/result', { clientId, eventId: event.eventId, outcome: { kind: 'result', value: 'rejected' } }).catch(error => report.failures.push(String(error)));
       }
     }, 50);
     try {
       await client.rpc('session/prompt', { request: { sessionId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: 'Run the isolated desktop computer fixture.' }] } });
       await stream.wait(frames => frames.some(frame => frame.event?.type === 'turn/end'), 35000);
-      await writeFile(join(data, `${face}-${decision}-events.json`), JSON.stringify(stream.frames, null, 2));
-      assert.equal(approvalCount, 1, 'Expected exactly one task approval');
+      await writeFile(join(data, `${face}-${mode}-events.json`), JSON.stringify(stream.frames, null, 2));
+      assert.equal(approvalCount, 0, 'Computer tasks must not request extra approval');
       assert.ok(JSON.stringify(stream.frames).includes('COMPUTER_FIXTURE_DONE'));
-      if (decision === 'rejected') assert.equal(driverCalls, beforeCalls, 'Denied tool started native work');
+      if (mode === 'disabled') assert.equal(driverCalls, beforeCalls, 'Disabled switch allowed native work');
       else {
-        assert.equal(driverCalls - beforeCalls, 2, 'Expected exactly observe and click');
+        assert.equal(driverCalls - beforeCalls, 3, 'Expected observe, click and post-action verification');
         assert.equal(current.imageSeen, true, 'Image did not reach the actual provider request');
         const failures = stream.frames.filter(frame => frame.event?.type === 'tool/result' && JSON.stringify(frame.event.data).includes('"isError":true'));
         assert.equal(failures.length, 0, 'Successful fixture contained tool errors');
       }
       assert.equal(broker.state.phase, 'idle');
-      report.checks.push(`${face}: ${decision}; ${decision === 'rejected' ? 'denial started no native work' : 'scoped approval, provider image delivery and desktop release verified'}`);
+      report.checks.push(`${face}: policy=never, switch ${mode}; ${mode === 'disabled' ? 'no native work while disabled' : 'no per-task approval, scoped ownership, post-action observation, provider image delivery and desktop release verified'}`);
       console.log('PASS', report.checks.at(-1));
-    } catch (error) { await writeFile(join(data, `${face}-${decision}-events.json`), JSON.stringify(stream.frames, null, 2)); throw error; }
+    } catch (error) { await writeFile(join(data, `${face}-${mode}-events.json`), JSON.stringify(stream.frames, null, 2)); throw error; }
     finally { clearInterval(approvals); stream.close(); }
   }
   events.close();

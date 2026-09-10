@@ -10,7 +10,7 @@ export interface BrowserContext {
   sidebarRight: {
     isExpanded(): boolean; toggleExpanded(): void;
     active(): { contentId: string } | undefined;
-    openResource(address: string, options?: { kind?: string }): void;
+    openResource(address: string, options?: { kind?: string; params?: { source?: boolean } }): void;
   };
   sidebarRightTabs: { register(definition: { id: string; kind: string; patterns?: string[]; priority: 'extension'; title(address: string): string; guide?: { order: number; title(): string; description(): string }[] }): Disposer };
   slots: {
@@ -98,7 +98,7 @@ function BrowserTab({ sessionId, useSessions, useTabInfo, ctx, retain }: TabProp
       <button title="前进" aria-label="前进" disabled={!state?.canGoForward} onClick={() => { void window.dshDesktop?.browserAction(id, 'forward'); }}>→</button>
       <button title={state?.loading ? '停止加载' : '刷新'} aria-label={state?.loading ? '停止加载' : '刷新'} disabled={!opened} onClick={() => { setError(undefined); void window.dshDesktop?.browserAction(id, state?.loading ? 'stop' : 'reload'); }}>{state?.loading ? '×' : '↻'}</button>
       <form onSubmit={navigate}><input aria-label={preview ? '预览文件路径' : '网址'} placeholder="输入网址" value={address} readOnly={preview} onChange={event => setAddress(event.target.value)} /></form>
-      {preview ? <button onClick={() => ctx.sidebarRight.openResource(tab.contentId, { kind: 'text' })}>源码</button> : <button title="在外部浏览器打开" aria-label="在外部浏览器打开" disabled={!externalWebUrl(state?.url)} onClick={() => { if (state) void window.dshDesktop?.openExternal(state.url); }}>↗</button>}
+      {preview ? <button onClick={() => ctx.sidebarRight.openResource(tab.contentId, { kind: 'text', params: { source: true } })}>源码</button> : <button title="在外部浏览器打开" aria-label="在外部浏览器打开" disabled={!externalWebUrl(state?.url)} onClick={() => { if (state) void window.dshDesktop?.openExternal(state.url); }}>↗</button>}
     </div>
     {(error || state?.error) && <p className="desktop-browser-error" role="alert">{error || state?.error}</p>}
     <div className="desktop-browser-viewport" ref={viewport}>

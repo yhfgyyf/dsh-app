@@ -20,6 +20,7 @@ export interface DesktopAPI {
   getComputerState(): Promise<ComputerState>;
   setComputerEnabled(enabled: boolean): Promise<ComputerState>;
   stopComputerUse(): Promise<void>;
+  showComputerPreview(): Promise<void>;
   onComputerState(listener: (state: ComputerState) => void): () => void;
   getUpdateState(): Promise<UpdateState>;
   setUpdateSchedule(schedule: UpdateSchedule): Promise<UpdateState>;

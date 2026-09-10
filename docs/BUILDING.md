@@ -19,6 +19,15 @@ can rebuild this isolated part of `.runtime` without replacing the DSH snapshot.
 The downloaded archive is verified before extraction, the driver runs as a private
 App-owned worker, and no Cua daemon or updater is installed. Driver telemetry is
 disabled. SDK and license files remain outside ASAR with the bundled runtime.
+On macOS, preparation builds the worker from that exact source commit with the
+small foreground-input patch in `runtime/computer-use/patches`. Install Rust
+**1.97.1** and the Xcode Command Line Tools before running preparation. The build
+uses the host architecture, a locked Cargo dependency graph, and validates the
+source tree, lockfile and patch hashes in `native-patch.json`. `driver-build.json`
+records the resulting binary hash. Build and packaging reject a stale or modified
+worker; startup requires matching patch metadata. The released SDK and Windows
+driver stay pinned to the official assets. A locally installed toolchain under
+`.build-runtime/rust` can be used without changing shell profiles.
 Build and preparation apply the hash-guarded `invoke_tool` image forwarding patch
 in `patches/progressive-images`, retaining an original-file backup.
 
@@ -71,7 +80,7 @@ archive timestamps and native tooling can prevent byte-identical rebuilds.
 ## Audit compatibility in Web/TUI
 
 Apply the Audit compatibility patch to existing Web and TUI profiles backed by
-DSH `0.1.5-alpha.1`:
+DSH `0.1.5-rc.1`:
 
 ```sh
 node scripts/install-audit-compat.mjs --check

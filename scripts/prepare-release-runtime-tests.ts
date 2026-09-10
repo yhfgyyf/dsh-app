@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path';
 const execute = promisify(execFile);
 const root = resolve('.');
 const pins = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+const snapshot = JSON.parse(await readFile(join(root, '.runtime/snapshot.json'), 'utf8'));
+if (snapshot.dsh !== pins.dsh) throw new Error(`Restored runtime contains DSH ${snapshot.dsh}; this source requires ${pins.dsh}. Select runtimeSource=registry to rebuild the pinned runtime.`);
 const fixture = join(root, '.test-runtime/release-cli');
 const plugins = join(fixture, 'plugins');
 await mkdir(plugins, { recursive: true });

@@ -1,0 +1,10 @@
+{
+  "patchId": "dsh-macos-foreground-v2",
+  "sourceRepository": "https://github.com/trycua/cua.git",
+  "sourceCommit": "45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f",
+  "sourceTree": "098ffdadd73183b62c2a6b5b8c4c41f389f8f2f5",
+  "toolchain": "1.97.1",
+  "patchFile": "patches/0001-macos-foreground-input.patch",
+  "patchSha256": "cf88284d443d4cf413ff027f2f1c7aa0fa2be693eae4041ae56d463c1855a5d1",
+  "cargoLockSha256": "0ba882bc9e55f36e5b3162667e67bda43553bd0f62868ef76e72e630f155406a"
+}

@@ -8,6 +8,16 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon** 
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.10 preview updates
+
+This release updates **Computer Use**, improving coordinate targeting, native input, and visual feedback after actions.
+
+- **More reliable computer-use coordinates:** targets use 0–1 relative coordinates across the entire screenshot, including the title bar. Moving or resizing a window invalidates old coordinates and requires a fresh observation.
+- **Native input fixes on macOS:** foreground clicks move the physical pointer, preventing shortcuts from reaching the wrong area after a window is reactivated. Long foreground text input stops if the target loses focus, and paste verifies the clipboard contents before delivery. The physical-pointer fix applies to the macOS native driver.
+- **Feedback after actions:** window actions return a fresh screenshot and observation ID by default. Live picture-in-picture preserves keyboard focus and provides an immediate Stop control.
+- **Bundled core upgrade:** the app ships DSH `0.1.5-rc.1` with migrated, verified local compatibility patches while preserving session write locks, tool-call consistency checks, and sharing with Web/TUI.
+- **Source preview fix:** an HTML file's Source action opens plain text immediately. Manual viewer choices survive tab switches and reloads.
+
 ## Interface preview
 
 ![DSH Desktop main interface with workspace and session details blurred](assets/readme/workspace-blurred.png)
@@ -47,7 +57,7 @@ Update downloads use the system proxy. Failed installations can be retried using
 - Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
 - Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.
 
-The app bundles DSH `0.1.5-alpha.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
+The app bundles DSH `0.1.5-rc.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 
 Some features depend on your model or external tools. MP4 attachments require a provider that supports `video_url`. Audit's Codex and Claude Code backends require their respective CLIs; a DSH model backend can also be configured. The installer does not include model accounts, API keys, or these external CLIs.
 
@@ -59,25 +69,25 @@ Codex sign-in uses DSH's authorization service and shared credential store. The 
 
 The official session lifecycle lock allows only one process to write to a session at a time. Other interfaces receive an ownership error when they try to resume, modify, or delete a session that is in use. They can take over after the owning process exits. Switching pages does not guarantee that a session is released, and following an active stream live across separate processes is not currently supported.
 
-Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.5-alpha.1).
+Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.5-rc.1).
 
 ## Computer use
 
-Describe the application and task in a conversation, then approve the task's
-computer-use request. The monitor icon in the title bar shows permissions and
-the current task; an active task has a Stop button. The global stop shortcut is
-`Command + Option + Shift + Escape` on macOS and `Ctrl + Alt + Shift + Escape`
-on Windows.
+Enable Computer use in Settings or through the title-bar monitor icon. The app checks and requests system permissions; the switch shows on only after permissions are available and startup succeeds. Enabling it authorizes computer use without a separate prompt for each task. This switch is independent of file and command approvals. Turning it off stops input immediately; the model cannot enable it.
 
-Grant Accessibility and Screen Recording to DSH Desktop on macOS. Screenshots
-require an image-capable model, such as `deepseek-v4-flash-vision-exp`; text-only
-models can use window accessibility trees. Tools support finding applications
-and windows, screenshots, clicks, typing, keyboard shortcuts, scrolling and
-dragging. One session owns the desktop at a time, with release on completion,
-cancellation, screen lock or App exit. Windows requires an interactive logged-in
-desktop; the lock screen and UAC secure desktop are unavailable. Full-desktop
-capture currently targets the primary display; other displays can be observed
-through individual application windows.
+Selecting a window opens live picture-in-picture. You can hide it, reopen it from the Computer use menu, or click Stop now at any time. It does not steal keyboard focus and closes when the task ends. Window actions return a fresh screenshot and observation ID by default so the model can check the result. When creating desktop application files, the model checks existing windows, preserves open documents, and opens the saved result to inspect its view, colors, and framing.
+
+Coordinates use 0–1 relative values across the complete screenshot, including the title bar. Picture-in-picture captures do not change the action screenshot's coordinate scale. Moving or resizing a window invalidates old coordinates and requires another observation. Action results distinguish input delivery from the subsequent observation; the actual outcome still needs to be checked against the task.
+
+On macOS, foreground keyboard input can first target an editor with coordinates. Foreground clicks synchronize the physical pointer while enforcing the target window, preventing shortcuts from following an old pointer position when the window is reactivated. Subsequent shortcuts and typing omit coordinates and control targets to preserve the selection. Long text input stops if focus leaves the target window. The `type_text` tool's `method="paste"` writes and reads back the clipboard before sending the paste shortcut to the specified window. After an input error, observe the actual content before retrying; do not resend text based only on a character count.
+
+The global stop shortcut is `Command + Option + Shift + Escape` on macOS and `Ctrl + Alt + Shift + Escape` on Windows.
+
+macOS requires Accessibility and Screen Recording permissions for DSH Desktop. The current macOS test package uses ad-hoc signing, so an upgrade may require new authorization. If System Settings shows permission enabled but the app cannot enable Computer use, or macOS reports a signature mismatch, follow [permission checks and recovery after an upgrade](docs/TESTING.md#macos-upgrade-permissions). Restarting or passing signature verification does not by itself prove that previous permissions remain valid.
+
+Distribution with stable permission identity across updates requires Developer ID signing from a fixed developer team and Apple notarization. See [signing, permission migration, and build commands](docs/MACOS-SIGNING.md).
+
+Screenshots require an image-capable model, such as `deepseek-v4-flash-vision-exp`; text-only models can use window accessibility trees. Tools support finding applications and windows, screenshots, clicks, typing, keyboard shortcuts, scrolling, and dragging. One session owns the desktop at a time, with release on completion, cancellation, screen lock, or App exit. Windows requires an interactive logged-in desktop; the lock screen and UAC secure desktop are unavailable. Full-desktop capture currently targets the primary display; other displays can be observed through individual application windows.
 
 ## Build from source
 

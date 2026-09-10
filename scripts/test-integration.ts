@@ -243,7 +243,8 @@ try {
 } finally {
   client.close();
   await mkdir(join(root, 'docs/evidence'), { recursive: true });
-  await writeFile(join(root, 'docs/evidence/integration.json'), JSON.stringify({ timestamp: new Date().toISOString(), environment: 'isolated DSH 0.1.5-alpha.1 + deterministic local provider', results }, null, 2));
+  const version = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8')).dsh;
+  await writeFile(join(root, 'docs/evidence/integration.json'), JSON.stringify({ timestamp: new Date().toISOString(), environment: `isolated DSH ${version} + deterministic local provider`, results }, null, 2));
   console.log(`${results.filter(result => result.status === 'pass').length}/${results.length} integration workflows passed.`);
   if (results.some(result => result.status === 'fail')) process.exitCode = 1;
 }

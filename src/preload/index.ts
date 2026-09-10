@@ -9,6 +9,7 @@ const api: DesktopAPI = {
   getComputerState: () => ipcRenderer.invoke('desktop:computer-state'),
   setComputerEnabled: enabled => ipcRenderer.invoke('desktop:computer-enabled', enabled),
   stopComputerUse: () => ipcRenderer.invoke('desktop:computer-stop'),
+  showComputerPreview: () => ipcRenderer.invoke('desktop:computer-preview'),
   onComputerState: listener => {
     const callback = (_event: unknown, state: ComputerState) => listener(state);
     ipcRenderer.on('desktop:computer-state', callback);

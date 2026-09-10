@@ -1,0 +1,14 @@
+--- a/presets/audit/agent.cordis.yml
++++ b/presets/audit/agent.cordis.yml
+@@ -31,8 +31,9 @@
+ - id: persona
+   name: '@deepseek-ai/dsh-persona'
+   config:
+-    text: |-
+-      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
++    suffix: Your working directory is {{cwd}}.
++    prefix: |-
++      You are a coding agent powered by the {{model}} model.
+ 
+       This session runs in AUDIT MODE. An independent auditor reviews progress
+       through a sidecar. Unaccepted summaries, verdicts, and findings do not enter

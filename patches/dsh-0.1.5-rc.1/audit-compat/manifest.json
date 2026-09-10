@@ -1,0 +1,30 @@
+{
+  "dsh": "0.1.5-rc.1",
+  "audit": [
+    "0.6.0",
+    "0.6.1"
+  ],
+  "files": [
+    {
+      "kind": "runtime",
+      "path": "@deepseek-ai/dsh-tool-cordis/lib/index.js",
+      "before": "55fb66ceb75ee92fdbd75e89db813f59edb8774cfa113968cdd132fade65edfe",
+      "after": "643d7b39f7a7cb47e01dda005f3afd53269a6a7d0fee4894bba2b466a08fa7e8",
+      "patchSha256": "4653533ce54ec27d553c7207d1b66f8f4621065a4a2d238e543c8355a78e13a8"
+    },
+    {
+      "kind": "plugin",
+      "path": "presets/audit/agent.cordis.yml",
+      "before": "bb0c7bc95c84fb835c0018189210f259a164921a20b2992c945dc2c93a4ee59b",
+      "after": "f4534b28fd91a2b1d1f8621fb89849e1a8000514ce1ddcd372d8f0e8de2b9ed4",
+      "patchSha256": "e6e3d085fd33e670e6cc13edd11027abe3d04c951b48ce4590a3dc9d44a70af9"
+    },
+    {
+      "kind": "client",
+      "path": "lib/client.js",
+      "before": "28bcb89b8b9a8bd0198073c922784f302bc22ccc4b2a90b6c981a402b43770df",
+      "after": "ca1225cdd29952a47654336e007741f813bedccd5700920b74c4d20e64d1fee9",
+      "patchSha256": "350caa1af8a5c6914a171894939dfa9542b7dc6bfce41f166c88bd5813ef68cf"
+    }
+  ]
+}

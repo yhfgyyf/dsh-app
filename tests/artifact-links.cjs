@@ -165,17 +165,16 @@ async function run(event) {
   await interactions.verifyLocalMenu(host, workspace, until);
   report.checks.push('Text sidebar supports drag selection and Copy; header opens each active SVG, PNG, HTML and Markdown file instead of the workspace');
   report.checks.push('Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
-  // Closing content leaves the seeded Start tab, but must release the column.
-  await js(`Array.from(document.querySelectorAll('[data-dockkit-tab]')).filter(t=>!/^(开始|Start)/.test(t.textContent)).forEach(t=>document.querySelector('[data-dockkit-tab-close="'+t.getAttribute('data-dockkit-tab')+'"]').click())`);
+  // rc.1 starts without a guide; closing every document leaves the column empty.
+  await js(`Array.from(document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab-close]')).forEach(button=>button.click())`);
   await until(() => js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the last document left the sidebar open');
   await until(() => svgPage.isDestroyed() && pngPage.isDestroyed() && canvasPage.isDestroyed(), 'Closed sidebar retained native previews');
   await interactions.verifyNoActiveFile(host, workspace, until);
   report.checks.push('With no active file, local open uses the file picker rather than silently opening the workspace');
   const reopened = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
-  await js(`{const guide=Array.from(document.querySelectorAll('[data-dockkit-tab]')).find(t=>/^(开始|Start)/.test(t.textContent));document.querySelector('[data-dockkit-tab-close="'+guide.getAttribute('data-dockkit-tab')+'"]').click()}`);
-  assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
-  await js(`document.querySelector('[data-dockkit-tab-close]').click()`);
+  assert.equal(await js(`document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab]').length`), 1, 'Reopening the empty sidebar should contain only the preview');
+  await js(`document.querySelector('[data-sidebar-right-open] [data-dockkit-tab-close]').click()`);
   await until(() => reopened.isDestroyed() && js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the sole preview failed to collapse');
   report.checks.push('Closing all documents or the sole preview collapses the sidebar, releases native views, and file links reopen it');
   // Restoring the UI must derive links from the unchanged retained messages.

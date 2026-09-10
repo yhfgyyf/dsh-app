@@ -1,0 +1,8 @@
+{
+  "dsh": "0.1.5-rc.1",
+  "package": "@deepseek-ai/dsh-client-ui-sidebar-right",
+  "path": "@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
+  "upstream": true,
+  "sha256": "32d24a77a28d25b975ffa9560ef94a2af94db232094910de7d5ea94788735afd",
+  "reason": "rc.1 closes the sole docked resource tab, collapses the column and restores push mode; seed and floating-pane behavior belongs to the upstream store."
+}

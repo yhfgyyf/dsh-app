@@ -1,0 +1,45 @@
+--- a/@deepseek-ai/dsh-tool-cordis/lib/index.js
++++ b/@deepseek-ai/dsh-tool-cordis/lib/index.js
+@@ -9103,6 +9103,33 @@
+ 	if (exec.agent === void 0) throw new Error("Cordis dynamic tools require an Agent-backed session");
+ 	return exec.agent;
+ }
++// The inspect registry belongs to the Host. Presets own leases, so switching
++// one session cannot duplicate or remove providers another session still uses.
++const hostInspectLeases = new WeakMap();
++function acquireHostInspectProviders(ctx) {
++	const root = ctx.root;
++	let shared = hostInspectLeases.get(root);
++	if (shared === void 0) {
++		const disposers = [];
++		try {
++			for (const provider of hostInspectProviders(root)) disposers.push(ctx.cordisInspect.register(provider));
++		} catch (error) {
++			for (const dispose of disposers.reverse()) dispose();
++			throw error;
++		}
++		shared = { users: 0, disposers };
++		hostInspectLeases.set(root, shared);
++	}
++	shared.users++;
++	let released = false;
++	return () => {
++		if (released) return;
++		released = true;
++		if (--shared.users !== 0) return;
++		hostInspectLeases.delete(root);
++		for (const dispose of shared.disposers.reverse()) dispose();
++	};
++}
+ /** Register the Cordis tools and explicit `@pluginId` context injection. */
+ function apply(ctx) {
+ 	ctx.systemPrompt.section({
+@@ -9110,7 +9137,7 @@
+ 		order: ctx.systemPrompt.getSectionOrder("TOOL_CORDIS"),
+ 		text: CORDIS_SYSTEM_PROMPT
+ 	});
+-	for (const provider of hostInspectProviders(ctx)) ctx.effect(() => ctx.cordisInspect.register(provider), `tool-cordis: inspect ${provider.manifest.id}`);
++	ctx.effect(() => acquireHostInspectProviders(ctx), "tool-cordis: shared Host inspect providers");
+ 	ctx.tools.register(defineTool({
+ 		name: "cordis_inspect_list",
+ 		description: "List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before creating or modifying a Package, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call.",

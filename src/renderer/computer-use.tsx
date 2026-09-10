@@ -46,7 +46,7 @@ export function ComputerControl() {
       <summary className="desktop-icon" title="电脑操作" aria-label="电脑操作">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="14" rx="2" /><path d="M8 21h8m-4-4v4" /></svg>
       </summary>
-      <div className="desktop-computer-popover" role="dialog" aria-label="电脑操作状态"><ComputerControls state={state} /></div>
+      <div className="desktop-computer-popover" role="dialog" aria-label="电脑操作状态"><ComputerControls state={state} />{state.phase === 'active' && <button onClick={() => { void window.dshDesktop?.showComputerPreview().catch(() => setError('无法打开画中画。')); }}>显示画中画</button>}</div>
     </details>
     {(state.owner || state.phase === 'stopping') && <button className="desktop-computer-stop" aria-label="立即停止电脑操作" disabled={state.phase === 'stopping'} onClick={() => { void stop(); }}>{state.phase === 'stopping' ? '停止中…' : '停止电脑操作'}</button>}
     {error && <span role="alert">{error}</span>}
