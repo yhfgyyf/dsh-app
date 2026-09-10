@@ -8,14 +8,14 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
-/** Version-pinned chat/Markdown adapter; never overwrite an unknown package edit. */
+/** Version-pinned artifact adapters; never overwrite an unknown package edit. */
 export async function applyArtifactLinks({ runtimeNodeModules = join(root, '.runtime/node_modules'), clientNodeModules = join(root, 'node_modules'), backupHome = join(root, '.build-runtime'), mode = 'apply' } = {}) {
-  const { dsh } = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+  const { version: dsh } = JSON.parse(await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-ui-chat/package.json'), 'utf8'));
   const directory = join(root, 'patches', `dsh-${dsh}`, 'artifact-links');
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
   const pending = [];
   for (const file of manifest.files) {
-    const base = file.kind === 'chat' ? runtimeNodeModules : clientNodeModules;
+    const base = file.kind === 'primitives' ? clientNodeModules : runtimeNodeModules;
     const pkg = JSON.parse(await readFile(join(base, file.package, 'package.json'), 'utf8'));
     if (pkg.name !== file.package || pkg.version !== manifest.dsh) throw new Error('Unexpected artifact-link package: ' + file.package);
     const path = join(base, file.path), bytes = await readFile(path), digest = sha(bytes);

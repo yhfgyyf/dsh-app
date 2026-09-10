@@ -1,0 +1,31 @@
+--- a/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js
+@@ -1413,13 +1413,17 @@
+ 			const canRead = meta.status !== "none";
+ 			const file = (0, react.useMemo)(() => hostFileOf(tab.contentId), [tab.contentId]);
+ 			const state = useStore((s) => s.byTab[tab.id]);
++			const sourceRequested = navigation.params?.source === true && state?.sourceRevision !== navigation.revision;
+ 			const definitions = useDocumentPreviews((value) => value);
+ 			const candidates = (0, react.useMemo)(() => {
+ 				const matched = matchingDocumentPreviews(definitions, file.path);
+ 				const fallback = definitions.find((definition) => definition.id === PLAIN_BODY_ID);
+ 				return fallback === void 0 ? matched : [...matched, fallback];
+ 			}, [definitions, file.path]);
+-			const selected = candidates.find((candidate) => candidate.id === state?.rendererId) ?? candidates[0];
++			const selected = candidates.find((candidate) => candidate.id === (sourceRequested ? PLAIN_BODY_ID : state?.rendererId)) ?? candidates[0];
++			(0, react.useEffect)(() => {
++				if (sourceRequested) actions.selected(tab.id, PLAIN_BODY_ID, navigation.revision);
++			}, [actions, tab.id, navigation.revision, sourceRequested]);
+ 			const mode = selected?.loading;
+ 			const current = (state?.mode ?? "text-pages") === mode ? state : void 0;
+ 			const bodyRef = (0, react.useRef)(null);
+@@ -1909,7 +1913,8 @@
+ 				init: () => ({ byTab: {} }),
+ 				actions: {
+ 					/** @param d - draft. @param tabId - owning tab. @param rendererId - manual choice, or automatic selection. */
+-					selected: (d, tabId, rendererId) => {
++					selected: (d, tabId, rendererId, sourceRevision) => {
++						if (sourceRevision !== void 0) bucket(d, tabId).sourceRevision = sourceRevision;
+ 						if (rendererId === void 0) delete bucket(d, tabId).rendererId;
+ 						else bucket(d, tabId).rendererId = rendererId;
+ 					},

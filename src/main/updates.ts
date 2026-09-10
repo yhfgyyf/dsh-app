@@ -8,6 +8,7 @@ import { DEFAULT_UPDATE_SCHEDULE, RELEASES_URL, localDay, nextDailyCheck, select
 import { downloadUpdate, githubFetch, type UpdateFetch } from './update-download.ts';
 import { fileSha256, physicalFs, run, type InstallPlan } from '../updater/install.ts';
 import { macUpdateTarget } from './update-target.ts';
+import { verifyMacSigningContinuity } from './macos-signature.ts';
 
 const execute = promisify(execFile);
 type Options = {
@@ -171,6 +172,9 @@ export class DesktopUpdates {
         payload = join(stage, 'DSH Desktop.app');
         await run('/usr/bin/ditto', [bundle, payload]);
         await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', payload]);
+        const currentBundle = dirname(dirname(dirname(this.options.executable)));
+        await verifyMacSigningContinuity(currentBundle, payload);
+        if (target !== currentBundle) await verifyMacSigningContinuity(target, payload);
       }
       const helper = join(directory, 'install.cjs');
       const nodeName = platform === 'win32' ? 'node.exe' : 'node';

@@ -9,19 +9,25 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 /** Preserve the pinned sidebar store's history and seed rules while closing an empty panel. */
-export async function applySidebarAutoclose() {
-  const { dsh } = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+export async function applySidebarAutoclose({ runtimeNodeModules = join(root, '.runtime/node_modules'), backupHome = join(root, '.build-runtime'), mode = 'apply' } = {}) {
+  const base = runtimeNodeModules;
+  const pkg = JSON.parse(await readFile(join(base, '@deepseek-ai/dsh-client-ui-sidebar-right/package.json'), 'utf8'));
+  const dsh = pkg.version;
   const directory = join(root, 'patches', `dsh-${dsh}`, 'sidebar-autoclose');
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
-  const base = join(root, '.runtime/node_modules');
-  const pkg = JSON.parse(await readFile(join(base, manifest.package, 'package.json'), 'utf8'));
-  if (pkg.name !== manifest.package || pkg.version !== dsh) throw new Error('Unexpected sidebar package');
+  if (pkg.name !== manifest.package || (manifest.dsh && pkg.version !== manifest.dsh)) throw new Error('Unexpected sidebar package');
   const path = join(base, manifest.path), bytes = await readFile(path), digest = sha(bytes);
+  if (manifest.upstream) {
+    if (digest !== manifest.sha256) throw new Error('Unrecognized upstream sidebar changes preserved: ' + path);
+    return mode === 'check' ? { pending: 0 } : { changed: 0, verified: true, upstream: true };
+  }
   if (digest !== manifest.before && digest !== manifest.after) throw new Error('Unrecognized changes preserved: ' + path);
   const patch = join(directory, 'runtime.patch');
   if (sha(await readFile(patch)) !== manifest.patchSha256) throw new Error('Sidebar patch checksum differs');
+  if (mode === 'check') return { pending: digest === manifest.after ? 0 : 1 };
   if (digest === manifest.after) return { changed: 0, verified: true };
-  const backup = join(root, '.build-runtime/backups', 'sidebar-autoclose-' + new Date().toISOString().replace(/[:.]/g, '-'));
+  if (mode === 'verify') throw new Error('Sidebar autoclose patch is missing');
+  const backup = join(backupHome, 'backups', 'sidebar-autoclose-' + new Date().toISOString().replace(/[:.]/g, '-'));
   await mkdir(backup, { recursive: true });
   await writeFile(join(backup, 'client.js'), bytes);
   if (sha(await readFile(join(backup, 'client.js'))) !== digest) throw new Error('Sidebar backup verification failed');

@@ -2,9 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const runtimeNodeModules = process.env.DSH_OVERLAY_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url));
 
 test('the packaged audit dock only mounts for the current audit preset, even with retained audit history', async () => {
-  const client = await readFile(new URL('../.runtime/node_modules/dsh-audit-mode/lib/client.js', import.meta.url), 'utf8');
+  const client = await readFile(join(runtimeNodeModules, 'dsh-audit-mode/lib/client.js'), 'utf8');
   let exports: any;
   let effects = 0;
   vm.runInNewContext(client, {
@@ -25,7 +29,7 @@ test('the packaged audit dock only mounts for the current audit preset, even wit
 });
 
 // Exercise the exact patched runtime function, including failed partial registration.
-const source = await readFile(new URL('../.runtime/node_modules/@deepseek-ai/dsh-tool-cordis/lib/index.js', import.meta.url), 'utf8');
+const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-tool-cordis/lib/index.js'), 'utf8');
 const start = source.indexOf('const hostInspectLeases = new WeakMap();');
 const end = source.indexOf('/** Register the Cordis tools and explicit', start);
 assert.ok(start >= 0 && end > start, 'Prepare the Audit-compatible runtime before testing.');

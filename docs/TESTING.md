@@ -12,6 +12,7 @@ npm run test:native
 npm run test:computer-tools
 npm run test:computer-settings
 npm run test:computer-native
+npm run test:computer-apps
 npm run test:audit-switch
 npm run test:updates
 ```
@@ -42,16 +43,41 @@ verifies recovery and process cleanup. It uses its own data directory.
 
 `test:computer-tools` runs the real DSH core, approval service, attachment store,
 native tool calls, `invoke_tool`, PTC worker and a local model endpoint. It checks
-rejected and allowed task grants, screenshot bytes reaching model requests and
-desktop release. The native driver is a disposable fixture in this transport test.
+disabled and enabled App switches under file/shell approval policy `never`,
+post-action observations, screenshot bytes reaching model requests and desktop
+release, without per-task approval prompts. The native driver is a disposable
+fixture in this transport test. Broker tests also cover successive tasks after
+one switch enable and cancellation during task startup. Focused action descriptions
+must expose only normalized coordinates and App-supported parameters. Regression
+tests cover unchanged-frame feedback, consumed observations after native errors,
+isolated PiP captures, stale window geometry rejection, validation versus dispatch
+failures, exact-window foreground keyboard preparation and clipboard
+readback before the explicit macOS paste mode. Paste mode replaces the clipboard.
 `test:computer-native` instead loads the actual Cua SDK in Electron and operates
 only its own test window using real OS accessibility and input APIs. It verifies
-screenshots, accessibility clicks, Unicode text, a narrow screenshot coordinate
-target and worker process cleanup. It requires a logged-in interactive desktop
+screenshots, accessibility clicks, Unicode text, narrow edge targets with original
+and resized observations, window movement, real wheel scrolling and dragging,
+and worker process cleanup. The actual PiP window must
+update live without taking keyboard focus or replacing native AX/coordinate
+state. Its isolated preload rejects foreign windows/frames, and hide/reopen/Stop
+controls are exercised. It requires a logged-in interactive desktop
 and macOS accessibility/screen-recording grants; missing permissions fail the test.
 Reports are `.test-data/computer-tools-latest.json` and
 `.test-data/computer-native-latest.json`. The Windows workflow runs both before
 building and testing the installer.
+
+`test:computer-apps` is the macOS cross-application regression. It starts a new
+factory-empty Blender process and an independent TextEdit process with a temporary
+document. Blender's small targets are clicked through the real broker/driver at
+1400, 320 and 1600 pixel observation sizes with PiP captures interleaved. The tests
+read back Chinese multiline input, selection replacement and a Blender object
+created by running the editor text. TextEdit saves typed and pasted Chinese text;
+the test compares the actual UTF-8 file. The fixture supplies target geometry and
+independent state observations; this tests native delivery, not model visual
+localization or planning. Only fixture-owned processes are stopped, and existing
+Blender/TextEdit processes must survive. Run desktop tests serially on an unlocked
+desktop. Its report is `.test-data/computer-apps-latest.json`; request logs, images
+and application state are retained in the report's data directory.
 
 `test:computer-settings` exercises the production renderer, preload, main IPC and
 preferences with controlled OS permission/driver outcomes. It checks that the
@@ -79,12 +105,49 @@ the real DSH services with a local SSE model stub. The advanced tool fixture has
 POSIX shell examples; the Windows workflow focuses on unit, model settings,
 ownership, native boot and installer behavior.
 
-macOS `npm run package` additionally verifies the complete ad-hoc signature
+macOS `npm run package` additionally verifies the complete bundle signature
 before and after a ZIP extraction, compares all runtime files and checks exact
 app.asar bytes. A successful `codesign` check establishes signature integrity,
-not Gatekeeper trust: the preview build has no Developer ID or notarization.
+not Gatekeeper trust: the default local preview build has no Developer ID or notarization.
 First-open testing must retain the browser download quarantine and follow the
 normal macOS per-app confirmation if blocked.
+
+### macOS upgrade permissions
+
+The current ad-hoc signature has a designated requirement tied to one build.
+macOS can retain an enabled privacy entry for the previous build while rejecting
+the new code with `Failed to match existing code requirement`. See Apple's
+[code signing requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+Packaging records the actual designated requirement and sets
+`installedComputerUseVerified: false`; a successful package build does not change
+that field to true. The native fixture may inherit a different responsible host's
+permissions, so its result does not establish the installed App's TCC access.
+
+For public distribution, follow [Developer ID signing and notarization](MACOS-SIGNING.md).
+Use `--developer-id --previous-app <previous-app>` to require a real identity and
+check the new bundle against the prior formal signature. The updater repeats that
+requirement check before replacing a formally signed installation. Unit tests
+cover missing identities and rejected continuity; the signed-to-signed TCC upgrade
+test still requires the actual Developer ID certificate and installed builds.
+
+After an upgrade, launch the exact installed App normally from `/Applications`,
+enable Computer Use and confirm that its own private worker starts. In that App,
+start a task that observes a disposable application window without another
+approval prompt, check that the
+screenshot and PiP show the current target, then stop the task. Record the installed
+version, designated requirement, worker parent process and observation result.
+Neither `codesign --verify` nor an enabled row in System Settings replaces this
+check. Test builds without a stable signing identity may require these steps
+again on the next upgrade; do not weaken the signing requirement to avoid consent.
+
+If logs confirm a stale DSH signing requirement, finish active tasks and quit DSH.
+Reset only its affected permission, using `tccutil reset Accessibility io.dsh.desktop`
+and/or `tccutil reset ScreenCapture io.dsh.desktop`. This revokes the old grant;
+it does not grant access. Relaunch the installed App, use its Computer Use switch,
+and authorize that App again in System Settings. If it is absent from the screen
+recording list, add `/Applications/DSH Desktop.app` explicitly. Follow macOS's
+Quit & Reopen prompt, then repeat the installed-App observation check. Never reset
+all applications, write the TCC database, or disable system protections.
 
 Windows packaging additionally runs `scripts/test-windows-installer.ps1`:
 silent installation into a path containing spaces; full runtime and app.asar
@@ -111,4 +174,4 @@ providers, Audit backends, network tools or every input method combination.
 
 Windows 安装测试从隔离的已安装旧版窗口点击更新图标，下载完整安装包并点击重启，验证未修改的新版自动启动、原生窗口和核心服务恢复、备份哈希及配置保留。测试期间另一个进程持续映射旧版 `d3dcompiler_47.dll`，覆盖文件占用时更新和回退的情况；失败回退测试还确认旧版重新启动且最初的安装错误不会被回退错误遮盖。
 
-仅修复更新器时，Windows workflow 可选择 `runtimeSource=v0.1.5`，从已发布安装包恢复运行时并校验全部 26,256 个文件，避免重新解析上游依赖。CLI 和 TUI 测试仍使用固定版本和提交；应用、更新器和安装包从当前源码重新构建并验证。
+Windows workflow 默认使用 `runtimeSource=registry` 重建固定版本运行时。仅修复更新器且已发布运行时的 DSH 版本与当前依赖清单一致时，才可选择 `runtimeSource=v0.1.5`，恢复后校验全部 26,256 个文件。版本不一致会在下载 CLI 或创建测试 fixture 前明确拒绝，并提示改用 `registry`。CLI 和 TUI 测试仍使用固定版本和提交；应用、更新器和安装包从当前源码重新构建并验证。

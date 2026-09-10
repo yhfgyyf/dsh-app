@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildComputerDriver } from './build-computer-driver.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const run = (command: string, args: string[], cwd: string) => new Promise<void>((resolve, reject) => {
@@ -39,6 +40,12 @@ export async function prepareComputerUse() {
   for (const name of asset.files) {
     await cp(join(assetRoot, name), join(runtime, 'bin', name));
     if (process.platform !== 'win32') await chmod(join(runtime, 'bin', name), 0o755);
+  }
+  if (process.platform === 'darwin') {
+    const patched = await buildComputerDriver();
+    await cp(patched.binaryPath, join(runtime, 'bin/cua-driver'));
+    await cp(patched.metadataPath, join(runtime, 'driver-build.json'));
+    await cp(join(root, 'runtime/computer-use/native-patch.json'), join(runtime, 'native-patch.json'));
   }
   for (const name of ['package.json', 'package-lock.json', 'driver.json']) await cp(join(root, 'runtime/computer-use', name), join(runtime, name));
   await cp(join(root, 'runtime/computer-use/licenses'), join(runtime, 'licenses'), { recursive: true });

@@ -157,7 +157,9 @@ async function run(event) {
   await invoke('browser-close', 'fixture:preview');
   await until(() => preview.isDestroyed(), 'Closed preview retained its renderer');
   report.checks.push('Closing preview releases its web contents');
-  await host.executeJavaScript(`Array.from(document.querySelectorAll('[role="tab"]')).find(t=>/^(开始|Start)/.test(t.textContent)).click()`);
+  // rc.1 creates the guide through the pane's New tab control.
+  await until(() => host.executeJavaScript(`!!document.querySelector('[data-sidebar-right-open] [data-dockkit-add-tab]')`), 'Sidebar New tab control missing');
+  await host.executeJavaScript(`document.querySelector('[data-sidebar-right-open] [data-dockkit-add-tab]').click()`);
   await until(() => host.executeJavaScript(`!!document.querySelector('[data-sidebar-right-guide-entry="files"]')`), 'Files guide missing');
   await host.executeJavaScript(`document.querySelector('[data-sidebar-right-guide-entry="files"]').click()`);
   await until(() => host.executeJavaScript(`!!document.querySelector('[data-files-path$="/canvas.html"] button, [data-files-path="canvas.html"] button')`), 'Canvas missing from files sidebar');

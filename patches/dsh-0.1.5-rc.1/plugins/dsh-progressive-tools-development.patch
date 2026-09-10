@@ -1,0 +1,205 @@
+diff --git a/src/index.ts b/src/index.ts
+index cc41685d86fbf473d2674c6061eef43b4fafcdda..985bd10ef8557bc59e54f4722bd174c780e24214 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -15,7 +15,7 @@ import {
+   renderToolsSdk,
+   renderToolsSdkPy,
+ } from '@deepseek-ai/dsh-tools'
+-import type { JsonSchemaNode, JsonValue, ToolDefinition } from '@deepseek-ai/dsh-tools'
++import type { JsonSchemaNode, ToolDefinition } from '@deepseek-ai/dsh-tools'
+ import type { ToolSchema } from '@deepseek-ai/dsh-llm'
+ import { installNativeDeferredBridge } from './native-deferred.ts'
+ 
+@@ -93,6 +93,7 @@ interface CatalogTool extends ToolSchema {
+ }
+ 
+ type PresentationMode = 'native' | 'code' | 'both'
++type JsonValue = Parameters<ToolDefinition['output']['render']>[1]
+ 
+ interface SearchMatch {
+   name: string
+diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-tools.spec.ts
+index 97ea483a842f24a51b09450123d4c33687d98e78..aa5a9244a98f5d36b262672b7c189ae8cd88ed8a 100644
+--- a/tests/agent-progressive-tools.spec.ts
++++ b/tests/agent-progressive-tools.spec.ts
+@@ -6,7 +6,7 @@
+ 
+ import { describe, expect, it } from 'vitest'
+ import { Context } from '@deepseek-ai/cordis'
+-import LlmRuntime, { CallId } from '@deepseek-ai/dsh-llm'
++import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
+ import { createScope } from '@deepseek-ai/dsh-scope'
+ import type { Scope } from '@deepseek-ai/dsh-scope'
+ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+@@ -53,7 +53,7 @@ interface Mounted {
+ }
+ 
+ /** Build one host catalog and mount the plugin inside an agent scope. */
+-async function mount(config: Config = {}, options: { language?: string; mode?: 'native' | 'code' | 'both'; runtime?: boolean } = {}): Promise<Mounted> {
++async function mount(config: Config = {}, options: { language?: string; mode?: 'native' | 'ptc' | 'both'; runtime?: boolean } = {}): Promise<Mounted> {
+   const ctx = new Context()
+   await ctx.plugin(LlmRuntime)
+   await ctx.plugin(SystemPrompt, {})
+@@ -93,7 +93,7 @@ async function mount(config: Config = {}, options: { language?: string; mode?: '
+   let scope!: Scope
+   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
+     { inject: ['tools', 'systemPrompt'] }))
+-  scope.ctx.tools.presentAs(options.mode ?? 'code')
++  scope.ctx.tools.presentAs(options.mode ?? 'ptc')
+   const row = scope.ctx.plugin({ name, inject: [...inject], Config, apply }, config)
+   await row.await()
+   return { ctx, scope, agent, row, runtime: ctx.get('codeRuntime') as FakeRuntime | undefined }
+@@ -108,7 +108,7 @@ async function nested(mounted: Mounted, toolName: string, args: unknown) {
+     return { logs: [], value: await tools.functions[toolName]!(args) }
+   }
+   return mounted.ctx.tools.execute({
+-    callId: CallId('outer'),
++    callId: ToolCallId('outer'),
+     name: RUN_CODE_NAME,
+     arguments: { code: 'return null', description: 'test discovery' },
+     agent: mounted.agent,
+@@ -126,7 +126,7 @@ function valueOf(result: Awaited<ReturnType<typeof nested>>) {
+ /** Execute one ordinary model tool call without the Code transport. */
+ async function direct(mounted: Mounted, toolName: string, args: unknown) {
+   return mounted.ctx.tools.execute({
+-    callId: CallId('direct-' + toolName),
++    callId: ToolCallId('direct-' + toolName),
+     name: toolName,
+     arguments: args,
+     agent: mounted.agent,
+@@ -146,7 +146,7 @@ describe('dsh-progressive-tools', () => {
+     const ctx = new Context()
+     await ctx.plugin(LlmRuntime)
+     await ctx.plugin(SystemPrompt, {})
+-    await ctx.plugin(ToolRuntime, { mode: 'code' })
++    await ctx.plugin(ToolRuntime, { mode: 'ptc' })
+     await ctx.plugin(FakeRuntime)
+     expect(() => { apply(ctx, { maxSearchResults: Number.NaN }) }).toThrow(/positive safe integer/)
+     expect(() => { apply(ctx, { maxDescribeTools: 1.5 }) }).toThrow(/positive safe integer/)
+@@ -249,7 +249,7 @@ describe('dsh-progressive-tools', () => {
+     expect(unavailable).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+   })
+   it('keeps Code and Both request prefixes stable across hidden catalog changes', async () => {
+-    for (const mode of ['code', 'both'] as const) {
++    for (const mode of ['ptc', 'both'] as const) {
+       const mounted = await mount({}, { mode })
+       const before = await mounted.ctx.systemPrompt.assemble({ scope: mounted.agent })
+       const prefix = JSON.stringify({ sections: before.sections, tools: before.tools })
+@@ -291,7 +291,7 @@ describe('dsh-progressive-tools', () => {
+   it('requires codeRuntime only when a Code surface is actually assembled', async () => {
+     const native = await mount({}, { mode: 'native', runtime: false })
+     await expect(native.ctx.systemPrompt.assemble({ scope: native.agent })).resolves.toBeDefined()
+-    const code = await mount({}, { mode: 'code', runtime: false })
++    const code = await mount({}, { mode: 'ptc', runtime: false })
+     await expect(code.ctx.systemPrompt.assemble({ scope: code.agent })).rejects.toThrow(/requires (?:ctx\.codeRuntime|a code runtime)/)
+   })
+ 
+@@ -389,7 +389,7 @@ describe('dsh-progressive-tools', () => {
+     const directDenied = await direct(mounted, 'web_search', { query: 'direct-code' })
+     expect(directDenied).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
+     const seen: string[] = []
+-    const dispatchesBefore = mounted.agent.session.events.filter(event => event.type === 'tool/code-dispatch').length
++    const dispatchesBefore = mounted.agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch').length
+     mounted.scope.ctx.on('tools/pre-execute', async (exec, next) => {
+       seen.push(exec.name)
+       return next()
+@@ -400,7 +400,7 @@ describe('dsh-progressive-tools', () => {
+       return { logs: [], value: await tools.functions.web_search!({ query: 'fresh' }) }
+     }
+     const result = await mounted.ctx.tools.execute({
+-      callId: CallId('outer-hidden'),
++      callId: ToolCallId('outer-hidden'),
+       name: RUN_CODE_NAME,
+       arguments: { code: 'return tools.web_search({ query: "fresh" })', description: 'call discovered tool' },
+       agent: mounted.agent,
+@@ -408,7 +408,7 @@ describe('dsh-progressive-tools', () => {
+     })
+     expect(valueOf(result)).toEqual(['fresh'])
+     expect(seen).toEqual([RUN_CODE_NAME, 'web_search'])
+-    const dispatches = mounted.agent.session.events.filter(event => event.type === 'tool/code-dispatch')
++    const dispatches = mounted.agent.session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
+     expect(dispatches).toHaveLength(dispatchesBefore + 1)
+     expect(dispatches.at(-1)?.data).toMatchObject({ name: 'web_search', arguments: { query: 'fresh' } })
+   })
+diff --git a/tests/loader-composition.spec.ts b/tests/loader-composition.spec.ts
+index f19972966d52e0a57e1ad3d9333e92b3a0b97e87..4d456d2ead14c0b9cb42421c7e1c8fb6820203da 100644
+--- a/tests/loader-composition.spec.ts
++++ b/tests/loader-composition.spec.ts
+@@ -11,7 +11,7 @@ import * as yaml from 'js-yaml'
+ import type { Agent } from '@deepseek-ai/dsh-agent'
+ import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
+ import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
+-import LlmRuntime, { CallId } from '@deepseek-ai/dsh-llm'
++import LlmRuntime, { ToolCallId } from '@deepseek-ai/dsh-llm'
+ import { createScope } from '@deepseek-ai/dsh-scope'
+ import { Session, SessionId } from '@deepseek-ai/dsh-session'
+ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+@@ -65,19 +65,19 @@ const FixturePlugin = {
+     }))
+     await ctx.plugin(FixtureRuntime)
+ 
+-    const mountMode = async (id: string, mode: 'native' | 'code' | 'both') => {
++    const mountMode = async (id: string, mode: 'native' | 'ptc' | 'both') => {
+       const session = Session.create(SessionId(id))
+       const agent = { id: session.id, session } as unknown as Agent
+       const scoped = createScope(ctx, agent)
+       scoped.ctx.tools.presentAs(mode)
+       return { agent, assembly: await ctx.systemPrompt.assemble({ scope: agent }) }
+     }
+-    const code = await mountMode('loader-discovery-code', 'code')
++    const code = await mountMode('loader-discovery-code', 'ptc')
+     const native = await mountMode('loader-discovery-native', 'native')
+     const both = await mountMode('loader-discovery-both', 'both')
+     const agent = code.agent
+ 
+-    const runContext = (callId: CallId, toolName: string, args: unknown): ToolRunContext => ({
++    const runContext = (callId: ToolCallId, toolName: string, args: unknown): ToolRunContext => ({
+       token: Symbol('fixture') as ToolExecutionToken,
+       callId,
+       rootCallId: callId,
+@@ -95,8 +95,8 @@ const FixturePlugin = {
+     state = {
+       wire: assembly.tools.map(tool => tool.name),
+       sdk: assembly.sections.find(section => section.name === 'tools:sdk')?.text ?? '',
+-      search: await search.execute({ query: '*' }, runContext(CallId('search'), Discovery.SEARCH_TOOLS_NAME, { query: '*' })),
+-      hidden: await hidden.execute({ city: 'Paris' }, runContext(CallId('hidden'), 'fixture_weather', { city: 'Paris' })),
++      search: await search.execute({ query: '*' }, runContext(ToolCallId('search'), Discovery.SEARCH_TOOLS_NAME, { query: '*' })),
++      hidden: await hidden.execute({ city: 'Paris' }, runContext(ToolCallId('hidden'), 'fixture_weather', { city: 'Paris' })),
+       hasRunCode: ctx.tools.get(RUN_CODE_NAME, agent) !== undefined,
+       nativeWire: native.assembly.tools.map(tool => tool.name),
+       bothWire: both.assembly.tools.map(tool => tool.name),
+diff --git a/tests/native-deferred.spec.ts b/tests/native-deferred.spec.ts
+index 10fcfa04a88500491b450e8150552c4f2ff0824b..9cc497a34d435fd2eb5df6b304ccfdd45aef66ae 100644
+--- a/tests/native-deferred.spec.ts
++++ b/tests/native-deferred.spec.ts
+@@ -1,6 +1,6 @@
+ import { describe, expect, it } from 'vitest'
+ import { Context } from '@deepseek-ai/cordis'
+-import LlmRuntime, { CallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
++import LlmRuntime, { ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
+ import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+ import { DESCRIBE_TOOLS_NAME, INVOKE_TOOL_NAME, SEARCH_TOOLS_NAME } from '../src/index.ts'
+ import { installNativeDeferredBridge } from '../src/native-deferred.ts'
+@@ -80,7 +80,7 @@ function request(tools = discoveryTools): GenerateOptions {
+         source: { kind: 'model', provider: 'fixture', model: 'fixture-model' },
+         content: [{
+           type: 'tool-call',
+-          id: CallId('describe-call'),
++          id: ToolCallId('describe-call'),
+           name: DESCRIBE_TOOLS_NAME,
+           arguments: '{"names":["pwsh"]}',
+         }],
+@@ -88,10 +88,10 @@ function request(tools = discoveryTools): GenerateOptions {
+       {
+         id: 'result' as never,
+         role: 'user',
+-        source: { kind: 'tool', callId: CallId('describe-call') },
++        source: { kind: 'tool', callId: ToolCallId('describe-call') },
+         content: [{
+           type: 'tool-result',
+-          toolCallId: CallId('describe-call'),
++          toolCallId: ToolCallId('describe-call'),
+           content: [{
+             type: 'text',
+             text: JSON.stringify({

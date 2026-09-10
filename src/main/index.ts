@@ -16,6 +16,8 @@ import { installTextContextMenu } from './context-menu.ts';
 import { openLocal } from './local-open.ts';
 import { DesktopComputerUse } from './computer-use.ts';
 import { CuaComputerDriver } from './computer-use-driver.ts';
+import { ComputerPreviewWindow } from './computer-preview.ts';
+import { resetDshComputerPermissions } from './macos-privacy.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
@@ -34,6 +36,7 @@ else {
   let browser: SidebarBrowser | undefined;
   let updates: DesktopUpdates;
   let computer: DesktopComputerUse;
+  let computerPreview: ComputerPreviewWindow | undefined;
   let computerSettingRevision = 0;
   let connected = false;
   let connecting = false;
@@ -106,7 +109,7 @@ else {
       { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
       { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开右侧面板', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },
       { role: 'windowMenu', label: '窗口' },
-      { label: '电脑操作', submenu: [{ label: '立即停止电脑操作', accelerator: 'CmdOrCtrl+Alt+Shift+Escape', click: stopComputer }] },
+      { label: '电脑操作', submenu: [{ label: '显示画中画', click: () => { void computerPreview?.show(); } }, { label: '立即停止电脑操作', accelerator: 'CmdOrCtrl+Alt+Shift+Escape', click: stopComputer }] },
       { label: '帮助', submenu: [{ label: 'DSH 项目', click: () => { void shell.openExternal('https://github.com/deepseek-ai/deepseek-harness'); } }] },
     ];
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -235,9 +238,21 @@ else {
       preferences.computerEnabled = value;
       await preferencesFile.save(preferences);
       if (revision !== computerSettingRevision) return computer.state;
-      return value ? computer.setEnabled(true) : computer.state;
+      const state = value ? await computer.setEnabled(true) : computer.state;
+      if (value && !state.enabled && state.error && revision === computerSettingRevision && window && !window.isDestroyed()) {
+        const permissionsMissing = process.platform === 'darwin' && (!state.permissions.accessibility || !state.permissions.screenRecording);
+        void dialog.showMessageBox(window, { type: 'warning', title: '电脑操作未开启', message: '电脑操作未能启动', detail: `DSH Desktop ${app.getVersion()}\n${state.error}` + (permissionsMissing ? '\n\n如果旧条目无法恢复，可选择“重置 DSH 旧授权”。这只清除 DSH 的辅助功能和录屏授权，之后需要在系统设置中重新授权当前 App。' : ''),
+          buttons: permissionsMissing ? ['打开系统设置', '重置 DSH 旧授权', '关闭'] : ['关闭'], cancelId: permissionsMissing ? 2 : 0, noLink: true,
+        }).then(async ({ response }) => {
+          if (!permissionsMissing || response === 2) return;
+          if (response === 1) await resetDshComputerPermissions();
+          if (response === 0 || response === 1) await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${response === 1 || !state.permissions.accessibility ? 'Privacy_Accessibility' : 'Privacy_ScreenCapture'}`);
+        }).catch(error => { dialog.showErrorBox('无法恢复电脑操作权限', String(error)); });
+      }
+      return state;
     });
     handle('desktop:computer-stop', () => computer.stop());
+    handle('desktop:computer-preview', () => computerPreview?.show());
     handle('desktop:update-state', () => updates.state);
     handle('desktop:update-schedule', value => updates.setSchedule(value));
     handle('desktop:update-check', () => updates.check());
@@ -276,7 +291,9 @@ else {
     catch { connectionError = '已有桌面配置无法读取，原文件已保留。'; }
     computer = new DesktopComputerUse(new CuaComputerDriver({ runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'), hostBundleId: 'io.dsh.desktop' }), state => {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:computer-state', state);
+      computerPreview?.update(state);
     });
+    computerPreview = new ComputerPreviewWindow(computer, app.getAppPath(), () => { window?.show(); window?.focus(); });
     computer.setStopShortcutAvailable(globalShortcut.register('CommandOrControl+Alt+Shift+Escape', stopComputer));
     void computer.setEnabled(preferences.computerEnabled, false);
     powerMonitor.on('lock-screen', stopComputer);
@@ -325,6 +342,7 @@ else {
     quitting = true;
     globalShortcut.unregisterAll();
     updates?.stop();
+    computerPreview?.dispose();
     clearTimeout(saveTimer);
     void savePreferences().then(async () => { await computer?.setEnabled(false).catch(() => {}); browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
   });

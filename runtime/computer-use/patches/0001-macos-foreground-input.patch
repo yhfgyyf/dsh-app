@@ -1,0 +1,283 @@
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs b/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
+index 2b9baf8e55aa799945621d5be2c5f14fb01bbf2f..04e68b8111b2d54f99433c8c8fd4e0ceed7f1433 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/input/keyboard.rs
+@@ -359,6 +359,27 @@ fn release_pid_modifiers(
+ /// queue. This is the desktop-scope counterpart to PID-routed `type_text` and
+ /// mirrors computer-server's frontmost pynput typing behavior.
+ pub fn type_text_global(text: &str, inter_char_delay_ms: u64) -> anyhow::Result<()> {
++    type_text_global_checked(text, inter_char_delay_ms, || Ok(()))
++}
++
++/// Window-scoped HID text must stop if another app or sibling window takes
++/// focus during a long payload. Never re-activate or repeat partially sent text.
++pub fn type_text_global_in_window(
++    pid: i32,
++    window_id: u32,
++    text: &str,
++    inter_char_delay_ms: u64,
++) -> anyhow::Result<()> {
++    type_text_global_checked(text, inter_char_delay_ms, || {
++        crate::input::skylight::require_foreground_window(pid, window_id)
++    })
++}
++
++fn type_text_global_checked(
++    text: &str,
++    inter_char_delay_ms: u64,
++    check_target: impl Fn() -> anyhow::Result<()>,
++) -> anyhow::Result<()> {
+     use core_graphics::event::CGEventTapLocation;
+ 
+     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState)
+@@ -369,13 +390,16 @@ pub fn type_text_global(text: &str, inter_char_delay_ms: u64) -> anyhow::Result<
+             .map_err(|_| anyhow::anyhow!("CGEvent keyboard down failed"))?;
+         down.set_string(&value);
+         down.set_flags(CGEventFlags::CGEventFlagNull);
+-        down.post(CGEventTapLocation::HID);
+-        std::thread::sleep(std::time::Duration::from_millis(8));
+         let up = CGEvent::new_keyboard_event(source.clone(), 0, false)
+             .map_err(|_| anyhow::anyhow!("CGEvent keyboard up failed"))?;
+         up.set_string(&value);
+         up.set_flags(CGEventFlags::CGEventFlagNull);
++        check_target()?;
++        down.post(CGEventTapLocation::HID);
++        std::thread::sleep(std::time::Duration::from_millis(8));
++        // Release the already-posted key even if focus changed after key-down.
+         up.post(CGEventTapLocation::HID);
++        check_target()?;
+         std::thread::sleep(std::time::Duration::from_millis(inter_char_delay_ms.max(8)));
+     }
+     Ok(())
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs b/libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs
+index a657ced2b2a6a1e909d4a7e8560e2da060dbfba9..a5510c19e698be3cecb86c942a1018dea7c24cb3 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/input/skylight.rs
+@@ -832,6 +832,24 @@ pub fn with_foreground_hid_activation(
+     result
+ }
+ 
++/// Check the live WindowServer front process and exact AX key window without
++/// changing focus. Used between characters of a window-scoped HID text action.
++pub fn require_foreground_window(target_pid: i32, target_wid: u32) -> anyhow::Result<()> {
++    let mut current_psn = [0u8; 8];
++    let current_ok = get_front_process_fn()
++        .map(|f| unsafe { f(current_psn.as_mut_ptr() as *mut c_void) } == 0)
++        .unwrap_or(false);
++    let mut target_psn = [0u8; 8];
++    let target_ok = get_process_psn_for_window(target_wid, target_pid, &mut target_psn);
++    let focused_window_id = crate::ax::bindings::focused_window_id_of_pid(target_pid);
++    if target_ok
++        && preserves_exact_existing_focus(current_ok, current_psn, target_psn, focused_window_id, target_wid)
++    {
++        return Ok(());
++    }
++    anyhow::bail!("foreground input target changed; text may be partially delivered; observe before further input")
++}
++
+ fn preserves_exact_existing_focus(
+     previous_process_known: bool,
+     previous_psn: [u8; 8],
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
+index 7baa571611475478de3f8fd35120c0e270ea49c3..0ea14fe8897f4234c5218727c92de52fbe45f86c 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/click.rs
+@@ -1048,11 +1048,10 @@ impl Tool for ClickTool {
+                 "click.pixel",
+                 || async move {
+                     tokio::task::spawn_blocking(move || {
+-                        let has_modifiers = !mods_owned.is_empty();
+                         let do_click = move || -> anyhow::Result<()> {
+                             let m: Vec<&str> = mods_owned.iter().map(String::as_str).collect();
+                             if fg && !m.is_empty() {
+-                                return crate::input::mouse::click_at_xy_desktop_with_modifiers_preserving_cursor(
++                                return crate::input::mouse::click_at_xy_desktop_with_modifiers(
+                                     screen_x,
+                                     screen_y,
+                                     count,
+@@ -1060,6 +1059,13 @@ impl Tool for ClickTool {
+                                     &m,
+                                 );
+                             }
++                            if fg {
++                                // Foreground pointer input must update the hardware
++                                // cursor as well as the target's event coordinates.
++                                // The next HID key inherits that location; leaving
++                                // the cursor elsewhere changes hover-based dispatch.
++                                crate::input::mouse::move_cursor_desktop(screen_x, screen_y)?;
++                            }
+                             match button_kind.as_str() {
+                                 "right" => {
+                                     if let Some(wid) = window_id {
+@@ -1098,8 +1104,8 @@ impl Tool for ClickTool {
+                         // Foreground rung: brief front → click → restore.
+                         // Returns whether the window was ACTUALLY fronted, so the
+                         // reported `path` honestly reflects the rung that ran.
+-                        match (fg, window_id, has_modifiers) {
+-                            (true, Some(wid), true) => {
++                        match (fg, window_id) {
++                            (true, Some(wid)) => {
+                                 crate::input::skylight::with_foreground_hid_activation(
+                                     pid as libc::pid_t,
+                                     wid,
+@@ -1107,13 +1113,6 @@ impl Tool for ClickTool {
+                                 )
+                                 .map(|_| true)
+                             }
+-                            (true, Some(wid), false) => {
+-                                crate::input::skylight::with_foreground_assist(
+-                                    pid as libc::pid_t,
+-                                    wid,
+-                                    do_click,
+-                                )
+-                            }
+                             _ => do_click().map(|_| false),
+                         }
+                     })
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
+index 699a8e8f127fdc57f992ab79fc98013c536a4122..b4c8b71f51a6b72252bb38f7d63acef857bdb3ac 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/hotkey.rs
+@@ -436,7 +436,11 @@ impl Tool for HotkeyTool {
+                                 wid,
+                                 || {
+                                     focus_hotkey_element(pid, ptr)?;
+-                                    crate::input::keyboard::press_key_bare_global(&key, &m)
++                                    if screen_sharing_target {
++                                        crate::input::keyboard::press_key_bare_global(&key, &m)
++                                    } else {
++                                        crate::input::keyboard::press_key_global(&key, &m)
++                                    }
+                                 },
+                             )?;
+                             Ok(())
+@@ -455,13 +459,13 @@ impl Tool for HotkeyTool {
+                             )?;
+                             Ok(())
+                         }
+-                        // foreground rung: briefly front the window so NSMenu key
+-                        // equivalents dispatch, then restore prior frontmost.
++                        // Keep an unaddressed foreground chord in the exact window
++                        // on the same explicit-flags HID path as pixel targeting.
+                         (true, false, Some(wid), None) => {
+-                            crate::input::skylight::with_menu_shortcut_activation(
++                            crate::input::skylight::with_foreground_hid_activation(
+                                 pid as libc::pid_t,
+                                 wid,
+-                                || crate::input::keyboard::hotkey_no_auth(pid, &key, &m),
++                                || crate::input::keyboard::press_key_global(&key, &m),
+                             )?;
+                             Ok(())
+                         }
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
+index 8378796e41ba6ae2813f520d57772086041cafda..18e2f4ba4dba925725c2f77c2c8b2b1a47ecb6f7 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/press_key.rs
+@@ -456,7 +456,11 @@ impl Tool for PressKeyTool {
+                                         let _ =
+                                             crate::input::ax_actions::focus_element(element_ptr);
+                                     }
+-                                    crate::input::keyboard::press_key_bare_global(&key, &m)
++                                    if crate::input::keyboard::is_screen_sharing_pid(pid) {
++                                        crate::input::keyboard::press_key_bare_global(&key, &m)
++                                    } else {
++                                        crate::input::keyboard::press_key_global(&key, &m)
++                                    }
+                                 },
+                             )
+                         });
+diff --git a/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs b/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
+index 49f8eca4425befb44c0b0b6b7a2f5fb23d380d67..1400de664c7e4623b53924ecc75f3af5b8d36395 100644
+--- a/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
++++ b/libs/cua-driver/rust/crates/platform-macos/src/tools/type_text.rs
+@@ -417,7 +417,7 @@ impl Tool for TypeTextTool {
+             Ok(Ok(outcome)) if outcome.delivered_chars.is_some_and(|n| n < char_count) => {
+                 let delivered_chars = outcome.delivered_chars.unwrap_or_default();
+                 ToolResult::error(format!(
+-                    "type_text incomplete: delivered {delivered_chars} of {char_count} character(s){}; retry only the remaining suffix",
++                    "type_text incomplete: observed {delivered_chars} of {char_count} character(s){}; observe the exact target before further input; do not infer an untyped suffix from this count",
+                     outcome.detail
+                 ))
+                 .with_structured(serde_json::json!({
+@@ -426,8 +426,8 @@ impl Tool for TypeTextTool {
+                     "effect": "partial",
+                     "requested_chars": char_count,
+                     "delivered_chars": delivered_chars,
+-                    "retryable": true,
+-                    "retry_from_character": delivered_chars,
++                    "retryable": false,
++                    "requires_observation": true,
+                 }))
+             }
+             Ok(Ok(outcome)) => {
+@@ -1023,6 +1023,7 @@ fn cgevent_type_verified(
+     element_ptr_and_idx: Option<(usize, Option<usize>)>,
+     settle_ms: u64,
+     window_id: Option<u32>,
++    foreground_hid: bool,
+ ) -> anyhow::Result<(bool, Option<usize>)> {
+     // Focus the target element so the keystrokes land in IT. Critical in
+     // foreground mode: a freshly-fronted window's keyboard focus may be on the
+@@ -1050,7 +1051,12 @@ fn cgevent_type_verified(
+     if settle_ms > 0 {
+         std::thread::sleep(std::time::Duration::from_millis(settle_ms));
+     }
+-    crate::input::keyboard::type_text_with_delay(pid, text, delay_ms)?;
++    if foreground_hid {
++        let wid = window_id.ok_or_else(|| anyhow::anyhow!("foreground text requires an exact window"))?;
++        crate::input::keyboard::type_text_global_in_window(pid, wid, text, delay_ms)?;
++    } else {
++        crate::input::keyboard::type_text_with_delay(pid, text, delay_ms)?;
++    }
+ 
+     // CGEvent posting is asynchronous with respect to the renderer. In
+     // particular, Chromium can acknowledge the posting process while a long
+@@ -1158,6 +1164,7 @@ fn type_text_blocking(
+                 element_ptr_and_idx,
+                 foreground_settle_ms,
+                 window_id,
++                window_id.is_some(),
+             )
+         };
+         let ((verified, delivered_chars), fronted) = match window_id {
+@@ -1183,12 +1190,10 @@ fn type_text_blocking(
+                 ((false, None), true)
+             }
+             Some(wid) => {
+-                // Front → type → restore. The closure returns the read-back
+-                // result; with_foreground_assist returns whether it actually
+-                // fronted (Ok(false) when the fronting SPIs are unavailable —
+-                // the keystrokes still ran, just as background input).
++                // Refuse unless the exact window can be guarded before HID
++                // text. Keep the existing focus, pacing and read-back checks.
+                 let mut typed_delivery = (false, None);
+-                let fronted = crate::input::skylight::with_foreground_assist(
++                crate::input::skylight::with_foreground_hid_activation(
+                     pid as libc::pid_t,
+                     wid,
+                     || {
+@@ -1196,7 +1201,7 @@ fn type_text_blocking(
+                         Ok(())
+                     },
+                 )?;
+-                (typed_delivery, fronted)
++                (typed_delivery, true)
+             }
+             // No window to front — best-effort background keystrokes instead.
+             None => (do_type()?, false),
+@@ -1247,6 +1252,7 @@ fn type_text_blocking(
+             element_ptr_and_idx,
+             /*settle_ms=*/ 0,
+             window_id,
++            false,
+         )?;
+         return Ok(TypeTextDelivery::Typed(TypeTextOutcome {
+             detail: format!(" via CGEvent (terminal emulator, {delay_ms}ms delay)"),
+@@ -1359,6 +1365,7 @@ fn type_text_blocking(
+         element_ptr_and_idx,
+         /*settle_ms=*/ 0,
+         window_id,
++        false,
+     )?;
+     Ok(TypeTextDelivery::Typed(TypeTextOutcome {
+         detail: format!(" via CGEvent ({delay_ms}ms delay)"),

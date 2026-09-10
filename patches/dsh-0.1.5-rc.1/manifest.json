@@ -1,0 +1,117 @@
+{
+  "dsh": "0.1.5-rc.1",
+  "piAi": "0.85.1",
+  "generatedAt": "2026-09-10T11:48:15.622711Z",
+  "patchSha256": "a74874a17dd8a8653e597e31b278e5c263c7f24d777cff423504cff15c393ea9",
+  "officialPersistence": {
+    "path": "@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js",
+    "sha256": "7d0640c9fc4be6c703b77605fdee6af519c542fae28a6cd4489353309812f062"
+  },
+  "files": [
+    {
+      "path": "@deepseek-ai/dsh-api-remotes/lib/client.js",
+      "before": "bec369e0f471422d393622a8ef757a0b21113bbe58ed7ea6cf1cad616146d645",
+      "after": "62367142d10266c0cc5ad8181d8bc4ced43828da2abd792377bdddb260568e38"
+    },
+    {
+      "path": "@deepseek-ai/dsh-api-session-controller/lib/client.js",
+      "before": "ff33d1f85a0b2f14568fcb555d5f52d2ba5f57f2e0ecfa5d7885ba83e7ff6069",
+      "after": "e06d0ce34f5d9e756c984b7bce1bca567aa65158d50939e7ef6c90cf7f7a6e9f"
+    },
+    {
+      "path": "@deepseek-ai/dsh-api-session-controller/lib/index.js",
+      "before": "16ecb48f33996efe72868f1603223214430634c5ac4c3e8fe9060bf240e990ff",
+      "after": "6f798586a1151190022e0a80cae64073af57a4b923dbb088c2e8b6b5215cb05e"
+    },
+    {
+      "path": "@deepseek-ai/dsh-api-session-controller/lib/typert.host.js",
+      "before": "ba696e6c85f616045e04f13cbdff9b47ea7acb6aa550c8e946fed830647292a1",
+      "after": "57db2abf97f92c3928b3e491635a177dfa9d55c02777835916f0d1f19929b715"
+    },
+    {
+      "path": "@deepseek-ai/dsh-api-session-controller/lib/typert.remote-client.js",
+      "before": "b2cb1c9a808d5d52e84926d98cb10dd6b03fda3fde006022844ec75ea56f79e7",
+      "after": "2f92635a6592713ae6f97f17805b513db9a698b2c8e12257ef241865459aba42"
+    },
+    {
+      "path": "@deepseek-ai/dsh-attachment-local/lib/index.js",
+      "before": "1f102b529918b39774d9813641217859c9bc21af7c9404b373ae7b12c5d4fd33",
+      "after": "8466b3ca0245fd46b97369fcbd3f0e9be489fd1dc0be11365c3184bb0b2261bb"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-connection/lib/client.js",
+      "before": "319cc46762af6ccb7ac74c9bab37ab8377be212dad9de4dba1f892b7e5b4d8a1",
+      "after": "a8f3b184893d9e69325a2f6490c6aa26562364b87045e3dd39232cf676bdf00c"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-ui-attachment/lib/client.js",
+      "before": "b0245951dfb86dc5259fcae1499160b689460bf2637e0abea94469b45202bea5",
+      "after": "44d869265b2308de2938db2ac0f44485aa04096236ad029baa6331fe89156158"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-ui-chat/lib/client.js",
+      "before": "4f9cfff8398ccf98de4fe22a58e4eccad88b163a3a217a6f25725544234c0ae8",
+      "after": "169747694bb96e7db6a37588b6d850d11ab0f8cd55d019384c3a53efee34e417"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-ui-conversation/lib/client.js",
+      "before": "81314dfd95864f2522f8edb812e3f8e08b04a8ef2141913e6e8cbdaae1ffc37f",
+      "after": "dc78f4d1261e58d9995d5a99c4a693ca76febe2256b2836046761e29f5e4ad69"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-ui-workspace/lib/client.js",
+      "before": "383b9ef779366c13d818500b6488896328b189f156addbaa480c835e902edd5f",
+      "after": "ce6d9948348a3dad13cbcc4d2719574af81ec42ff3ae2ed7bfda800e99a31b95"
+    },
+    {
+      "path": "@deepseek-ai/dsh-commands/lib/typert.host.js",
+      "before": "3c89caa596424bad27134c212d76f07399704723674de5d3dd6b6b5226d31be9",
+      "after": "e20682776ac5586dde472daa02ab0d5419c12bc6665aa87d1a527119c919ee78"
+    },
+    {
+      "path": "@deepseek-ai/dsh-commands/lib/typert.remote-client.js",
+      "before": "38d3df6ad8be907e06aba88385526fff12be434992dd6f8db966473536e5414e",
+      "after": "1c0db57d5f6311105a3e59c2c421cf47266254c4877c88e44557f704ef2e2bff"
+    },
+    {
+      "path": "@deepseek-ai/dsh-llm/lib/index.js",
+      "before": "f54d86572d4c0e8d9348cdc65e4c4684a4956a91162815d3c52ee7c0c58225ed",
+      "after": "780b0f25118d56673ae9e27d7942e7669176e79b8f2833106fde3541d1b16252"
+    },
+    {
+      "path": "@deepseek-ai/dsh-session/lib/index.js",
+      "before": "05e94f57d96e7979670a5b51024c8591572eb0051ce793613dbdec35cf2c47bf",
+      "after": "2f571ec4f78911089f96235c7eca139f6612165f0b4c428ab8b1e0cacb14f7fc"
+    },
+    {
+      "path": "@deepseek-ai/dsh-session/lib/types/index.d.ts",
+      "before": "ed327445b83ca8d699eb22991178362e4458172ba3c717a7a894f4907394fc37",
+      "after": "f74eca85dd0d85e4022159d3dd39b81cb707be3d8bf8c3d48576f22f9a673fe8"
+    },
+    {
+      "path": "@deepseek-ai/dsh-session-format-v0-to-v1/lib/index.js",
+      "before": "15ae26b90310d83b1b90a5e7cad9e2f34282fddaba2f19f2fd2232382065603d",
+      "after": "d49b83889a1707661b217ab43005f1deba3e5842388254e40a65650cbc083d5f"
+    },
+    {
+      "path": "@deepseek-ai/dsh-session-persistence/lib/index.js",
+      "before": "0dc2a1634e4b6ebb558aac214009da3dc00f54f315762a56a1841d12baf770d4",
+      "after": "877b8d545900b92a256ec2808ad1804ed05c52b14d605756134318ec9ef4e3c5"
+    },
+    {
+      "path": "@deepseek-ai/dsh-workspace/lib/index.js",
+      "before": "57aadb8733e4e586d02d314181878ebd92e5dbeede03836dccf0625634b43c8b",
+      "after": "1736a0b2e2cbce1f6300f26b529e2cef02885f82d2ee2a384ab961ef2b3023fd"
+    },
+    {
+      "path": "@earendil-works/pi-ai/dist/api/openai-completions.js",
+      "before": "1e2097ced37cf0e21aa5711297eecc77916de8a4ed81a9019bc7d97b22825fa3",
+      "after": "2ce446626f7b9b3801d2b94676ee7ade108b7e5b5d326209b7f13d0816901eea"
+    },
+    {
+      "path": "@deepseek-ai/dsh-client-connection/lib/index.js",
+      "before": "bbe7c9aa6d82a7a4ec657aa8bc51064e12bb091be0465526d0b9f5e031f540f7",
+      "after": "9976b160efa18051d10b5f70ca13d634ee4b4c35b45d8897c0bfeea0756e1f2a"
+    }
+  ]
+}

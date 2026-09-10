@@ -21,3 +21,4 @@ docs/*
 !docs/ARCHITECTURE.md
 !docs/BUILDING.md
 !docs/TESTING.md
+!docs/MACOS-SIGNING.md

@@ -1,6 +1,6 @@
 {
   "node": "24.15.0",
-  "dsh": "0.1.5-alpha.1",
+  "dsh": "0.1.5-rc.1",
   "plugins": {
     "dsh-auto-preset-router": {
       "repository": "yhfgyyf/dsh-auto-preset-router",
