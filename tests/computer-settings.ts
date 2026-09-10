@@ -85,16 +85,25 @@ async function run(event: IpcMainInvokeEvent) {
   assert.equal(JSON.parse(readFileSync(join(data, 'desktop.json'), 'utf8')).computerEnabled, true, 'Window autosave overwrote the requested computer preference');
   assert.equal((await state()).checked, 'false'); assert.equal(fixture.prompts, 1);
   assert.match(warnings.at(-1)?.detail ?? '', /辅助功能、屏幕录制/);
-  assert.deepEqual(warnings.at(-1)?.buttons, ['打开系统设置', '重置 DSH 旧授权', '关闭']);
+  const macos = process.platform === 'darwin';
+  assert.deepEqual(warnings.at(-1)?.buttons, macos ? ['打开系统设置', '重置 DSH 旧授权', '关闭'] : ['关闭']);
   assert.equal(fixture.resets, 0, 'Permissions must never reset automatically');
+  assert.deepEqual(openedSettings, []);
   fixture.permissions.accessibility = true;
-  warningResponse = 1;
+  warningResponse = macos ? 1 : undefined;
   await click(); await settled(); assert.equal((await state()).checked, 'false'); assert.equal(fixture.starts, 0);
   assert.match(warnings.at(-1)?.detail ?? '', /屏幕录制/);
-  assert.match(warnings.at(-1)?.detail ?? '', /旧版本的授权/);
-  await until(async () => openedSettings.length === 1, 'Explicit reset did not open Settings');
-  assert.equal(fixture.resets, 1);
-  assert.match(openedSettings[0], /Privacy_Accessibility$/);
+  if (macos) {
+    assert.deepEqual(warnings.at(-1)?.buttons, ['打开系统设置', '重置 DSH 旧授权', '关闭']);
+    assert.match(warnings.at(-1)?.detail ?? '', /旧版本的授权/);
+    await until(async () => openedSettings.length === 1, 'Explicit reset did not open Settings');
+    assert.equal(fixture.resets, 1);
+    assert.match(openedSettings[0], /Privacy_Accessibility$/);
+  } else {
+    assert.deepEqual(warnings.at(-1)?.buttons, ['关闭']);
+    assert.equal(fixture.resets, 0);
+    assert.deepEqual(openedSettings, []);
+  }
   fixture.permissions.screenRecording = true; fixture.fail = true;
   await click(); await settled(); assert.equal((await state()).checked, 'false'); assert.match((await state()).title, /Fixture driver unavailable/);
   assert.match(warnings.at(-1)?.detail ?? '', /Fixture driver unavailable/);
@@ -124,6 +133,10 @@ async function run(event: IpcMainInvokeEvent) {
   await Promise.all([handlers.get('desktop:computer-enabled')!(event, true), handlers.get('desktop:computer-enabled')!(event, false)]);
   assert.equal((await state()).checked, 'false');
   assert.equal(JSON.parse(readFileSync(join(data, 'desktop.json'), 'utf8')).computerEnabled, false);
+  if (!macos) {
+    assert.equal(fixture.resets, 0);
+    assert.deepEqual(openedSettings, []);
+  }
   report.checks.push('Returning from System Settings enables only after permission is granted; foreign IPC is rejected');
 
   await evaluate(readFileSync(join(root, '.test-data/computer-settings-build/audit.js'), 'utf8'));
