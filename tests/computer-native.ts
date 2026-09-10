@@ -49,7 +49,8 @@ async function finish() {
 void app.whenReady().then(async () => {
   await mkdir(data, { recursive: true });
   app.setAccessibilitySupportEnabled(true);
-  window = new BrowserWindow({ title: 'DSH Computer Fixture', width: 640, height: 560, show: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  // The fixture must keep painting visual changes even when other windows cover it.
+  window = new BrowserWindow({ title: 'DSH Computer Fixture', width: 640, height: 560, show: true, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
   await window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(`<!doctype html><html><head><title>DSH Computer Fixture</title><style>body{font:20px system-ui;padding:30px;background:#fff;color:#222}input,button{font:inherit;padding:12px;margin:12px 0}#scroll{height:100px;overflow:auto;border:2px solid #888}</style></head><body><h1>Computer use fixture</h1><label>Native input <input id="input" aria-label="Native input"></label><br><button id="button" onclick="document.querySelector('#count').textContent=Number(document.querySelector('#count').textContent)+1">Native button</button><output id="count">0</output><button id="edge" style="position:fixed;right:24px;bottom:24px;width:56px;height:32px;padding:0;font-size:12px" onclick="document.querySelector('#count').textContent=Number(document.querySelector('#count').textContent)+10">Edge</button><div id="scroll" tabindex="0">${'<p>Scrollable fixture row</p>'.repeat(20)}</div><input id="slider" aria-label="Native slider" type="range" min="0" max="100" value="0" style="position:fixed;left:40px;bottom:12px;width:240px;height:24px;padding:0;margin:0" onpointermove="if(event.isTrusted&amp;&amp;event.buttons===1)window.fixtureDragMoves=(window.fixtureDragMoves||0)+1" oninput="document.querySelector('#slider-value').textContent=this.value"><output id="slider-value" style="position:fixed;left:296px;bottom:12px">0</output></body></html>`));
   await window.webContents.executeJavaScript(`
     window.fixtureKeys = [];
@@ -235,24 +236,67 @@ void app.whenReady().then(async () => {
     x: (staleEdge.frame.x + staleEdge.frame.w / 2 - snapshot.window_bounds.x) / snapshot.window_bounds.width,
     y: (staleEdge.frame.y + staleEdge.frame.h / 2 - snapshot.window_bounds.y) / snapshot.window_bounds.height,
   };
-  window.setBounds({ x: beforeMove.x + 24, y: beforeMove.y + 20, width: beforeMove.width + 80, height: beforeMove.height + 40 });
-  await until(async () => window.getBounds().width === beforeMove.width + 80 && window.getBounds().height === beforeMove.height + 40);
-  let staleRejection = '';
-  await assert.rejects(request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: { ...stalePoint, delivery_mode: 'foreground' } }), error => {
-    staleRejection = String(error);
-    assert.match(staleRejection, /not_dispatched; observation_consumed/);
-    return true;
-  });
-  assert.equal(await window.webContents.executeJavaScript('document.querySelector("#count").textContent'), '21', 'Rejected stale coordinates must not send a click');
-  snapshot = await observe();
-  const movedEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
-  const moved = await request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: {
-    x: (movedEdge.frame.x + movedEdge.frame.w / 2 - snapshot.window_bounds.x) / snapshot.window_bounds.width,
-    y: (movedEdge.frame.y + movedEdge.frame.h / 2 - snapshot.window_bounds.y) / snapshot.window_bounds.height,
-    delivery_mode: 'foreground',
-  } });
-  await until(() => window.webContents.executeJavaScript('document.querySelector("#count").textContent === "31"'));
-  await writeFile(join(data, 'window-geometry.json'), JSON.stringify({ beforeMove, afterMove: window.getBounds(), stalePoint, staleRejection, observedBounds: snapshot.window_bounds, freshAction: moved.data, count: await window.webContents.executeJavaScript('document.querySelector("#count").textContent') }, null, 2));
+  const requestedBounds = { x: beforeMove.x + 24, y: beforeMove.y + 20, width: beforeMove.width + 80, height: beforeMove.height + 40 };
+  const nativeBounds: Record<string, unknown>[] = [];
+  const geometry: Record<string, unknown> = { observationId: snapshot.observation_id, observedBounds: snapshot.window_bounds, beforeMove, requestedBounds, stalePoint, nativeBounds };
+  let geometryStage = 'before-move';
+  const callDriver = driver.call.bind(driver);
+  driver.call = async (name, args, signal) => {
+    const result = await callDriver(name, args, signal);
+    if (name === 'list_windows' && args.pid === process.pid) {
+      const values = Array.isArray(result.data) ? result.data : (result.data as any)?.windows;
+      const current = values?.find((value: any) => value.pid === process.pid && value.window_id === target.window_id);
+      nativeBounds.push({ stage: geometryStage, at: Date.now(), pid: current?.pid, windowId: current?.window_id, bounds: current?.bounds });
+    }
+    return result;
+  };
+  const saveGeometry = () => writeFile(join(data, 'window-geometry.json'), JSON.stringify(geometry, null, 2));
+  try {
+    await driver.call('list_windows', { pid: process.pid }, AbortSignal.timeout(5000));
+    await saveGeometry();
+    window.setBounds(requestedBounds);
+    await until(async () => window.getBounds().width === requestedBounds.width && window.getBounds().height === requestedBounds.height);
+    geometry.afterSetBounds = window.getBounds();
+    geometryStage = 'after-setBounds';
+    await driver.call('list_windows', { pid: process.pid }, AbortSignal.timeout(5000));
+    await saveGeometry();
+    // Electron can report new bounds before the OS window list commits them.
+    // Establish that native move/resize first, without replacing the old observation.
+    geometryStage = 'native-move-wait';
+    const nativeMoveStartedAt = Date.now();
+    await until(async () => {
+      await driver.call('list_windows', { pid: process.pid }, AbortSignal.timeout(5000));
+      const current = nativeBounds.at(-1)?.bounds as Record<string, number> | undefined;
+      return !!current && ['x', 'y', 'width', 'height'].every(key => current[key] !== snapshot.window_bounds[key]);
+    }, 5000);
+    geometry.nativeMoveWaitMs = Date.now() - nativeMoveStartedAt;
+    await saveGeometry();
+    geometryStage = 'stale-action';
+    const staleAction = request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: { ...stalePoint, delivery_mode: 'foreground' } }).then(result => {
+      geometry.staleAction = { status: 'returned', actionFeedback: (result.data as any)?.action_feedback };
+      return result;
+    }, error => { geometry.staleAction = { status: 'rejected', error: String(error) }; throw error; });
+    await assert.rejects(staleAction, /not_dispatched; observation_consumed/);
+    assert.equal(await window.webContents.executeJavaScript('document.querySelector("#count").textContent'), '21', 'Rejected stale coordinates must not send a click');
+    geometryStage = 'fresh-observation';
+    snapshot = await observe();
+    geometry.freshObservedBounds = snapshot.window_bounds;
+    const movedEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
+    geometryStage = 'fresh-action';
+    const moved = await request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: {
+      x: (movedEdge.frame.x + movedEdge.frame.w / 2 - snapshot.window_bounds.x) / snapshot.window_bounds.width,
+      y: (movedEdge.frame.y + movedEdge.frame.h / 2 - snapshot.window_bounds.y) / snapshot.window_bounds.height,
+      delivery_mode: 'foreground',
+    } });
+    geometry.freshAction = (moved.data as any)?.action_feedback;
+    await until(() => window.webContents.executeJavaScript('document.querySelector("#count").textContent === "31"'));
+  } catch (error) { geometry.failure = String(error); throw error; }
+  finally {
+    driver.call = callDriver;
+    geometry.afterMove = window.getBounds();
+    geometry.count = await window.webContents.executeJavaScript('document.querySelector("#count").textContent');
+    await saveGeometry();
+  }
   report.checks.push('Moving/resizing the window rejects stale coordinates without input; a fresh observation hits the edge target');
 
   // DOM is a read-only oracle for fixture geometry/state; scroll and drag are

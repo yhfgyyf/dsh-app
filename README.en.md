@@ -10,6 +10,8 @@ The app bundles Node.js and the DSH core, with its own Electron main process, Re
 
 ## v0.1.10 preview updates
 
+This release updates **Computer Use**, improving coordinate targeting, native input, and visual feedback after actions.
+
 - **More reliable computer-use coordinates:** targets use 0–1 relative coordinates across the entire screenshot, including the title bar. Moving or resizing a window invalidates old coordinates and requires a fresh observation.
 - **Native input fixes on macOS:** foreground clicks move the physical pointer, preventing shortcuts from reaching the wrong area after a window is reactivated. Long foreground text input stops if the target loses focus, and paste verifies the clipboard contents before delivery. The physical-pointer fix applies to the macOS native driver.
 - **Feedback after actions:** window actions return a fresh screenshot and observation ID by default. Live picture-in-picture preserves keyboard focus and provides an immediate Stop control.
