@@ -267,7 +267,7 @@ void app.whenReady().then(async () => {
     await until(async () => {
       await driver.call('list_windows', { pid: process.pid }, AbortSignal.timeout(5000));
       const current = nativeBounds.at(-1)?.bounds as Record<string, number> | undefined;
-      return !!current && ['x', 'y', 'width', 'height'].every(key => current[key] !== snapshot.window_bounds[key]);
+      return !!current && ['x', 'y', 'width', 'height'].every(key => Number.isFinite(current[key]) && current[key] !== snapshot.window_bounds[key]);
     }, 5000);
     geometry.nativeMoveWaitMs = Date.now() - nativeMoveStartedAt;
     await saveGeometry();
