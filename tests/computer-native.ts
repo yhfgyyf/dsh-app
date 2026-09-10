@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { DesktopComputerUse } from '../src/main/computer-use.ts';
@@ -109,8 +110,54 @@ void app.whenReady().then(async () => {
   report.checks.push('PiP has only read/stop/return/hide IPC; all commands reject foreign windows and frames');
   await writeFile(join(data, 'picture-in-picture.png'), (await previewWindow!.webContents.capturePage()).toPNG());
   const firstFrame = await previewWindow!.webContents.executeJavaScript('document.querySelector("img").src');
-  await window.webContents.executeJavaScript('document.body.style.background="#ddeeff"');
-  await until(async () => await previewWindow!.webContents.executeJavaScript('document.querySelector("img")?.src') !== firstFrame, 10000);
+  const imageHash = (base64?: string) => base64 ? createHash('sha256').update(Buffer.from(base64, 'base64')).digest('hex') : undefined;
+  const polling: {
+    captureCalls: number; previewCalls: number;
+    lastCapture?: { startedAt: number; completedAt?: number; imageSha256?: string; error?: string };
+    lastPreview?: { returnedAt: number; capturedAt?: number; imageSha256?: string; error?: string };
+  } = { captureCalls: 0, previewCalls: 0 };
+  const capturePreview = driver.capturePreview.bind(driver), readPreview = broker.preview.bind(broker);
+  driver.capturePreview = async (args, signal) => {
+    polling.captureCalls++;
+    const capture: NonNullable<typeof polling.lastCapture> = { startedAt: Date.now() };
+    polling.lastCapture = capture;
+    try {
+      const result = await capturePreview(args, signal);
+      capture.imageSha256 = imageHash(result.images[0]?.dataBase64);
+      return result;
+    } catch (error) { capture.error = String(error); throw error; }
+    finally { capture.completedAt = Date.now(); }
+  };
+  broker.preview = async () => {
+    polling.previewCalls++;
+    try {
+      const result = await readPreview();
+      polling.lastPreview = { returnedAt: Date.now(), capturedAt: result?.capturedAt, imageSha256: imageHash(result?.image?.dataBase64), error: result?.error };
+      return result;
+    } catch (error) { polling.lastPreview = { returnedAt: Date.now(), error: String(error) }; throw error; }
+  };
+  const updateStartedAt = Date.now();
+  let updatePassed = false;
+  try {
+    await window.webContents.executeJavaScript('document.body.style.background="#ddeeff"');
+    await until(async () => await previewWindow!.webContents.executeJavaScript(`(() => { const image = document.querySelector("img"); return !!image && image.naturalWidth > 0 && image.src !== ${JSON.stringify(firstFrame)}; })()`), 10000);
+    updatePassed = true;
+  } finally {
+    driver.capturePreview = capturePreview; broker.preview = readPreview;
+    const capturedPolling = structuredClone(polling);
+    const targetState = await window.webContents.executeJavaScript('({computedBackground:getComputedStyle(document.body).backgroundColor,hidden:document.hidden,visibilityState:document.visibilityState,focused:document.hasFocus()})');
+    const { imageSrc, ...previewState } = await previewWindow!.webContents.executeJavaScript('({hidden:document.hidden,visibilityState:document.visibilityState,focused:document.hasFocus(),status:document.querySelector(".status")?.textContent,imageSrc:document.querySelector("img")?.src,imageWidth:document.querySelector("img")?.naturalWidth,text:document.querySelector(".screen")?.textContent})');
+    await writeFile(join(data, 'picture-in-picture-update.json'), JSON.stringify({
+      passed: updatePassed, timeoutMs: 10000, startedAt: updateStartedAt, recordedAt: Date.now(),
+      initialFrameSha256: imageHash(firstFrame.split(',')[1]), polling: capturedPolling,
+      target: { ...targetState, visible: window.isVisible(), focusedWindow: window.isFocused() },
+      preview: { ...previewState, visible: previewWindow!.isVisible(), focusedWindow: previewWindow!.isFocused(), imageSha256: imageHash(imageSrc?.split(',')[1]) },
+    }, null, 2));
+    if (!updatePassed) {
+      await writeFile(join(data, 'picture-in-picture-timeout-target.png'), (await window.webContents.capturePage()).toPNG());
+      await writeFile(join(data, 'picture-in-picture-timeout-preview.png'), (await previewWindow!.webContents.capturePage()).toPNG());
+    }
+  }
   const clicked = await request('act', { action: 'click', observation_id: snapshot.observation_id, arguments: { element_index: element.element_index } });
   assert.ok(clicked.images.length, 'Real action did not return a verification screenshot');
   assert.notEqual((clicked.data as any).observation_id, snapshot.observation_id);
