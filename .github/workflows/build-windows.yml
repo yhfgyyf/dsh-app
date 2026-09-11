@@ -1,100 +1,186 @@
-name: Build Windows installer
+name: Transfer verified v0.1.12 macOS archive
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
+
+concurrency:
+  group: transfer-v0.1.12-macos
+  cancel-in-progress: false
 
 jobs:
-  windows:
-    runs-on: windows-2022
-    timeout-minutes: 40
+  transfer:
+    if: github.repository == 'yhfgyyf/dsh-app' && github.ref == 'refs/heads/ops/promote-v0.1.12-macos'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: yhfgyyf/dsh-app
+      GH_PROMPT_DISABLED: '1'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.15.0
-          cache: npm
-      - name: Install frontend dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Build pinned runtime and apply verified patch
-        run: npm run setup:runtime
-      - name: Typecheck, unit tests and production build
-        run: npm run check
-      - name: Shared model settings
-        run: npm run test:model-settings
-      - name: Web, TUI and App ownership
-        run: npm run test:three-surfaces
-      - name: Native Electron lifecycle
-        run: npm run test:native
-      - name: Computer use approval and image transport
-        timeout-minutes: 4
-        run: npm run test:computer-tools
-      - name: Computer switch and audit dock UI
-        timeout-minutes: 3
-        run: npm run test:computer-settings
-      - name: Native computer input and screenshot (three consecutive runs)
-        timeout-minutes: 4
+      - name: Verify the base and delta, restore the exact archive and upload it to the existing draft
+        shell: bash
         run: |
-          1..3 | ForEach-Object {
-            npm run test:computer-native
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Native updater
-        timeout-minutes: 3
-        run: npm run test:updates
-      - name: Update download through a proxy
-        timeout-minutes: 5
-        run: npm run test:update-network
-      - name: Native Office, text, media and file previews
-        timeout-minutes: 3
-        run: npm run test:artifact-links
-      - name: Native sidebar browser
-        timeout-minutes: 3
-        run: npm run test:sidebar-browser
-      - name: Install pinned Inno Setup with long-path support
-        shell: pwsh
-        run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
-          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
-          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
-          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
-          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
-          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Create Windows installer
-        run: node scripts/package-windows.ts
-      - name: Install, launch, close and uninstall
-        shell: pwsh
-        run: ./scripts/test-windows-installer.ps1
-      - name: Collect verified installer and reports
-        run: node scripts/collect-windows-artifact.ts
-      - name: Preserve installation diagnostics on failure
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dsh-app-windows-diagnostics
-          path: |
-            .test-data/installer-*/install.log
-            .test-data/installer-*/updates/report.json
-            .test-data/installer-*/updates/failure.txt
-            .test-data/installer-*/updates/old-app.log
-            .test-data/installer-*/updates/before-install.json
-            .test-data/installer-*/desktop-state/updates/install-result.json
-            .test-data/installer-*/desktop-state/updates/inno-update.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.json
-            .test-data/computer-native/**
-            .test-data/computer-*-latest.json
-            .test-data/computer-tools-*/**
-          include-hidden-files: true
-          if-no-files-found: ignore
-          retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dsh-app-windows-x64
-          path: release/upload/*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+
+          REPO = 'yhfgyyf/dsh-app'
+          TAG = 'v0.1.12'
+          RELEASE_ID = 386820145
+          RELEASE_COMMIT = '3b4b0ad2c115ec35ffeabce5d0f343c124fea305'
+          SOURCE_COMMIT = 'bd32f88cc33856597a55230828e4520d1d6697ed'
+          SOURCE_TREE = '789de54bb5ffad8901b6c9b851355e991b5a9d79'
+          TRANSFER_RELEASE_ID = 386838438
+          TRANSFER_TAG = 'transfer-v0.1.12-macos'
+          BASE_TAG = 'v0.1.10'
+          BASE_ASSET_ID = 555198438
+          BASE_NAME = 'DSH-Desktop-0.1.10-macOS-arm64.zip'
+          BASE_BYTES = 272889716
+          BASE_SHA = '464a921f9122283ecb557a459dc39622b4377d360b3e5322b4d96e2d9266a56f'
+          PATCH_ASSET_ID = 556695206
+          PATCH_NAME = 'macos-from-v0.1.10.zst'
+          PATCH_BYTES = 6269070
+          PATCH_SHA = '0c7711747a7e15778273a5697e5a8cfde46dba80b06eef4bf8ee21a3948c95c4'
+          ARCHIVE = 'DSH-Desktop-0.1.12-macOS-arm64.zip'
+          ARCHIVE_BYTES = 273580976
+          ARCHIVE_SHA = 'fab36ed189c26adaa86767e89397a8db89a5167299a3c326c0e0c6c91c611b03'
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def gh_json(*args):
+              result = subprocess.run(['gh', *args], check=True, capture_output=True, timeout=90)
+              return json.loads(result.stdout)
+
+          def api(endpoint):
+              return gh_json('api', f'repos/{REPO}/{endpoint}')
+
+          def sha256(path):
+              digest = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          def verify_tag_and_tree():
+              require(api('git/ref/heads/main')['object']['sha'] == RELEASE_COMMIT, 'main moved')
+              target = api(f'git/ref/tags/{TAG}')['object']
+              if target['type'] == 'tag':
+                  target = api(f"git/tags/{target['sha']}")['object']
+              require(target['type'] == 'commit' and target['sha'] == RELEASE_COMMIT, 'Release tag moved')
+              for commit in [RELEASE_COMMIT, SOURCE_COMMIT]:
+                  require(api(f'git/commits/{commit}')['tree']['sha'] == SOURCE_TREE, 'Source tree mismatch')
+
+          def existing_draft(release_id, tag):
+              release = api(f'releases/{release_id}')
+              require(release['id'] == release_id and release['draft'] is True and release['tag_name'] == tag,
+                      'Expected existing draft release ID and tag')
+              require(release['url'] == f'https://api.github.com/repos/{REPO}/releases/{release_id}',
+                      'Release repository mismatch')
+              expected_upload = f'https://uploads.github.com/repos/{REPO}/releases/{release_id}/assets'
+              require(release['upload_url'].split('{', 1)[0] == expected_upload, 'Unexpected upload host or repository')
+              return release
+
+          def exact_existing_asset(release):
+              matches = [asset for asset in release['assets'] if asset['name'] == ARCHIVE]
+              require(len(matches) <= 1, 'Duplicate macOS archive assets')
+              if not matches:
+                  return None
+              asset = matches[0]
+              require(asset['state'] == 'uploaded' and asset['size'] == ARCHIVE_BYTES
+                      and asset.get('digest') == 'sha256:' + ARCHIVE_SHA,
+                      'Existing macOS archive is incomplete or different; refusing to delete or overwrite it')
+              return asset
+
+          def source_asset(release, name, size, digest, asset_id=None):
+              matches = [asset for asset in release['assets'] if asset['name'] == name]
+              require(len(matches) == 1, f'Expected exactly one source asset: {name}')
+              asset = matches[0]
+              require(type(asset['id']) is int and asset['id'] > 0, 'Invalid source asset ID')
+              require(asset_id is None or asset['id'] == asset_id, 'Source asset ID mismatch')
+              require(asset['url'] == f"https://api.github.com/repos/{REPO}/releases/assets/{asset['id']}",
+                      'Source asset repository mismatch')
+              require(asset['state'] == 'uploaded' and asset['size'] == size
+                      and asset.get('digest') == 'sha256:' + digest, f'Source asset metadata mismatch: {name}')
+              return asset
+
+          def download_asset(asset, path, size, digest):
+              with path.open('wb') as output:
+                  subprocess.run(['gh', 'api', f"repos/{REPO}/releases/assets/{asset['id']}",
+                                  '--header', 'Accept: application/octet-stream'],
+                                 stdout=output, stderr=subprocess.PIPE, check=True, timeout=300)
+              require(path.stat().st_size == size and sha256(path) == digest,
+                      f'Downloaded source asset size or SHA-256 mismatch: {asset["name"]}')
+              return path
+
+          def report(asset, transferred):
+              print(json.dumps({'verified': True, 'transferred': transferred,
+                                'sourceReleaseId': TRANSFER_RELEASE_ID,
+                                'baseAssetId': BASE_ASSET_ID, 'baseSha256': BASE_SHA,
+                                'patchAssetId': PATCH_ASSET_ID, 'patchSha256': PATCH_SHA,
+                                'releaseId': RELEASE_ID, 'releaseTag': TAG, 'releaseAssetId': asset['id'],
+                                'name': asset['name'], 'bytes': asset['size'], 'digest': asset['digest']}), flush=True)
+
+          require(os.environ.get('GITHUB_REPOSITORY') == REPO, 'Unexpected workflow repository')
+          require(os.environ.get('GITHUB_REF') == 'refs/heads/ops/promote-v0.1.12-macos', 'Unexpected workflow branch')
+          require(TRANSFER_RELEASE_ID != RELEASE_ID, 'Source and destination releases must differ')
+          verify_tag_and_tree()
+          release = existing_draft(RELEASE_ID, TAG)
+          asset = exact_existing_asset(release)
+          if asset:
+              report(asset, False)
+              raise SystemExit(0)
+          source = existing_draft(TRANSFER_RELEASE_ID, TRANSFER_TAG)
+          patch_asset = source_asset(source, PATCH_NAME, PATCH_BYTES, PATCH_SHA, PATCH_ASSET_ID)
+          base_release = api(f'releases/tags/{BASE_TAG}')
+          require(base_release['draft'] is False and base_release['tag_name'] == BASE_TAG
+                  and base_release['url'] == f"https://api.github.com/repos/{REPO}/releases/{base_release['id']}",
+                  'Expected published base release in this repository')
+          base_asset = source_asset(base_release, BASE_NAME, BASE_BYTES, BASE_SHA, BASE_ASSET_ID)
+
+          with tempfile.TemporaryDirectory(prefix='verified-macos-', dir=os.environ['RUNNER_TEMP']) as scratch:
+              directory = Path(scratch)
+              version = subprocess.run(['zstd', '--version'], check=True, capture_output=True, text=True, timeout=30)
+              print(version.stdout.strip(), flush=True)
+              base_path = download_asset(base_asset, directory / BASE_NAME, BASE_BYTES, BASE_SHA)
+              print('Verified published v0.1.10 base archive', flush=True)
+              patch_path = download_asset(patch_asset, directory / PATCH_NAME, PATCH_BYTES, PATCH_SHA)
+              print('Verified fixed delta asset', flush=True)
+              archive = directory / ARCHIVE
+              subprocess.run(['zstd', '-d', '--long=29', '--patch-from=' + str(base_path), str(patch_path), '-o', str(archive)],
+                             check=True, capture_output=True, timeout=600)
+              require(archive.stat().st_size == ARCHIVE_BYTES and sha256(archive) == ARCHIVE_SHA,
+                      'Restored macOS archive size or SHA-256 mismatch')
+              print('Verified restored macOS archive size and SHA-256', flush=True)
+
+              verify_tag_and_tree()
+              release = existing_draft(RELEASE_ID, TAG)
+              asset = exact_existing_asset(release)
+              if asset:
+                  report(asset, False)
+                  raise SystemExit(0)
+              upload_url = release['upload_url'].split('{', 1)[0] + '?name=' + ARCHIVE
+              # The only write request adds the verified archive to this fixed draft ID.
+              # No release creation, publication, deletion or asset overwrite request is made.
+              try:
+                  upload = subprocess.run(['gh', 'api', '--method', 'POST', upload_url,
+                                           '--header', 'Content-Type: application/zip',
+                                           '--header', f'Content-Length: {ARCHIVE_BYTES}', '--input', str(archive)],
+                                          capture_output=True, timeout=600)
+                  upload_exit = upload.returncode
+              except subprocess.TimeoutExpired:
+                  upload_exit = 'timeout'
+              # An interrupted response may still follow a completed upload; read back without retrying POST.
+              asset = exact_existing_asset(existing_draft(RELEASE_ID, TAG))
+              require(asset is not None, f'Upload did not create a verified macOS archive (exit {upload_exit})')
+              report(asset, True)
+          PY
