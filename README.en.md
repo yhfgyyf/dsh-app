@@ -8,6 +8,17 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon** 
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.11 preview updates
+
+This release adds **common file previews in the sidebar** and fixes Windows text encoding and path handling.
+
+- **Local Office previews:** Word DOCX text, images and tables; PowerPoint PPTX slides; and multiple Excel XLS/XLSX worksheets. ODS, CSV and TSV are also supported.
+- **Windows TXT fixes:** UTF-8, UTF-16LE/BE and GBK/GB18030 decoding, with manual Big5 and Windows-1252 choices. Chinese names, spaces, drive-letter case and files outside the workspace are handled.
+- **Images, audio and video:** BMP, ICO, AVIF, MP3, WAV, FLAC, MP4, WebM and related formats gain local previews or playback controls. Existing PDF, HTML/Canvas, SVG, Markdown and code previews remain available.
+- **Clear format limits:** legacy DOC/PPT files explain conversion to DOCX/PPTX/PDF; damaged, encrypted or oversized documents show actionable messages.
+
+Office files are processed locally. Word/PowerPoint previews disable network resources and external links; complex layouts, fonts, animations and some charts can differ from Office. Spreadsheets show saved cell values without recalculating formulas or executing macros, limited to the first 200 rows, 40 columns and 100 sheets. Use Open locally for the complete document. Complete-file previews are limited to 32 MiB, or 25 MiB for spreadsheets. Audio/video playback depends on the available codecs.
+
 ## v0.1.10 preview updates
 
 This release updates **Computer Use**, improving coordinate targeting, native input, and visual feedback after actions.
@@ -52,7 +63,7 @@ Update downloads use the system proxy. Failed installations can be retried using
 - Model provider configuration, permission approvals, plans, goals, questions, workflows, and subagents.
 - Standard, PTC, Minimal, Creative, Auto, and Audit presets; model reasoning effort is configured separately.
 - Native menus, file and directory pickers, download saving, zoom, window state, and recovery from core failures.
-- Conversation links open in right-sidebar browser tabs; the file sidebar previews HTML/Canvas, SVG, images, and PDFs, with a source-view action.
+- Conversation links open in right-sidebar browser tabs; file previews include Office documents, spreadsheets, text, code, Markdown, HTML/Canvas, SVG, images, PDF and common audio/video formats.
 - Existing file paths in replies open directly, images have thumbnails, and the right sidebar collapses when its last file or browser tab closes.
 - Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
 - Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.

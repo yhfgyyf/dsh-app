@@ -26,7 +26,27 @@ test('file addresses bind session paths to the current session', () => {
   assert.equal(previewFileOf('dsh-resource://file/session/s2/chart.html', 's1'), undefined);
   assert.equal(previewFileOf('dsh-resource://file/session/s1/%2E%2E%2Fsecret.html', 's1'), undefined);
   assert.equal(previewFileOf('dsh-resource://file/session/s1/%2Ftmp/secret.html', 's1'), undefined);
-  assert.equal(previewFileOf('dsh-resource://file/session/s1/C:/secret.html', 's1'), undefined);
+  assert.deepEqual(previewFileOf('dsh-resource://file/session/s1/C:/secret.html', 's1'), { path: 'C:/secret.html', relative: false });
+});
+
+test('file previews accept session-owned absolute paths without accepting traversal or encoded separators', () => {
+  for (const [address, path] of [
+    ['dsh-resource://file/session/s1/C:/Users/name/%E6%8A%A5%20%E5%91%8A.txt', 'C:/Users/name/报 告.txt'],
+    ['dsh-resource://file/absolute/c:/Users/name/report.txt', 'c:/Users/name/report.txt'],
+    ['dsh-resource://file/session/s1//tmp/report.txt', '/tmp/report.txt'],
+    ['dsh-resource://file/session/s1///server/share/report.txt', '//server/share/report.txt'],
+    ['dsh-resource://file/absolute//server/share/report.txt', '//server/share/report.txt'],
+  ]) assert.deepEqual(previewFileOf(address, 's1'), { path, relative: false });
+  for (const address of [
+    'dsh-resource://file/session/s2/C:/report.txt',
+    'dsh-resource://file/session/s1/../secret.txt',
+    'dsh-resource://file/session/s1/folder/../secret.txt',
+    'dsh-resource://file/session/s1/folder/%2e%2e/secret.txt',
+    'dsh-resource://file/session/s1/folder%2Fsecret.txt',
+    'dsh-resource://file/session/s1/folder%5Csecret.txt',
+    'dsh-resource://file/session/s1/C:secret.txt',
+    'dsh-resource://file/session/s1/report%00.txt',
+  ]) assert.equal(previewFileOf(address, 's1'), undefined, address);
 });
 
 test('local preview serves HTML and web assets but prevents directory and symlink escapes', async () => {
@@ -47,4 +67,16 @@ test('local preview serves HTML and web assets but prevents directory and symlin
   for (const path of ['.private.json', 'escape.json', '%2E%2E%2Foutside.json', '%2Fetc%2Fpasswd']) assert.equal((await grant.read(new Request(new URL(path, grant.url)))).status, 403, path);
   assert.equal((await grant.read(new Request(grant.url, { method: 'POST' }))).status, 404);
   assert.equal((await grant.read(new Request(grant.url.replace(grant.host, 'other')))).status, 404);
+});
+
+test('an explicitly opened file outside the workspace retains its session and grants its own directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'dsh-sidebar-outside-'));
+  const workspace = join(root, 'workspace');
+  await mkdir(workspace);
+  const path = join(root, 'outside.html');
+  await writeFile(path, '<p>Outside workspace</p>');
+  const address = 'dsh-resource://file/session/s1/' + path.replaceAll('\\', '/').split('/').map(encodeURIComponent).join('/');
+  const grant = await previewGrant({ kind: 'preview', sessionId: 's1', cwd: workspace, address });
+  assert.equal(await (await grant.read(new Request(grant.url))).text(), '<p>Outside workspace</p>');
+  await assert.rejects(previewGrant({ kind: 'preview', sessionId: 's2', cwd: workspace, address }), /无法定位/);
 });

@@ -1,6 +1,6 @@
 import { build } from 'vite';
 import { builtinModules } from 'node:module';
-import { copyFile, mkdir, cp } from 'node:fs/promises';
+import { copyFile, mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyComputerDriverBuild } from './build-computer-driver.ts';
@@ -21,9 +21,21 @@ for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) 
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 
-await build({
+// Office parsers run in an opaque sandboxed frame, with no DSH preload or network.
+const frameBuild = await build({ configFile: false, root, define: { 'process.env.NODE_ENV': JSON.stringify('production') }, build: {
+  write: false, target: 'chrome148', minify: true,
+  lib: { entry: resolve(root, 'src/renderer/office-frame/index.ts'), name: 'DSHOfficePreview', formats: ['iife'] },
+  rolldownOptions: { output: { codeSplitting: false } },
+} });
+const frameOutput = Array.isArray(frameBuild) ? frameBuild[0] : frameBuild;
+if (!('output' in frameOutput)) throw new Error('Office preview build returned no output.');
+const frameScript = frameOutput.output.find(item => item.type === 'chunk' && item.isEntry);
+if (!frameScript || frameScript.type !== 'chunk') throw new Error('Office preview entry script is missing.');
+
+const pluginBuild = await build({
   configFile: false,
   root,
+  define: { __DSH_OFFICE_FRAME_SCRIPT__: JSON.stringify(frameScript.code) },
   build: {
     outDir: resolve(root, 'dist/renderer'),
     target: 'chrome148',
@@ -40,7 +52,23 @@ await build({
 });
 
 await mkdir(resolve(root, 'dist/renderer'), { recursive: true });
-await copyFile(resolve(root, 'src/renderer/theme.css'), resolve(root, 'dist/renderer/theme.css'));
+const pluginOutput = Array.isArray(pluginBuild) ? pluginBuild[0] : pluginBuild;
+if (!('output' in pluginOutput)) throw new Error('Desktop plugin build returned no output.');
+const documentStyles = pluginOutput.output.filter(item => item.type === 'asset' && item.fileName.endsWith('.css')).map(item => item.type === 'asset' ? Buffer.from(item.source).toString('utf8') : '').join('\n');
+await writeFile(resolve(root, 'dist/renderer/theme.css'), await readFile(resolve(root, 'src/renderer/theme.css'), 'utf8') + '\n' + documentStyles);
+for (const [packagePath, files] of [
+  ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
+  ['echarts', ['LICENSE', 'NOTICE', 'licenses']], ['zrender', ['LICENSE']],
+  ['echarts/node_modules/tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
+  ['jszip', ['LICENSE.markdown']], ['pako', ['LICENSE']], ['lie', ['license.md']], ['immediate', ['LICENSE.txt']],
+  ['readable-stream', ['LICENSE']], ['core-util-is', ['LICENSE']], ['inherits', ['LICENSE']], ['isarray', ['README.md']],
+  ['process-nextick-args', ['license.md']], ['safe-buffer', ['LICENSE']], ['string_decoder', ['LICENSE']],
+  ['util-deprecate', ['LICENSE']], ['setimmediate', ['LICENSE.txt']],
+] as const) for (const file of files) {
+  const destination = resolve(root, 'dist/renderer/licenses', packagePath, file);
+  await mkdir(resolve(destination, '..'), { recursive: true });
+  await cp(resolve(root, 'node_modules', packagePath, file), destination, { recursive: true });
+}
 await build({
   configFile: false,
   root: resolve(root, 'src/renderer/setup'),

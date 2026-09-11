@@ -13,6 +13,13 @@ pi-ai components. Their original licenses remain applicable. Exact runtime and
 plugin revisions are listed in `runtime/dependencies.json`; installer checksums
 are provided with each GitHub Release.
 
+Offline document previews bundle docx-preview 0.4.0, SheetJS CE 0.20.3,
+and @aiden0z/pptx-renderer 1.2.4 (Apache-2.0), together with Apache ECharts,
+ZRender, JSZip (under its MIT option), and their dependencies. Their license
+texts and notices are included under `dist/renderer/licenses` in the app.
+Spreadsheet code pages are distributed with SheetJS. Exact dependency versions
+and integrity hashes are pinned in `package-lock.json`.
+
 Computer use includes Cua Driver and its Node SDK 0.25.0 (MIT), pinned to
 `trycua/cua` commit `45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f`.
 Its native Node bridge is derived from UniFFI Bindgen React Native 0.31.0-3

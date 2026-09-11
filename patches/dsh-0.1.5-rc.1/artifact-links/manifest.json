@@ -6,8 +6,8 @@
       "package": "@deepseek-ai/dsh-client-ui-chat",
       "path": "@deepseek-ai/dsh-client-ui-chat/lib/client.js",
       "before": "169747694bb96e7db6a37588b6d850d11ab0f8cd55d019384c3a53efee34e417",
-      "after": "db6aa81ce0d8ee9d0ecb412cf9677cbf62618b0b8882c5b9f57f0929c3ef71e2",
-      "patchSha256": "72156047b87c8f23afa08130e12ac7c1b5d2b1efe329f66736d73db12867a236"
+      "after": "4c6f1d979a49eb18630dead382a73523daf0c1535194d656f6448d5e82e978c2",
+      "patchSha256": "5aae4ee10aa04cf9b042c38fdf25198c41d8ee413eb0657e98c0845b2a449804"
     },
     {
       "kind": "primitives",

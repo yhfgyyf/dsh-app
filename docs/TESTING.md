@@ -15,6 +15,8 @@ npm run test:computer-native
 npm run test:computer-apps
 npm run test:audit-switch
 npm run test:updates
+npm run test:artifact-links
+npm run test:sidebar-browser
 ```
 
 `check` runs TypeScript, unit tests and the renderer/main builds. Unit tests cover
@@ -93,6 +95,19 @@ hash-verifies the Audit compatibility patch before bundling the runtime.
 native page bounds, navigation history, dialog visibility, isolated web content,
 local HTML/Canvas with relative assets, and renderer cleanup. It uses a local
 HTTP fixture and a separate DSH home without making model requests.
+
+`test:artifact-links` replays a synthetic historical session through the actual
+desktop UI on both macOS and Windows. It clicks relative, absolute, Unicode and
+space-containing file links, and verifies native SVG/PNG/HTML, Markdown, five
+Chinese TXT encodings, DOCX text/tables/images, two PPTX slides, XLS/XLSX/ODS
+worksheets, quoted CSV cells, WAV metadata and an H.264 MP4 frame. It also checks
+damaged/legacy Office messages, document cleanup, sidebar collapse and unchanged
+historical log bytes. Word/PowerPoint frames must have no parent-document or
+desktop API access. Reports and screenshots are under
+`.test-data/artifact-links-native/`; `latest.json` points to the most recent run.
+The small committed fixtures need no Office installation or network service.
+Unit tests additionally cover encoding overrides, spreadsheet limits, saved
+formula values, and Office archive/iframe boundaries.
 
 `test:audit-switch` reproduces the original failure with `--expect-broken` on
 an unpatched snapshot. On the fixed runtime it checks concurrent Audit/Cordis

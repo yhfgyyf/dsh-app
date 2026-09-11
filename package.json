@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
@@ -38,6 +38,7 @@
     "package:windows": "npm run check && node scripts/package-windows.ts"
   },
   "dependencies": {
+    "@aiden0z/pptx-renderer": "1.2.4",
     "@deepseek-ai/cordis": "4.0.2",
     "@deepseek-ai/cordis-plugin-group": "1.0.2",
     "@deepseek-ai/cordis-plugin-loader": "1.0.3",
@@ -48,6 +49,7 @@
     "@shikijs/langs": "4.4.3",
     "anser": "2.3.5",
     "clsx": "2.1.1",
+    "docx-preview": "0.4.0",
     "immer": "10.2.0",
     "katex": "0.16.47",
     "mdast-util-from-markdown": "2.0.3",
@@ -64,6 +66,7 @@
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "shiki": "4.4.3",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "4.4.7"
   },
   "devDependencies": {

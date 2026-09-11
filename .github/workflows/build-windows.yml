@@ -47,7 +47,7 @@ jobs:
       - name: Update download through a proxy
         timeout-minutes: 5
         run: npm run test:update-network
-      - name: Native file previews
+      - name: Native Office, text, media and file previews
         timeout-minutes: 3
         run: npm run test:artifact-links
       - name: Native sidebar browser

@@ -1,0 +1,97 @@
+{
+  "files": {
+    "sample.png": {
+      "bytes": 152,
+      "sha256": "8fe36f8802fcb2e61614050b9b04016b3078d68c9a3b8e5fc01a2bc2b4805536"
+    },
+    "sample.docx": {
+      "bytes": 35195,
+      "sha256": "bd4b8fd489902711d56917b7216b97d6fe3cace2d5b130d9024be4dab09388a3"
+    },
+    "sample.pptx": {
+      "bytes": 30363,
+      "sha256": "258ff927d389d801f1856ec4e8b1ff078c4ca5387cb8590e28dd04bf26571aee"
+    },
+    "sample.xlsx": {
+      "bytes": 5777,
+      "sha256": "72caa237c8574292f5c9f9baac5713f479d3449f534e02318de1dee03ec872fb"
+    },
+    "sample.wav": {
+      "bytes": 4044,
+      "sha256": "a36770f6496659756b3ca40f979529c883ad2d96658572151d11fd11c7bf454d"
+    },
+    "utf8.txt": {
+      "bytes": 89,
+      "sha256": "1fa339308b4d7929a65af456cd61869b808c6f7e3173923fd2c80fdd5aceffd6"
+    },
+    "utf8-bom.txt": {
+      "bytes": 92,
+      "sha256": "14bdbd171ac02375b492b45d18afe3113756e4625d15278847ab465910d90de8"
+    },
+    "utf16le.txt": {
+      "bytes": 84,
+      "sha256": "9982d4ebc10105f626fe72b85d78b2e517d4c9ba105592d9f1061418307aa04a"
+    },
+    "utf16be.txt": {
+      "bytes": 84,
+      "sha256": "d558a55c46d6e1192ceb2fbbd72a48ce91d8dbbd82191318eb973ee8363ae5b1"
+    },
+    "gbk.txt": {
+      "bytes": 65,
+      "sha256": "a8ddb3082f212e2ced39978b1a94ef35153762a2a5fc3d0bcf7223a6bca71005"
+    }
+  },
+  "expected": {
+    "sample.docx": {
+      "text": [
+        "桌面文档预览测试",
+        "DOCX_PREVIEW_OK",
+        "中文表格",
+        "通过"
+      ],
+      "tables": 1,
+      "images": 1
+    },
+    "sample.pptx": {
+      "slides": 2,
+      "text": [
+        "演示文稿第一页",
+        "PPTX_SLIDE_1_OK",
+        "演示文稿第二页",
+        "PPTX_SLIDE_2_OK"
+      ],
+      "imagesPerSlide": 1
+    },
+    "sample.xlsx": {
+      "sheets": [
+        "销售数据",
+        "汇总"
+      ],
+      "cachedValues": {
+        "销售数据!D2": 50,
+        "销售数据!D3": 24,
+        "销售数据!D4": 74,
+        "汇总!B2": 74
+      },
+      "text": [
+        "测试商品",
+        "XLSX_SECOND_SHEET_OK"
+      ]
+    },
+    "sample.wav": {
+      "durationSeconds": 0.25,
+      "sampleRate": 8000,
+      "channels": 1
+    },
+    "textFiles": {
+      "text": "桌面文本预览：你好，世界。\nTXT_PREVIEW_OK\n第二行：中文编码验证。\n",
+      "encodings": {
+        "utf8.txt": "UTF-8",
+        "utf8-bom.txt": "UTF-8 BOM",
+        "utf16le.txt": "UTF-16LE BOM",
+        "utf16be.txt": "UTF-16BE BOM",
+        "gbk.txt": "GBK"
+      }
+    }
+  }
+}
