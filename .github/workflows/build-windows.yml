@@ -1,100 +1,160 @@
-name: Build Windows installer
+name: Transfer verified v0.1.12 Windows installer
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  actions: read
+  contents: write
+
+concurrency:
+  group: transfer-v0.1.12-windows
+  cancel-in-progress: false
 
 jobs:
-  windows:
-    runs-on: windows-2022
-    timeout-minutes: 40
+  transfer:
+    if: github.repository == 'yhfgyyf/dsh-app' && github.ref == 'refs/heads/ops/promote-v0.1.12-windows'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: yhfgyyf/dsh-app
+      GH_PROMPT_DISABLED: '1'
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.15.0
-          cache: npm
-      - name: Install frontend dependencies
-        run: npm ci --no-audit --no-fund
-      - name: Build pinned runtime and apply verified patch
-        run: npm run setup:runtime
-      - name: Typecheck, unit tests and production build
-        run: npm run check
-      - name: Shared model settings
-        run: npm run test:model-settings
-      - name: Web, TUI and App ownership
-        run: npm run test:three-surfaces
-      - name: Native Electron lifecycle
-        run: npm run test:native
-      - name: Computer use approval and image transport
-        timeout-minutes: 4
-        run: npm run test:computer-tools
-      - name: Computer switch and audit dock UI
-        timeout-minutes: 3
-        run: npm run test:computer-settings
-      - name: Native computer input and screenshot (three consecutive runs)
-        timeout-minutes: 4
+      - name: Verify existing artifact and transfer its installer to the existing draft
+        shell: bash
         run: |
-          1..3 | ForEach-Object {
-            npm run test:computer-native
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Native updater
-        timeout-minutes: 3
-        run: npm run test:updates
-      - name: Update download through a proxy
-        timeout-minutes: 5
-        run: npm run test:update-network
-      - name: Native Office, text, media and file previews
-        timeout-minutes: 3
-        run: npm run test:artifact-links
-      - name: Native sidebar browser
-        timeout-minutes: 3
-        run: npm run test:sidebar-browser
-      - name: Install pinned Inno Setup with long-path support
-        shell: pwsh
-        run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
-          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
-          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
-          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
-          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
-          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Create Windows installer
-        run: node scripts/package-windows.ts
-      - name: Install, launch, close and uninstall
-        shell: pwsh
-        run: ./scripts/test-windows-installer.ps1
-      - name: Collect verified installer and reports
-        run: node scripts/collect-windows-artifact.ts
-      - name: Preserve installation diagnostics on failure
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dsh-app-windows-diagnostics
-          path: |
-            .test-data/installer-*/install.log
-            .test-data/installer-*/updates/report.json
-            .test-data/installer-*/updates/failure.txt
-            .test-data/installer-*/updates/old-app.log
-            .test-data/installer-*/updates/before-install.json
-            .test-data/installer-*/desktop-state/updates/install-result.json
-            .test-data/installer-*/desktop-state/updates/inno-update.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.json
-            .test-data/computer-native/**
-            .test-data/computer-*-latest.json
-            .test-data/computer-tools-*/**
-          include-hidden-files: true
-          if-no-files-found: ignore
-          retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dsh-app-windows-x64
-          path: release/upload/*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPO = 'yhfgyyf/dsh-app'
+          TAG = 'v0.1.12'
+          RELEASE_ID = 386820145
+          RELEASE_COMMIT = '3b4b0ad2c115ec35ffeabce5d0f343c124fea305'
+          SOURCE_COMMIT = 'bd32f88cc33856597a55230828e4520d1d6697ed'
+          SOURCE_TREE = '789de54bb5ffad8901b6c9b851355e991b5a9d79'
+          RUN_ID = 34568307683
+          ARTIFACT_ID = 10186987079
+          ARTIFACT_NAME = 'dsh-app-windows-x64'
+          ARCHIVE_BYTES = 241940589
+          ARCHIVE_SHA = '4bb2c54526ef87371eeff4ce01e4fed88bc41bbf98584c11bed73901387eb60a'
+          EXE = 'DSH-Desktop-0.1.12-Windows-x64-Setup.exe'
+          EXE_BYTES = 236746296
+          EXE_SHA = '323d2d1656648def6fb1792e01bfc049f4b8e656d5f55fa207669ec4e12f9fd0'
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def gh_json(*args):
+              result = subprocess.run(['gh', *args], check=True, capture_output=True, timeout=90)
+              return json.loads(result.stdout)
+
+          def api(endpoint):
+              return gh_json('api', f'repos/{REPO}/{endpoint}')
+
+          def sha256(path):
+              digest = hashlib.sha256()
+              with path.open('rb') as stream:
+                  for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          def verify_tag_and_tree():
+              require(api('git/ref/heads/main')['object']['sha'] == RELEASE_COMMIT, 'main moved')
+              target = api(f'git/ref/tags/{TAG}')['object']
+              if target['type'] == 'tag':
+                  target = api(f"git/tags/{target['sha']}")['object']
+              require(target['type'] == 'commit' and target['sha'] == RELEASE_COMMIT, 'Release tag moved')
+              for commit in [RELEASE_COMMIT, SOURCE_COMMIT]:
+                  require(api(f'git/commits/{commit}')['tree']['sha'] == SOURCE_TREE, 'Source tree mismatch')
+
+          def existing_draft():
+              release = api(f'releases/{RELEASE_ID}')
+              require(release['id'] == RELEASE_ID and release['draft'] is True and release['tag_name'] == TAG,
+                      'Expected existing draft release ID and tag')
+              require(release['url'] == f'https://api.github.com/repos/{REPO}/releases/{RELEASE_ID}',
+                      'Release repository mismatch')
+              expected_upload = f'https://uploads.github.com/repos/{REPO}/releases/{RELEASE_ID}/assets'
+              require(release['upload_url'].split('{', 1)[0] == expected_upload, 'Unexpected upload host or repository')
+              return release
+
+          def exact_existing_asset(release):
+              matches = [asset for asset in release['assets'] if asset['name'] == EXE]
+              require(len(matches) <= 1, 'Duplicate installer assets')
+              if not matches:
+                  return None
+              asset = matches[0]
+              require(asset['state'] == 'uploaded' and asset['size'] == EXE_BYTES
+                      and asset.get('digest') == 'sha256:' + EXE_SHA,
+                      'Existing installer is incomplete or different; refusing to delete or overwrite it')
+              return asset
+
+          def report(asset, transferred):
+              print(json.dumps({'verified': True, 'transferred': transferred,
+                                'sourceRun': RUN_ID, 'artifactId': ARTIFACT_ID,
+                                'releaseId': RELEASE_ID, 'releaseTag': TAG, 'releaseAssetId': asset['id'],
+                                'name': asset['name'], 'bytes': asset['size'], 'digest': asset['digest']}))
+
+          require(os.environ.get('GITHUB_REPOSITORY') == REPO, 'Unexpected workflow repository')
+          require(os.environ.get('GITHUB_REF') == 'refs/heads/ops/promote-v0.1.12-windows', 'Unexpected workflow branch')
+          verify_tag_and_tree()
+          run = api(f'actions/runs/{RUN_ID}')
+          require(run['id'] == RUN_ID and run['status'] == 'completed' and run['conclusion'] == 'success', 'Source CI did not succeed')
+          require(run['head_sha'] == SOURCE_COMMIT and run['repository']['full_name'] == REPO
+                  and run['head_repository']['full_name'] == REPO, 'Source CI repository or commit mismatch')
+          artifact = api(f'actions/artifacts/{ARTIFACT_ID}')
+          require(artifact['id'] == ARTIFACT_ID and artifact['name'] == ARTIFACT_NAME
+                  and artifact['expired'] is False, 'Artifact identity or expiry mismatch')
+          require(artifact['workflow_run']['id'] == RUN_ID and artifact['workflow_run']['head_sha'] == SOURCE_COMMIT,
+                  'Artifact belongs to a different source run')
+          require(artifact['size_in_bytes'] == ARCHIVE_BYTES and artifact['digest'] == 'sha256:' + ARCHIVE_SHA,
+                  'Artifact archive metadata mismatch')
+          release = existing_draft()
+          asset = exact_existing_asset(release)
+          if asset:
+              report(asset, False)
+              raise SystemExit(0)
+
+          with tempfile.TemporaryDirectory(prefix='verified-release-', dir=os.environ['RUNNER_TEMP']) as scratch:
+              directory = Path(scratch)
+              archive = directory / 'artifact.zip'
+              with archive.open('wb') as output:
+                  subprocess.run(['gh', 'api', f'repos/{REPO}/actions/artifacts/{ARTIFACT_ID}/zip'],
+                                 stdout=output, stderr=subprocess.PIPE, check=True, timeout=600)
+              require(archive.stat().st_size == ARCHIVE_BYTES and sha256(archive) == ARCHIVE_SHA,
+                      'Downloaded artifact ZIP size or SHA-256 mismatch')
+              installer = directory / EXE
+              with zipfile.ZipFile(archive) as bundle:
+                  require(bundle.namelist().count(EXE) == 1, 'Expected exactly one installer in artifact')
+                  info = bundle.getinfo(EXE)
+                  require(not info.is_dir() and info.file_size == EXE_BYTES, 'Installer archive entry size mismatch')
+                  with bundle.open(info) as source, installer.open('wb') as destination:
+                      shutil.copyfileobj(source, destination, 1024 * 1024)
+              require(installer.stat().st_size == EXE_BYTES and sha256(installer) == EXE_SHA,
+                      'Installer size or SHA-256 mismatch')
+
+              verify_tag_and_tree()
+              release = existing_draft()
+              asset = exact_existing_asset(release)
+              if asset:
+                  report(asset, False)
+                  raise SystemExit(0)
+              upload_url = release['upload_url'].split('{', 1)[0] + '?name=' + EXE
+              # Upload only verified bytes to the fixed draft ID. No create, publish, delete or clobber call.
+              upload = subprocess.run(['gh', 'api', '--method', 'POST', upload_url,
+                                       '--header', 'Content-Type: application/octet-stream',
+                                       '--header', f'Content-Length: {EXE_BYTES}', '--input', str(installer)],
+                                      capture_output=True, timeout=600)
+              # A lost response may still follow a completed upload; verify before reporting failure.
+              asset = exact_existing_asset(existing_draft())
+              require(asset is not None, f'Upload did not create a verified installer (exit {upload.returncode})')
+              report(asset, True)
+          PY
