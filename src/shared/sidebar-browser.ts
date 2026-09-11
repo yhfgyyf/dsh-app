@@ -22,15 +22,19 @@ export function webUrlOf(address: string): string | undefined {
 
 export function previewFileOf(address: string, sessionId: string): { path: string; relative: boolean } | undefined {
   try {
-    const url = new URL(address);
-    if (url.protocol !== 'dsh-resource:' || url.host !== 'file' || url.search || url.hash) return undefined;
-    const [, scope, ...parts] = url.pathname.split('/');
+    const prefix = 'dsh-resource://file/';
+    if (!address.startsWith(prefix) || /[?#]/.test(address)) return undefined;
+    // Read the original segments: URL parsing would erase dot-segment traversal.
+    const [scope, ...parts] = address.slice(prefix.length).split('/');
     if (scope === 'session' && decodeURIComponent(parts.shift() ?? '') !== sessionId) return undefined;
     if (scope !== 'session' && scope !== 'absolute') return undefined;
-    const path = parts.map(decodeURIComponent).join('/');
-    if (!path || path.includes('\0') || path.split(/[\\/]/).includes('..')) return undefined;
-    if (scope === 'session' && (/^[\\/]/.test(path) || /^[A-Za-z]:/.test(path))) return undefined;
-    return { path: scope === 'absolute' && !/^[A-Za-z]:/.test(path) ? '/' + path : path, relative: scope === 'session' };
+    const segments = parts.map(decodeURIComponent);
+    if (segments.some(part => part === '..' || /[\\/\0]/.test(part))) return undefined;
+    const path = segments.join('/');
+    const drive = /^[A-Za-z]:\//.test(path);
+    if (!path || (/^[A-Za-z]:/.test(path) && !drive)) return undefined;
+    // The core file API also keeps workspace-external paths in their owning session.
+    return { path: scope === 'absolute' && !drive ? '/' + path : path, relative: scope === 'session' && !drive && !path.startsWith('/') };
   } catch { return undefined; }
 }
 

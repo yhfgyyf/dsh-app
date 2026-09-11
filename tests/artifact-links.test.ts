@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { previewFileOf } from '../src/shared/sidebar-browser.ts';
 
 const runtimeNodeModules = process.env.DSH_OVERLAY_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url));
 const clientNodeModules = process.env.DSH_OVERLAY_TEST_CLIENT ?? fileURLToPath(new URL('../node_modules', import.meta.url));
@@ -15,6 +16,7 @@ const start = source.indexOf('function localArtifactPath(');
 const end = source.indexOf('/** Reasoning block', start);
 assert.ok(start > 0 && end > start, 'Install the artifact adapter before testing');
 const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath);
+const { fileAddressFor } = new Function(source.slice(source.indexOf('const FILE_ADDRESS_PREFIX'), source.indexOf('const EMPTY_LIST$1')) + '; return {fileAddressFor};')();
 
 test('artifact paths use the owning workspace and normalize relative, spaced and Windows destinations', () => {
   assert.equal(localArtifactPath('pelican-riding-bicycle.svg', '/Users/yang/Documents'), '/Users/yang/Documents/pelican-riding-bicycle.svg');
@@ -38,6 +40,28 @@ test('Markdown image destinations resolve relative and encoded paths through the
   assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
   assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'https://outside.invalid/a.png', '/workspace'), undefined);
   assert.equal(localPathMediaUrl('file:', 'null', '/tmp/a.png'), undefined);
+});
+
+test('Windows artifact addresses preserve session reads across casing, separators and outside paths', () => {
+  const sessionId = 'windows-preview';
+  const cwd = 'C:\\Workspace';
+  for (const path of ['C:\\Workspace\\报告.txt', 'c:/workspace/报告.txt', 'C:/WORKSPACE/报告.txt']) {
+    const address = fileAddressFor(sessionId, cwd, path);
+    assert.deepEqual(paths.parseFileAddress(address), { scope: 'session', sessionId, path: '报告.txt' });
+    assert.deepEqual(previewFileOf(address, sessionId), { path: '报告.txt', relative: true });
+  }
+  for (const path of ['C:\\Other\\报告.txt', 'C:\\Workspace-old\\报告.txt']) {
+    const address = fileAddressFor(sessionId, cwd, path);
+    const absolute = path.replaceAll('\\', '/');
+    assert.deepEqual(paths.parseFileAddress(address), { scope: 'session', sessionId, path: absolute });
+    assert.deepEqual(previewFileOf(address, sessionId), { path: absolute, relative: false });
+  }
+  assert.deepEqual(previewFileOf(fileAddressFor(sessionId, undefined, 'C:\\Other\\报告.txt'), sessionId), { path: 'C:/Other/报告.txt', relative: false });
+  assert.deepEqual(previewFileOf(fileAddressFor(sessionId, '/workspace', '/WORKSPACE/report.txt'), sessionId), { path: '/WORKSPACE/report.txt', relative: false });
+  for (const [workspace, path] of [
+    ['C:\\', 'c:/report.txt'],
+    ['\\\\SERVER\\share\\Workspace', '\\\\server\\SHARE\\workspace\\report.txt'],
+  ]) assert.deepEqual(previewFileOf(fileAddressFor(sessionId, workspace, path), sessionId), { path: 'report.txt', relative: true });
 });
 
 test('artifact package adapter is idempotent and verifies both runtime and bundled renderer', async () => {

@@ -6,6 +6,7 @@ const { join } = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { zstdCompressSync } = require('node:zlib');
 const interactions = require('./desktop-interactions.cjs');
+const documents = require('./document-preview.cjs');
 interactions.install();
 const root = join(__dirname, '..');
 const data = join(root, '.test-data', 'artifact-links-native', String(Date.now()));
@@ -38,6 +39,7 @@ const text = [
   '[文档引用][report]\n\n[report]: report.md',
   '```svg\n' + svg + '\n```',
   '```text\nmissing-fenced.png\n```',
+  documents.install(workspace),
 ].join('\n\n');
 const header = { type: 'session', version: 3, id: sessionId, createdAt: Date.now(), cwd: workspace, isSeeded: false, delegationDepth: 0, agentPreset: 'standard' };
 let seq = 0;
@@ -57,7 +59,7 @@ writeFileSync(log, original);
 const report = { data, checks: [], failures: [], console: [], headPaths: [] };
 let finished = false;
 let failure = false;
-const timeout = setTimeout(() => finish(new Error('Artifact UI acceptance timed out')), 55000);
+const timeout = setTimeout(() => finish(new Error('Artifact UI acceptance timed out')), 110000);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(fn, label) {
   const started = Date.now();
@@ -165,6 +167,7 @@ async function run(event) {
   await interactions.verifyLocalMenu(host, workspace, until);
   report.checks.push('Text sidebar supports drag selection and Copy; header opens each active SVG, PNG, HTML and Markdown file instead of the workspace');
   report.checks.push('Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
+  await documents.run({ host, until, report, data });
   // rc.1 starts without a guide; closing every document leaves the column empty.
   await js(`Array.from(document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab-close]')).forEach(button=>button.click())`);
   await until(() => js(`!document.querySelector('[data-sidebar-right-open]')`), 'Closing the last document left the sidebar open');

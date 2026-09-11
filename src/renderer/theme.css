@@ -55,6 +55,13 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-browser-viewport { flex: 1; min-height: 0; position: relative; }
 .desktop-browser-viewport > p { margin: 32px 20px; text-align: center; color: var(--dsw-alias-label-secondary); font-size: 13px; }
 .desktop-browser-error { flex: none; margin: 0; padding: 8px 10px; font-size: 12px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-1); }
+.desktop-document { box-sizing: border-box; min-height: 100%; padding: 16px; white-space: normal; font-size: 13px; line-height: 1.6; }
+.desktop-document-options { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: var(--dsw-alias-label-secondary); }
+.desktop-document-options select { background: var(--dsw-alias-bg-layer-1); color: inherit; border: 1px solid var(--dsw-alias-border-l3); border-radius: 5px; padding: 4px; }
+.desktop-document pre { margin: 0; font: 13px/1.7 var(--ds-font-family-code, monospace); tab-size: 4; overflow-wrap: anywhere; }
+.desktop-document-media { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+.desktop-document-media img, .desktop-document-media video { max-width: 100%; height: auto; }
+.desktop-document-media audio { width: 100%; }
 @media (prefers-color-scheme: dark) { .desktop-startup { background: #181818; color: #bbb; } }
 .desktop-artifact-previews { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 16px; }
 .desktop-artifact-previews > button { display: flex; flex-direction: column; gap: 8px; width: 176px; max-width: 100%; padding: 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; background: var(--dsw-alias-bg-layer-1); color: inherit; cursor: pointer; text-align: left; }

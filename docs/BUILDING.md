@@ -1,11 +1,20 @@
 # Build and package
 
 Use Node 24.15.0 and Git. Run `npm ci`, `npm run setup:runtime`, then
-`npm run check`. The runtime builder installs DSH into a repository-owned
-`.build-runtime/global` prefix, checks out the exact plugin commits from
-`runtime/dependencies.json`, applies the hash-guarded patch and snapshots only
+`npm run check`. The runtime builder runs `npm ci --install-strategy=shallow`
+with `runtime/dsh/package.json` and its lockfile in `.build-runtime/global`.
+The manifest fixes every DSH subpackage to the runtime version and pins the
+patch-sensitive `pi-ai` package and tested `zod` version; the lockfile fixes the
+remaining dependency graph. Shallow installation keeps DSH's dependencies inside
+its package for snapshotting on both platforms. The builder checks out the exact
+plugin commits from `runtime/dependencies.json`, applies the hash-guarded patch and snapshots only
 published program files into `.runtime`. A previous snapshot is renamed before
 replacement. User settings, credentials and sessions are not build inputs.
+Existing staging installations and obsolete plugin dependency links are renamed
+to backups before replacement. When changing the DSH pin, update its subpackage
+overrides and regenerate the runtime lockfile from an empty directory using
+`npm install --package-lock-only --install-strategy=shallow --ignore-scripts`.
+Verify the pinned patch against a fresh installation before preparing a snapshot.
 
 `npm run prepare:runtime` is the separate snapshot step. For an existing verified
 installation, set `DSH_INSTALL_ROOT` to the DSH package directory and

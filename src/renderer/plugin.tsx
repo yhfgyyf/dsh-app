@@ -5,13 +5,15 @@ import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
 import { installLocalOpen } from './local-open.tsx';
 import { ComputerControl, ComputerSettings } from './computer-use.tsx';
+import { installDocumentPreviews } from './document-preview.tsx';
+import type { DocumentContext } from './document-preview.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
 type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string };
 
 // The narrow, verified public faces consumed from the installed DSH runtime.
-interface DesktopContext extends BrowserContext {
+interface DesktopContext extends BrowserContext, DocumentContext {
   effect(factory: () => Disposer, label?: string): void;
   on(event: 'theme/change', listener: (snapshot: ThemeSnapshot) => void): Disposer;
   get(name: 'uiWorkspace'): { startSession(): void };
@@ -24,7 +26,7 @@ interface DesktopContext extends BrowserContext {
 }
 
 export const name = 'dsh-desktop-shell';
-export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection'];
+export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews'];
 
 const palette: Record<string, [string, string]> = {
   '--dsw-alias-bg-base': ['#ffffff', '#181818'],
@@ -104,6 +106,7 @@ export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
 
 export function apply(ctx: DesktopContext) {
   installSidebarBrowser(ctx);
+  installDocumentPreviews(ctx);
   installLocalOpen(ctx);
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
