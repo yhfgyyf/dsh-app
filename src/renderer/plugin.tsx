@@ -76,7 +76,6 @@ function TitleBar({ state, reconnect }: { state: StateSource; reconnect: () => v
       <ComputerControl />
       <span className="desktop-status" role="status" title={status === 'connected' ? '已连接本机 DSH' : 'DSH 连接中断'}><i data-connected={status === 'connected'} />{status === 'connected' ? '本机' : status === 'connecting' ? '连接中' : '离线'}</span>
       {status !== 'connected' && <button onClick={reconnect}>重连</button>}
-      <button className="desktop-icon" aria-label="运行状态" title="运行状态" onClick={() => { void window.dshDesktop?.showConnection(); }}><Icon kind="connect" /></button>
     </div>
   </header>;
 }

@@ -8,10 +8,11 @@
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
 
-## v0.1.11 预览版更新
+## v0.1.12 预览版更新
 
 本次补齐 **侧边栏常见文件预览**，并修复 Windows 文本编码和文件路径兼容问题。
 
+- **标题栏精简**：移除 Windows 和 macOS App 右上角的“运行状态”图标。
 - **Office 本地预览**：Word DOCX 的正文、图片和表格，PowerPoint PPTX 的页面，以及 Excel XLS/XLSX 多工作表；同时支持 ODS、CSV、TSV 等表格格式。
 - **Windows TXT 修复**：兼容 UTF-8、UTF-16LE/BE 和 GBK/GB18030；可手动选择 Big5、Windows-1252 等编码。支持中文、空格、盘符大小写和工作区外的文件路径。
 - **图片与音视频**：补充 BMP、ICO、AVIF，以及 MP3、WAV、FLAC、MP4、WebM 等本地预览与播放控件，保留现有 PDF、HTML/Canvas、SVG、Markdown 和代码预览。

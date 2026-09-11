@@ -8,10 +8,11 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon** 
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
-## v0.1.11 preview updates
+## v0.1.12 preview updates
 
 This release adds **common file previews in the sidebar** and fixes Windows text encoding and path handling.
 
+- **Simpler title bar:** remove the Runtime status icon from the top-right corner on Windows and macOS.
 - **Local Office previews:** Word DOCX text, images and tables; PowerPoint PPTX slides; and multiple Excel XLS/XLSX worksheets. ODS, CSV and TSV are also supported.
 - **Windows TXT fixes:** UTF-8, UTF-16LE/BE and GBK/GB18030 decoding, with manual Big5 and Windows-1252 choices. Chinese names, spaces, drive-letter case and files outside the workspace are handled.
 - **Images, audio and video:** BMP, ICO, AVIF, MP3, WAV, FLAC, MP4, WebM and related formats gain local previews or playback controls. Existing PDF, HTML/Canvas, SVG, Markdown and code previews remain available.
