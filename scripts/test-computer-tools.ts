@@ -34,7 +34,7 @@ const mock = createServer(async (req, res) => {
     const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const bytes = Buffer.concat(chunks);
     const body = bytes.toString('utf8');
-    if (req.url?.endsWith('/models')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: 'deepseek-v4-flash' }] })); return; }
+    if (req.url?.endsWith('/models')) { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ data: [{ id: 'deepseek-flash' }] })); return; }
     if (req.url === '/files' && req.method === 'POST') {
       const form = await new Request('http://127.0.0.1/files', { method: 'POST', headers: { 'content-type': req.headers['content-type']! }, body: bytes }).formData();
       const file = form.get('file') as File;
@@ -48,7 +48,7 @@ const mock = createServer(async (req, res) => {
       res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify(req.method === 'DELETE' ? { id, object: 'file', deleted: true } : value)); return;
     }
     const request = JSON.parse(body);
-    if (!req.url?.endsWith('/chat/completions') || !current) throw new Error('Unexpected model request.');
+    if (!req.url?.endsWith('/chat/completions') || !current) throw new Error(`Unexpected model request: ${req.method} ${req.url} (${current ? `${current.face}/${current.mode}` : 'before scenario'}).`);
     await writeFile(join(data, `${current.face}-${current.mode}-request-${current.step}.json`), JSON.stringify(request, null, 2));
     const hasImage = request.messages?.some((message: any) => Array.isArray(message.content) && message.content.some((block: any) => block.type === 'image_url' && /^data:image\//.test(block.image_url?.url) || block.type === 'file' && uploaded.has(block.file_id)));
     current.imageSeen ||= hasImage;
@@ -74,7 +74,7 @@ const mock = createServer(async (req, res) => {
   } catch (error) { report.failures.push(String(error)); res.writeHead(500); res.end('fixture failed'); }
 });
 await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
-await writeFile(join(home, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:\n    baseURL: http://127.0.0.1:${(mock.address() as { port: number }).port}\n    apiKeyEnv: DSH_DESKTOP_COMPUTER_FIXTURE_KEY\n    maxTokens: 4096\n`);
+await writeFile(join(home, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:\n    protocol: chat-completions\n    baseURL: http://127.0.0.1:${(mock.address() as { port: number }).port}\n    apiKeyEnv: DSH_DESKTOP_COMPUTER_FIXTURE_KEY\n    maxTokens: 4096\n`);
 process.env.DSH_DESKTOP_COMPUTER_FIXTURE_KEY = 'disposable-local-fixture';
 // File/shell approval=never must not suppress access granted by the App switch.
 process.env.DSH_PERMISSION_MODE = 'danger-full-access';
@@ -99,7 +99,7 @@ try {
     await broker.setEnabled(mode === 'enabled', false);
     const created = await client.rpc('session/create', { request: { cwd: data, agentPreset: face === 'ptc' ? 'ptc' : 'standard' } });
     const sessionId = created.sessionId;
-    await client.rpc('session/selectModel', { request: { sessionId, provider: 'deepseek-official', model: 'deepseek-v4-flash-vision-exp', reasoningEffort: 'high' } });
+    await client.rpc('session/selectModel', { request: { sessionId, provider: 'deepseek-official', model: 'deepseek-flash', reasoningEffort: 'high' } });
     const stream = client.follow('session/follow', { request: { address: { kind: 'session', sessionId } } });
     await stream.wait(frames => frames.some(frame => frame.type === 'snapshot'));
     const beforeCalls = driverCalls;
