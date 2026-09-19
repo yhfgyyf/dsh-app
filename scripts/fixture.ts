@@ -19,7 +19,7 @@ const mock = createServer(async (req, res) => {
   for await (const chunk of req) body += chunk;
   if (req.url?.endsWith('/models')) {
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ object: 'list', data: [{ id: 'deepseek-v4-flash', object: 'model', owned_by: 'desktop-test' }] }));
+    res.end(JSON.stringify({ object: 'list', data: [{ id: 'deepseek-flash', object: 'model', owned_by: 'desktop-test' }] }));
     return;
   }
   if (!req.url?.endsWith('/chat/completions')) { res.writeHead(404); res.end('{}'); return; }
@@ -35,14 +35,17 @@ const mock = createServer(async (req, res) => {
   const question = prompt.includes('[desktop-question]');
   const approval = prompt.match(/\[desktop-approval:([a-f0-9-]+)\]/)?.[1];
   const advanced = prompt.match(/\[desktop-(workflow|subagent|jobs|cordis)\]/)?.[1];
-  const target = question ? 'ask_user_question' : approval ? 'write' : advanced === 'jobs' ? 'bash' : advanced === 'cordis' ? 'cordis_define' : advanced ?? 'read';
+  const target = question ? 'ask_user_question' : approval ? 'write' : advanced === 'jobs' ? 'bash' : advanced === 'cordis' ? 'cordis_inspect_list' : advanced ?? 'read';
   const toolArguments = advanced === 'workflow' ? { meta: { name: 'desktop-workflow', description: 'Isolated desktop workflow acceptance', phases: [{ title: '验收' }] }, script: 'phase("验收"); log("desktop-workflow-running"); const result = await agent("Return a simple desktop child test reply.", {label:"desktop-child"}); return {verified: true, result};' } : advanced === 'subagent' ? { description: 'desktop child acceptance', prompt: 'Return a simple desktop child test reply.', run_in_background: false } : advanced === 'jobs' ? { command: 'printf desktop-background-job', description: 'Print isolated desktop background job result', workdir: workspace, run_in_background: true } : undefined;
   const sequence: { name: string; arguments: any }[] = [
     { name: 'search_tools', arguments: { query: target } },
     { name: 'describe_tools', arguments: { names: [target] } },
     { name: 'invoke_tool', arguments: { name: target, arguments: toolArguments ?? (question ? { questions: [{ id: 'desktop-choice', question: '请选择桌面测试结果', header: '桌面验收', options: [{ label: '通过', description: '继续测试' }, { label: '重试', description: '重新执行' }] }] } : approval ? { file_path: join(data, `approval-${approval}.txt`), content: 'Desktop one-time approval verified.\n' } : { file_path: join(workspace, 'README.md') }) } },
   ];
-  if (advanced === 'cordis') sequence[2].arguments.arguments = { plugin: { kind: 'new', idPrefix: 'dshtst' }, name: 'Desktop lifecycle fixture', purpose: 'Verify an isolated dynamic plugin can be defined, run and stopped.', code: { host: 'return { apply() {} };' } };
+  if (advanced === 'cordis') {
+    sequence[2].arguments.arguments = {};
+    sequence.push({ name: 'invoke_tool', arguments: { name: 'cordis_inspect_query', arguments: { platform: 'host', provider: 'Tool', method: 'listTools' } } });
+  }
   if (approval) sequence.push({ name: 'invoke_tool', arguments: { name: target, arguments: { file_path: join(data, `approval-${approval}.txt`), content: 'Desktop one-time approval verified.\n', sandbox_permissions: 'danger-full-access', justification: '仅在隔离测试目录创建这个验收文件，以验证桌面单次审批。' } } } as typeof sequence[number]);
   if (request.stream && (question || approval || advanced || prompt.includes('[desktop-tools]')) && step < sequence.length) {
     res.writeHead(200, { 'content-type': 'text/event-stream' });
@@ -76,7 +79,7 @@ const mock = createServer(async (req, res) => {
 });
 await new Promise<void>((resolve, reject) => { mock.once('error', reject); mock.listen(0, '127.0.0.1', resolve); });
 const mockPort = (mock.address() as { port: number }).port;
-await writeFile(join(home, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:\n    baseURL: http://127.0.0.1:${mockPort}\n    apiKeyEnv: DSH_DESKTOP_FIXTURE_KEY\n    maxTokens: 4096\n- id: agent-presets\n  config:\n    default: standard\n`);
+await writeFile(join(home, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:\n    protocol: chat-completions\n    baseURL: http://127.0.0.1:${mockPort}\n    apiKeyEnv: DSH_DESKTOP_FIXTURE_KEY\n    maxTokens: 4096\n- id: agent-presets\n  config:\n    default: standard\n`);
 process.env.DSH_DESKTOP_FIXTURE_KEY = 'desktop-local-fixture';
 const core = new DesktopRuntime({ runtimeRoot: join(root, '.runtime'), entry: join(root, '.runtime/app/index.ts'), home, cwd: workspace, onExit: code => { mock.close(); process.exitCode = code ?? 1; } });
 const ready = await core.start();

@@ -1,0 +1,12 @@
+{
+  "name": "dsh-desktop-surface",
+  "version": "0.1.15",
+  "private": true,
+  "type": "module",
+  "description": "Desktop shell with native browser, document previews and computer control",
+  "dsh": {
+    "bundle": {
+      "patch": "./desktop.patch.yml"
+    }
+  }
+}

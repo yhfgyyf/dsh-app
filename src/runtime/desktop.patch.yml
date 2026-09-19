@@ -21,8 +21,6 @@
 - insert:
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:
@@ -61,6 +59,8 @@
       name: '@deepseek-ai/dsh-api-workspace-controller'
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
+    - id: terminal-controller
+      name: '@deepseek-ai/dsh-api-terminal-controller'
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
     - id: webserver
@@ -100,6 +100,10 @@
       name: '@deepseek-ai/dsh-client-ui-sidebar-right'
     - id: ui-sidebar-documentpreview
       name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
+    - id: office-to-pdf
+      name: '@deepseek-ai/dsh-office-to-pdf'
+    - id: ui-sidebar-terminal
+      name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
     - id: ui-sidebar-files
       name: '@deepseek-ai/dsh-client-ui-sidebar-files'
     - id: ui-settings
@@ -110,6 +114,10 @@
       name: '@deepseek-ai/dsh-client-ui-settings-models'
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+    - id: ui-plugin-manager
+      name: '@deepseek-ai/dsh-client-ui-plugin-manager'
+    - id: ui-settings-unarchive-sessions
+      name: '@deepseek-ai/dsh-client-ui-settings-unarchive-sessions'
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
     - id: ui-approval
@@ -128,6 +136,8 @@
       name: '@deepseek-ai/dsh-client-ui-workflow-run'
     - id: ui-deliverables
       name: '@deepseek-ai/dsh-client-ui-deliverables'
+    - id: workspace-changes
+      name: '@deepseek-ai/dsh-workspace-changes'
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
     - id: ui-input-trigger
@@ -199,7 +209,7 @@
   disabled: true
 - id: tool-subagent-fork
   disabled: true
-- id: workflow-worker-thread
+- id: workflow-ptc
   disabled: true
 - id: tool-workflow
   disabled: true
@@ -228,3 +238,7 @@
       name: dsh-progressive-tools
     - id: desktop-computer-use
       name: './computer-use.ts'
+    - id: desktop-plugin-marketplace
+      name: './plugin-marketplace.ts'
+    - id: desktop-plugin-security
+      name: './plugin-security-host.ts'

@@ -28,6 +28,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Plugin marketplace review and explicit installation consent
+        timeout-minutes: 4
+        run: npm run test:plugin-marketplace
       - name: Computer use approval and image transport
         timeout-minutes: 4
         run: npm run test:computer-tools
@@ -88,6 +91,7 @@ jobs:
             .test-data/computer-native/**
             .test-data/computer-*-latest.json
             .test-data/computer-tools-*/**
+            .test-data/plugin-marketplace-native/**
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

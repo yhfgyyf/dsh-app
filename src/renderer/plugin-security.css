@@ -1,0 +1,18 @@
+.desktop-plugin-security { display:flex; flex-direction:column; gap:12px; max-height:65vh; overflow-y:auto; color:var(--dsw-alias-label-primary); font-size:13px; line-height:1.6; }
+.desktop-plugin-security p,.desktop-plugin-security h3 { margin:0; }
+.desktop-plugin-security h3 { font-size:13px; font-weight:600; }
+.desktop-plugin-security-spec { font-weight:600; overflow-wrap:anywhere; }
+.desktop-plugin-security-summary { display:flex; align-items:center; gap:12px; }
+.desktop-plugin-security-summary span,.desktop-plugin-security-meta,.desktop-plugin-security-path { color:var(--dsw-alias-label-secondary); font-size:12px; }
+.desktop-plugin-security [data-plugin-security-risk="high"],.desktop-plugin-security-error { color:var(--dsw-alias-state-error-primary); }
+.desktop-plugin-security-findings { display:flex; flex-direction:column; gap:16px; margin:0; padding-left:20px; }
+.desktop-plugin-security ul { margin:6px 0; padding-left:20px; }
+.desktop-plugin-security pre { max-height:180px; overflow:auto; padding:10px; white-space:pre-wrap; overflow-wrap:anywhere; background:var(--dsw-alias-bg-layer-1); border-radius:8px; font-size:12px; }
+.desktop-plugin-security-hash { overflow-wrap:anywhere; font-size:11px; }
+.desktop-plugin-security-consent { display:flex; align-items:flex-start; gap:8px; padding:12px 0; cursor:pointer; }
+.desktop-plugin-security-consent input { margin-top:4px; }
+.desktop-plugin-security-actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:8px; position:sticky; bottom:0; padding:10px 0 0; background:var(--dsw-alias-bg-layer-2); }
+.desktop-plugin-security-actions button { border:1px solid var(--dsw-alias-border-l3); border-radius:8px; background:var(--dsw-alias-bg-layer-2); color:inherit; padding:7px 12px; font:inherit; cursor:pointer; }
+.desktop-plugin-security-actions button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }
+.desktop-plugin-security-actions button:disabled { opacity:.5; cursor:default; }
+.desktop-plugin-security :is(button,input):focus-visible { outline:2px solid var(--dsw-alias-brand-primary); outline-offset:2px; }

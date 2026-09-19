@@ -1,0 +1,652 @@
+diff --git a/lib/client.js b/lib/client.js
+index 326dd20caab36cfe27530f78721a1d59193568d2..267a71de23652c8bce3f8a3e5b01a654ab9d9784 100644
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -64,6 +64,12 @@ window.__ModuleLoader__.load({
+ 			return "var(--dsw-alias-state-success-primary, #30a46c)";
+ 		}
+ 		function AuditDock (props) {
++			var preset = props.useProjection("agentPreset");
++			// Retained audit history does not mean this session still uses Audit.
++			if (preset !== "audit" && preset !== "guardian") return null;
++			return h(AuditSessionDock, Object.assign({}, props, { key: props.sessionId }));
++		}
++		function AuditSessionDock (props) {
+ 			var sessionId = props.sessionId;
+ 			var view = props.view;
+ 			var onAudit = props.onAudit;
+diff --git a/lib/service.js b/lib/service.js
+index 0a7470eec2b227d8da041f77c47ff3b6d0678bc1..37026076aa1a3eab3340d1341cad2a6532ac12a5 100644
+--- a/lib/service.js
++++ b/lib/service.js
+@@ -18,11 +18,7 @@ const RETIRED_PLUGIN = `dsh-${['guard', 'ian'].join('')}-mode`
+ const CORDIS_TOOL_NAMES = Object.freeze([
+   'cordis_inspect_list',
+   'cordis_inspect_query',
+-  'cordis_inspect_self',
+-  'cordis_define',
+-  'cordis_run',
+-  'cordis_stop',
+-  'cordis_undefine'
++  'plugin_manager'
+ ])
+ const REMEDIATION_SKILLS = Object.freeze([
+   {
+@@ -54,8 +50,9 @@ function capabilityLeasePrompt (remediation, skills) {
+     'Load the `editing-cordis-compositions` skill through the stable `skill` tool before changing DSH.',
+     'Load `cordis-plugin-development` only when the accepted remediation changes a plugin or model-facing tool.',
+     `Available remediation skills: ${skills.map(skill => `\`${skill.name}\``).join(', ')}.`,
+-    `Temporarily authorized Cordis tools: ${CORDIS_TOOL_NAMES.map(name => `\`${name}\``).join(', ')}.`,
++    `Temporarily authorized plugin development tools: ${CORDIS_TOOL_NAMES.map(name => `\`${name}\``).join(', ')}.`,
+     'Use search_tools and describe_tools when they are available; otherwise use the exact tools declared by the current DSH presentation.',
++    'Plugin Manager changes persist across every session in the current profile. Use only changes within the accepted remediation scope; do not treat this lease as permission for unrelated profile changes.',
+     'All calls remain subject to DSH permission, approval, safety, scheduling, and audit policy.',
+     '</audit-capability-lease>'
+   ].join('\n')
+diff --git a/package.json b/package.json
+index fde001cf1cce771098028b53edcebee15eb2ba8f..4effcdf103535bfd24678b711355a6a48e8dfa1b 100644
+--- a/package.json
++++ b/package.json
+@@ -1,110 +1,110 @@
+ {
+- "name": "dsh-audit-mode",
+- "version": "0.6.1",
+- "description": "Fifth DeepSeek Harness mode with configurable Codex, Claude Code, or DSH audits, user-approved remediation turns, progressive Cordis/skill elevation, safety pauses, and Web/TUI review controls.",
+- "license": "MIT",
+- "type": "module",
+- "main": "index.js",
+- "exports": {
+-  ".": "./index.js",
+-  "./client": {
+-   "types": "./lib/client.d.ts",
+-   "default": "./lib/client.js"
++  "name": "dsh-audit-mode",
++  "version": "0.6.1",
++  "description": "Fifth DeepSeek Harness mode with configurable Codex, Claude Code, or DSH audits, user-approved remediation turns, progressive Cordis/skill elevation, safety pauses, and Web/TUI review controls.",
++  "license": "MIT",
++  "type": "module",
++  "main": "index.js",
++  "exports": {
++    ".": "./index.js",
++    "./client": {
++      "types": "./lib/client.d.ts",
++      "default": "./lib/client.js"
++    },
++    "./invariant": "./lib/invariant.js",
++    "./cordis.patch.yml": "./cordis.patch.yml",
++    "./package.json": "./package.json"
+   },
+-  "./invariant": "./lib/invariant.js",
+-  "./cordis.patch.yml": "./cordis.patch.yml",
+-  "./package.json": "./package.json"
+- },
+- "files": [
+-  "index.js",
+-  "lib",
+-  "presets",
+-  "scripts",
+-  "test",
+-  "cordis.patch.yml",
+-  "README.md",
+-  "README.zh-CN.md",
+-  "LICENSE"
+- ],
+- "engines": {
+-  "node": ">=22.19.0"
+- },
+- "scripts": {
+-  "test": "node --test test/*.test.mjs",
+-  "check": "node --check index.js && node --check lib/*.js && node scripts/check-package.mjs && node --test test/*.test.mjs",
+-  "build:preset": "node scripts/build-preset.mjs",
+-  "pack:check": "npm pack --dry-run"
+- },
+- "keywords": [
+-  "deepseek-harness",
+-  "dsh",
+-  "dsh-plugin",
+-  "agent-preset",
+-  "audit",
+-  "auditor",
+-  "codex",
+-  "claude-code"
+- ],
+- "repository": {
+-  "type": "git",
+-  "url": "git+https://github.com/yhfgyyf/dsh-audit-mode.git"
+- },
+- "homepage": "https://github.com/yhfgyyf/dsh-audit-mode#readme",
+- "bugs": {
+-  "url": "https://github.com/yhfgyyf/dsh-audit-mode/issues"
+- },
+- "peerDependencies": {
+-  "@deepseek-ai/cordis": "^4.0.1",
+-  "@deepseek-ai/dsh-agent": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-agent-presets": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-commands": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-host-webserver": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-llm": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-skill": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/dsh-tools": "^0.1.1-rc.1 || ^0.1.2-alpha.2 || ^0.1.3-alpha.2",
+-  "@deepseek-ai/schemastery": "^3.18.1"
+- },
+- "peerDependenciesMeta": {
+-  "@deepseek-ai/cordis": {
+-   "optional": true
++  "files": [
++    "index.js",
++    "lib",
++    "presets",
++    "scripts",
++    "test",
++    "cordis.patch.yml",
++    "README.md",
++    "README.zh-CN.md",
++    "LICENSE"
++  ],
++  "engines": {
++    "node": ">=22.19.0"
+   },
+-  "@deepseek-ai/dsh-agent": {
+-   "optional": true
++  "scripts": {
++    "test": "node --test test/*.test.mjs",
++    "check": "node --check index.js && node --check lib/*.js && node scripts/check-package.mjs && node --test test/*.test.mjs",
++    "build:preset": "node scripts/build-preset.mjs",
++    "pack:check": "npm pack --dry-run"
+   },
+-  "@deepseek-ai/dsh-agent-presets": {
+-   "optional": true
++  "keywords": [
++    "deepseek-harness",
++    "dsh",
++    "dsh-plugin",
++    "agent-preset",
++    "audit",
++    "auditor",
++    "codex",
++    "claude-code"
++  ],
++  "repository": {
++    "type": "git",
++    "url": "git+https://github.com/yhfgyyf/dsh-audit-mode.git"
+   },
+-  "@deepseek-ai/dsh-commands": {
+-   "optional": true
++  "homepage": "https://github.com/yhfgyyf/dsh-audit-mode#readme",
++  "bugs": {
++    "url": "https://github.com/yhfgyyf/dsh-audit-mode/issues"
+   },
+-  "@deepseek-ai/dsh-host-webserver": {
+-   "optional": true
++  "peerDependencies": {
++    "@deepseek-ai/cordis": "^4.0.1",
++    "@deepseek-ai/dsh-agent": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-agent-presets": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-commands": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-host-webserver": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-llm": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-skill": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-tools": "^0.1.6-alpha.2",
++    "@deepseek-ai/schemastery": "^3.18.1"
+   },
+-  "@deepseek-ai/dsh-llm": {
+-   "optional": true
++  "peerDependenciesMeta": {
++    "@deepseek-ai/cordis": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-agent": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-agent-presets": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-commands": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-host-webserver": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-llm": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-skill": {
++      "optional": true
++    },
++    "@deepseek-ai/dsh-tools": {
++      "optional": true
++    },
++    "@deepseek-ai/schemastery": {
++      "optional": true
++    }
+   },
+-  "@deepseek-ai/dsh-skill": {
+-   "optional": true
+-  },
+-  "@deepseek-ai/dsh-tools": {
+-   "optional": true
+-  },
+-  "@deepseek-ai/schemastery": {
+-   "optional": true
+-  }
+- },
+- "dsh": {
+-  "bundle": {
+-   "patch": "./cordis.patch.yml"
+-  },
+-  "client": {
+-   "inject": [
+-    "@deepseek-ai/dsh-client-runtime",
+-    "@deepseek-ai/dsh-client-ui-conversation",
+-    "@deepseek-ai/dsh-client-ui-slots",
+-    "@deepseek-ai/dsh-client-locale"
+-   ],
+-   "platform": "web"
++  "dsh": {
++    "bundle": {
++      "patch": "./cordis.patch.yml"
++    },
++    "client": {
++      "inject": [
++        "@deepseek-ai/dsh-client-runtime",
++        "@deepseek-ai/dsh-client-ui-conversation",
++        "@deepseek-ai/dsh-client-ui-slots",
++        "@deepseek-ai/dsh-client-locale"
++      ],
++      "platform": "web"
++    }
+   }
+- }
+ }
+diff --git a/presets/audit/agent.cordis.yml b/presets/audit/agent.cordis.yml
+index 482b0c97ad411c2f14157f5b2f918e45bd021b42..740d7680f2a93f73d58b8ff05fb231242049b6c1 100644
+--- a/presets/audit/agent.cordis.yml
++++ b/presets/audit/agent.cordis.yml
+@@ -1,9 +1,9 @@
+-# The `code` agent preset: the standard coding agent, presented as Code Mode.
++# The `ptc` agent preset: the standard coding agent, presented as PTC mode.
+ #
+-# Everything in `standard` is here unchanged. What is added is the `tool-presentation`
+-# row: instead of one tool call per action, the model writes a TypeScript
+-# program against a generated SDK and `run_code` executes it, so a sequence
+-# that would be five round trips becomes one.
++# Most of `standard` is here unchanged. The deliberate exception is the
++# general-purpose `workflow` tool: PTC mode uses `run_code` as its model-authored
++# composition surface. The `tool-presentation` row turns the remaining registry
++# into a generated SDK, so a sequence that would be five round trips becomes one.
+ #
+ # The registry itself stays on the host plane — the agent loop's scheduler and
+ # the API proxy's presenters are its consumers — so what this preset owns is
+@@ -31,8 +31,9 @@
+ - id: persona
+   name: '@deepseek-ai/dsh-persona'
+   config:
+-    text: |-
+-      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
++    suffix: Your working directory is {{cwd}}.
++    prefix: |-
++      You are a coding agent powered by the {{model}} model.
+ 
+       This session runs in AUDIT MODE. An independent auditor reviews progress
+       through a sidecar. Unaccepted summaries, verdicts, and findings do not enter
+@@ -100,9 +101,14 @@
+ - id: tool-skill
+   name: '@deepseek-ai/dsh-tool-skill'
+ 
+-# Stable bridge for future Audit capabilities. The tool name and schema do
+-# not change when a dynamic capability is added, preserving the prompt prefix.
+-# Audit findings are deliberately not available through this model-facing seam.
++# ── goals ───────────────────────────────────────────────────────────────────
++
++# The goal service and session driver stay on the host plane, where the Gateway
++# can resolve them. The human command and model-facing tool register into this
++# preset's scoped layers.
++- id: command-goal
++  name: '@deepseek-ai/dsh-command-goal'
++
+ - id: audit-capability-tool
+   name: ../../lib/tool.js
+ 
+@@ -114,6 +120,7 @@
+ # resolves `goals` on the host and an entry-local realm here would hide it. The
+ # registry is keyed by session anyway, so one host instance serves every
+ # session. What a preset chooses is whether its agent can call the goal tool.
++
+ - id: tool-goal
+   name: '@deepseek-ai/dsh-tool-goal'
+ 
+@@ -202,8 +209,13 @@
+       config:
+         provider: spawn
+         toolName: subagent
++        modelSelectionSettings: true
+         backgroundMode: continuable
+ 
++    # Fork omits model selection so provider/model stay equal to the parent and
++    # the inherited history remains eligible for KV Cache reuse. This preset
++    # keeps fork continuable; parent and child inherit the same messaging tool,
++    # while the parent id and return guidance follow the inherited history.
+     - id: tool-subagent-fork
+       name: '@deepseek-ai/dsh-tool-subagent'
+       config:
+@@ -233,16 +245,27 @@
+         backgroundMode: one-shot
+         maxDepth: provider-managed
+ 
+-    - id: workflow-worker-thread
+-      name: '@deepseek-ai/dsh-workflow-worker-thread'
++    - id: workflow-ptc
++      name: '@deepseek-ai/dsh-workflow-ptc'
++      # No consumer here: `tool-workflow` is off in PTC mode and `tool-ralph`
++      # below is off by default. Restore this row together with `tool-ralph`.
++      disabled: true
+       config:
+         provider: spawn
+ 
+     - id: tool-workflow
+       name: '@deepseek-ai/dsh-tool-workflow'
++      # Do not publish a second model-authored orchestration surface beside
++      # `run_code` in PTC mode.
++      disabled: true
+ 
++    # Off by default with the base row it mirrors. Preset files take no patches,
++    # so a session that wants it duplicates this preset under a new id and drops
++    # `disabled` from this row and from the engine above; the shipped root
++    # shadows a copy that reuses this id.
+     - id: tool-ralph
+       name: '@deepseek-ai/dsh-tool-ralph'
++      disabled: true
+       config:
+         subagentProvider: spawn
+         maxRounds: 64
+@@ -262,16 +285,14 @@
+ - id: tool-web
+   name: '@deepseek-ai/dsh-tool-web'
+   config:
+-    fetch: false
++    fetch: true
+     searchTimeoutMs: 60000
+ 
+ # ── presentation ────────────────────────────────────────────────────────────
+ 
+-# PTC/Code Mode for this agent alone. The row waits for the host's `codeRuntime`
++# PTC mode for this agent alone. The row waits for the host's `ptcRuntime`
+ # rather than assuming it: a deployment that composes no TypeScript runtime
+ # fails this preset at mount, naming this id, instead of at the first request.
+-# DSH 0.1.2 renamed the presentation enum from `code` to `ptc`; inspect the
+-# installed presenter so one plugin release remains compatible with rc.1/rc.2.
+ - id: tool-presentation
+   name: '@deepseek-ai/dsh-agent-tool-presentation'
+   config:
+@@ -283,9 +304,14 @@
+ # these registered but agent-scoped-restricted during ordinary work. A user
+ # acceptance of critical remediation temporarily lifts that restriction, so
+ # the next request sees the Cordis SDK only at the tail repair boundary.
++
++- id: present
++  name: '@deepseek-ai/dsh-tool-present'
++
++- id: tool-plugin-manager
++  name: '@deepseek-ai/dsh-plugin-manager/tools'
++  disabled: true
++
++# Model-facing Cordis tools; Audit controls their remediation boundary.
+ - id: tool-cordis
+   name: '@deepseek-ai/dsh-tool-cordis'
+-
+-# The composition-authoring skills are intentionally not part of the standing
+-# skill catalog. Audit registers and injects them only for a user-approved
+-# critical remediation, then removes them after the verification audit.
+diff --git a/presets/audit/skills/cordis-plugin-development/SKILL.md b/presets/audit/skills/cordis-plugin-development/SKILL.md
+index eac4299d227844bc6ad81ceafdd13e4ba02cce92..aa40d0dbb8c0a3fb82eca5bdfe740bdd2d19297f 100644
+--- a/presets/audit/skills/cordis-plugin-development/SKILL.md
++++ b/presets/audit/skills/cordis-plugin-development/SKILL.md
+@@ -9,10 +9,10 @@ Use this only when the current task genuinely needs a DSH capability that the mo
+ 
+ 1. Inspect the live Host and Client interfaces with the Cordis inspect tools before writing code. Do not infer service methods, event payloads, slot props, or theme tokens.
+ 2. Choose the owning plane: files, processes, sessions, and cross-session state belong on Host; page layout and visual state belong on Client. A feature spanning both uses a small private bridge.
+-3. Read the current plugin/package with the self-inspection tool before updating it. Add a new immutable package version; do not rewrite history.
++3. Inspect the installed package and use `plugin_manager` list operations to obtain exact bundle and entry identifiers. Author an ordinary workspace bundle with a unique package name and `dsh.bundle.patch`; do not use the removed dynamic define/run/undefine API.
+ 4. Register every effect through the Cordis lifecycle and retain the disposer. Keep optional services optional with `ctx.get()`; declare `inject` only for hard dependencies.
+-5. Client code is plain JavaScript with `React.createElement`, not JSX. Host code must use the inspected builtins and services.
+-6. Preview and define the smallest implementation, activate the exact returned package, inspect diagnostics, then verify the behavior that motivated the change.
+-7. Stop or roll back a bad package. Permanently undefine only when the user explicitly wants deletion.
++5. Client code registers its package factory through `window.__ModuleLoader__.load` and can use `React.createElement`. Query the exact current slot contract; session-local projections use `useProjection`, not the global session summary.
++6. Check syntax and package metadata, then use `plugin_manager` with `action: install_bundle` and the absolute package directory. Inspect application and activation results, then verify the behavior that motivated the change. Pass `approvedBuilds` only after explicit user approval for the reported scripts.
++7. Plugin Manager changes persist across every session in this profile. Stay within the accepted remediation scope; keep a rollback copy and disable a faulty bundle through `set_bundle`. Remove a bundle only when deletion is within the user-approved scope.
+ 
+ For Audit extensions, keep the top-level model tool fixed as `audit_capability`. Register new behavior behind the Audit service capability registry so the early prompt and tool catalog do not change. Never expose raw or unaccepted audit feedback through this bridge. An accepted remediation is a bounded tail message owned by the approval service, not a general feedback API.
+diff --git a/presets/audit/skills/editing-cordis-compositions/SKILL.md b/presets/audit/skills/editing-cordis-compositions/SKILL.md
+index d64e1a74550743f6959789d3712eb81628f72ac4..a45c40c54aca927af13e634db7f1ba02b36194a4 100644
+--- a/presets/audit/skills/editing-cordis-compositions/SKILL.md
++++ b/presets/audit/skills/editing-cordis-compositions/SKILL.md
+@@ -12,6 +12,7 @@ Never edit a preset in the installed DSH package. Copy or change only the plugin
+ - A service created by a preset and all its consumers must share an isolated realm. A preset row that only consumes a host service stays outside such a realm.
+ - Preserve the main session's chosen model, effort, and permissions. Audit is an explicit fifth preset and must not alter Auto Router's original four targets.
+ - Use `agentPresets.standingKeyFor(id)` to mount-validate the finished preset, then create a real session and inspect its tool list. A roster entry alone is not validation.
++- Use the current `ptcRuntime` service, `@deepseek-ai/dsh-ptc-runtime-node` host provider and `@deepseek-ai/dsh-workflow-ptc` workflow package.
+ - Keep Codex and Claude providers host-side optional bundles; a preset can expose their delegation tools only after the matching provider is installed.
+ 
+-Audit mode combines the shipped code-mode tool presentation with user-approved Cordis self-modification. Keep `audit_capability` as one stable model-facing bridge. Unaccepted summaries, verdicts, findings, and all reviewer thread state stay out of the agent composition and main session messages; only the bounded remediation accepted by the user may be appended at the conversation tail.
++Audit mode combines the shipped PTC tool presentation with user-approved persistent plugin management. Keep `audit_capability` as one stable model-facing bridge. Unaccepted summaries, verdicts, findings, and all reviewer thread state stay out of the agent composition and main session messages; only the bounded remediation accepted by the user may be appended at the conversation tail.
+diff --git a/scripts/build-preset.mjs b/scripts/build-preset.mjs
+index 1cb2821a9af375cdc89c08871c265756e2a985d4..7cb8a77110621a497b701cb6fa0996650cafa9e7 100644
+--- a/scripts/build-preset.mjs
++++ b/scripts/build-preset.mjs
+@@ -1,41 +1,40 @@
+-// Build presets/audit/agent.cordis.yml from the shipped code + cordis
+-// compositions: code (PTC) first, then cordis-specific rows replace/append.
+-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+-import { dirname, join } from 'node:path'
++// Refresh the shipped PTC tools while retaining Audit-owned persona and capability boundaries.
++import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs'
++import { dirname, join, resolve } from 'node:path'
+ import { fileURLToPath } from 'node:url'
+ 
+ const here = dirname(fileURLToPath(import.meta.url))
+ const root = join(here, '..')
++const row = id => new RegExp(`^- id: ${id}\\n[\\s\\S]*?(?=\\n- id: |(?![\\s\\S]))`, 'm')
+ 
+-function findShipped (name) {
+-  const source = process.env.DSH_SOURCE
+-  if (source === undefined || source === '') {
+-    throw new Error('DSH_SOURCE must point to the shipped config/agent-presets directory')
++export function buildPreset (code, cordis, audit) {
++  const required = id => {
++    const value = audit.match(row(id))?.[0]
++    if (value === undefined) throw new Error('Audit template has no ' + id + ' row')
++    return value.trimEnd()
+   }
+-  return join(source, name, 'agent.cordis.yml')
+-}
+-
+-function parseRows (file) {
+-  const text = readFileSync(file, 'utf8')
+-  // the shipped files are literal YAML lists; we re-emit them verbatim for
+-  // compatibility instead of parsing (comments and !!js expressions survive).
+-  return text
++  const persona = required('persona')
++  if (!/\n    prefix:/.test(persona)) throw new Error('Audit persona requires the current prefix field')
++  if (!row('persona').test(code) || !row('tool-presentation').test(code) || !row('tool-goal').test(code)) throw new Error('Shipped PTC composition is incomplete')
++  const cordisTool = cordis.match(/- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/u)?.[0]
++  if (cordisTool === undefined) throw new Error('Shipped Cordis composition has no tool-cordis row')
++  const pluginManager = row('tool-plugin-manager').test(code)
++    ? undefined
++    : cordis.match(row('tool-plugin-manager'))?.[0]?.trimEnd()
++  return code.replace(row('persona'), persona + '\n')
++    .replace(row('tool-presentation'), required('tool-presentation') + '\n')
++    .replace(/^- id: tool-goal/m, required('audit-capability-tool') + '\n\n- id: tool-goal')
++    .trimEnd() + '\n\n# Model-facing Cordis tools; Audit controls their remediation boundary.\n' + cordisTool + '\n' + (pluginManager === undefined ? '' : '\n' + pluginManager + '\n')
+ }
+ 
+-if (!process.argv.includes('--raw-only')) {
+-  // Take code fully, add the package skill directory to its existing skill
+-  // provider, and append only Cordis's self-modification tool. Appending the
+-  // full block would duplicate both skill-filesystem and tool-skill ids.
+-  const code = parseRows(findShipped('code'))
+-  const cordis = parseRows(findShipped('cordis'))
+-  const withSkills = code.replace(
+-    "- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n",
+-    "- id: skill-filesystem\n  name: '@deepseek-ai/dsh-skill-filesystem'\n  config:\n    customSkillDirs:\n      - !!js \"process.getBuiltinModule('node:url').fileURLToPath(new URL('skills/', baseUrl))\"\n"
+-  )
+-  const toolCordis = cordis.match(/- id: tool-cordis\n  name: '@deepseek-ai\/dsh-tool-cordis'/u)?.[0]
+-  if (toolCordis === undefined) throw new Error('shipped cordis preset has no tool-cordis row')
+-  mkdirSync(join(root, 'presets', 'audit'), { recursive: true })
+-  writeFileSync(join(root, 'presets', 'audit', 'agent.cordis.yml'),
+-    withSkills.replace(/\n$/, '') + '\n\n# ── self-modification ───────────────────────────────────────────────────────\n\n' + toolCordis + '\n')
+-  console.log('presets/audit/agent.cordis.yml rebuilt from shipped code + cordis')
++if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url) && !process.argv.includes('--raw-only')) {
++  const source = process.env.DSH_SOURCE
++  if (!source) throw new Error('DSH_SOURCE must point to the shipped agent-presets directory')
++  const path = name => join(source, name, 'agent.cordis.yml')
++  const target = join(root, 'presets/audit/agent.cordis.yml')
++  const code = readFileSync(path(existsSync(path('ptc')) ? 'ptc' : 'code'), 'utf8')
++  const result = buildPreset(code, readFileSync(path('cordis'), 'utf8'), readFileSync(target, 'utf8'))
++  mkdirSync(dirname(target), { recursive: true })
++  writeFileSync(target, result)
++  console.log('Audit preset refreshed; persona, capability tool and remediation boundaries preserved')
+ }
+diff --git a/scripts/check-remediation-runtime.mjs b/scripts/check-remediation-runtime.mjs
+index 0c535b0b43bbfa67d7fdeed9df91800040506548..280398c2544d64bba27079c395475971232259be 100644
+--- a/scripts/check-remediation-runtime.mjs
++++ b/scripts/check-remediation-runtime.mjs
+@@ -4,11 +4,7 @@ import { AuditService } from '../lib/service.js'
+ const cordisNames = [
+   'cordis_inspect_list',
+   'cordis_inspect_query',
+-  'cordis_inspect_self',
+-  'cordis_define',
+-  'cordis_run',
+-  'cordis_stop',
+-  'cordis_undefine'
++  'plugin_manager'
+ ]
+ 
+ function fixture (verdict) {
+@@ -37,20 +33,22 @@ function fixture (verdict) {
+     session: { id: 'session-runtime', events: [] },
+     ctx: { get: (name) => name === 'tools' ? tools : name === 'skills' ? skills : undefined },
+     cancel: (...args) => cancellations.push(args),
+-    send: (message, target, wakeup) => sent.push({ message, target, wakeup })
++    steer: message => sent.push({ message, target: 'next-step', wakeup: true }),
++    followup: message => sent.push({ message, target: 'next-turn', wakeup: true })
+   }
+   const engine = {
+     get: async () => ({
+       pendingApproval: { status: 'pending', verdict },
+       remediation: undefined
+     }),
+-    accept: async (_sessionId, auditId) => ({
++    accept: async (_sessionId, auditId, _editedText, delivery) => ({
+       remediation: {
+         id: `remediation-${auditId}`,
+         auditId,
+         verdict,
+         prompt: `repair ${verdict}`,
+         phase: 'queued',
++        delivery,
+         elevated: verdict === 'critical'
+       }
+     }),
+@@ -83,6 +81,9 @@ const criticalText = critical.sent[0].message.content.map((block) => block.text
+ assert.match(criticalText, /editing-cordis-compositions/)
+ assert.match(criticalText, /cordis-plugin-development/)
+ assert.match(criticalText, /<audit-capability-lease/)
++assert.match(criticalText, /plugin_manager/)
++assert.match(criticalText, /persist across every session/)
++assert.doesNotMatch(criticalText, /cordis_define|cordis_run|cordis_undefine/)
+ assert.match(criticalText, /search_tools and describe_tools/)
+ assert.doesNotMatch(criticalText, /<skill_content/)
+ assert.equal(critical.sent[0].wakeup, true)
+@@ -98,10 +99,11 @@ await warning.service.accept('session-runtime', 'audit-warning')
+ assert.equal(warning.restrictions[0].disposed, false)
+ assert.equal(warning.skillDefinitions.length, 0)
+ assert.equal(warning.sent.length, 1)
++assert.equal(warning.sent[0].target, 'next-step')
+ assert.equal(warning.sent[0].message.source.kind, 'plugin')
+ 
+ const queueFailure = fixture('critical')
+-queueFailure.agent.send = () => { throw new Error('inbox unavailable') }
++queueFailure.agent.followup = () => { throw new Error('inbox unavailable') }
+ await assert.rejects(queueFailure.service.accept('session-runtime', 'audit-critical'), /inbox unavailable/)
+ assert.equal(queueFailure.remediationFailures[0].error.code, 'QUEUE_FAILED')
+ assert.equal(queueFailure.skillDisposals.length, 2)
+diff --git a/test/client.test.mjs b/test/client.test.mjs
+index c705e7ff24aa6724c6887bafdf8526e12e429bbb..df44ee1ab9cfb6b8102c8f1ecda5390eaeea9b3d 100644
+--- a/test/client.test.mjs
++++ b/test/client.test.mjs
+@@ -9,6 +9,32 @@ import vm from 'node:vm'
+ const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+ const clientSource = readFileSync(join(root, 'lib/client.js'), 'utf8')
+ 
++test('audit dock ignores retained audit state outside the current audit preset', () => {
++  let client
++  const effects = []
++  vm.runInNewContext(clientSource, { window: { __ModuleLoader__: {
++    load: entry => { client = entry.factory(() => ({
++      createElement: (type, props) => ({ type, props }),
++      useState: initial => [initial, () => {}],
++      useEffect: effect => effects.push(effect)
++    })) }
++  } } })
++  let preset = 'audit'
++  const props = {
++    sessionId: 'previously-audited',
++    view: { active: true, completedSteps: 2, auditCount: 1, failureCount: 0 },
++    useProjection: name => { assert.equal(name, 'agentPreset'); return preset }
++  }
++  assert.ok(client.AuditDock(props), 'audit mode keeps its controls')
++  for (preset of ['standard', 'code', 'minimal', 'cordis', 'auto', undefined]) {
++    assert.equal(client.AuditDock(props), null, `hide retained audit state in ${preset}`)
++  }
++  preset = 'audit'
++  const resumed = client.AuditDock(props)
++  assert.equal(resumed.props.key, props.sessionId, 'each session owns a fresh audit subscription')
++  assert.equal(effects.length, 0, 'the visibility gate never starts snapshot or watch effects')
++})
++
+ test('the browser half registers the audit dock at order 5', async () => {
+   let loaded
+   let loadedExports
+diff --git a/test/preset-build.test.mjs b/test/preset-build.test.mjs
+new file mode 100644
+index 0000000000000000000000000000000000000000..66bf34a3fed01516dbf6004c8e5456b2b975a181
+--- /dev/null
++++ b/test/preset-build.test.mjs
+@@ -0,0 +1,36 @@
++import test from 'node:test'
++import assert from 'node:assert/strict'
++import { readFileSync } from 'node:fs'
++import { buildPreset } from '../scripts/build-preset.mjs'
++const audit = readFileSync(new URL('../presets/audit/agent.cordis.yml', import.meta.url), 'utf8')
++const code = "- id: persona\n  name: '@deepseek-ai/dsh-persona'\n  config:\n    prefix: Shipped identity\n- id: tool-goal\n  name: '@deepseek-ai/dsh-tool-goal'\n- id: tool-presentation\n  name: '@deepseek-ai/dsh-agent-tool-presentation'\n  config:\n    mode: ptc\n"
++const cordis = "- id: tool-cordis\n  name: '@deepseek-ai/dsh-tool-cordis'\n"
++
++test('regenerating the preset keeps current persona fields and Audit remediation boundaries', () => {
++  const result = buildPreset(code, cordis, audit)
++  assert.match(result, /prefix: \|-\n\s+You are a coding agent/)
++  assert.match(result, /suffix: Your working directory/)
++  assert.match(result, /AUDIT MODE/)
++  assert.match(result, /Only a remediation explicitly accepted by the user/)
++  assert.match(result, /name: ..\/..\/lib\/tool.js/)
++  assert.equal((result.match(/^- id: tool-cordis$/gm) ?? []).length, 1)
++  assert.doesNotMatch(result, /customSkillDirs|Shipped identity/)
++})
++
++
++test('alpha.2 regeneration includes the official persistent management tool without loading repair skills', () => {
++  const officialCordis = cordis + "\n- id: tool-plugin-manager\n  name: '@deepseek-ai/dsh-plugin-manager/tools'\n"
++  const result = buildPreset(code, officialCordis, audit)
++  assert.equal((result.match(/^- id: tool-plugin-manager$/gm) ?? []).length, 1)
++  assert.match(result, /@deepseek-ai\/dsh-plugin-manager\/tools/)
++  assert.doesNotMatch(result, /customSkillDirs/)
++})
++
++
++test('regeneration keeps one management row when the shipped PTC preset already includes it', () => {
++  const management = "\n- id: tool-plugin-manager\n  name: '@deepseek-ai/dsh-plugin-manager/tools'\n"
++  const result = buildPreset(code + management, cordis + management, audit)
++  assert.equal((result.match(/^- id: tool-plugin-manager$/gm) ?? []).length, 1)
++  const ids = [...result.matchAll(/^- id: ([^\n]+)/gm)].map(match => match[1])
++  assert.equal(new Set(ids).size, ids.length, 'top-level preset rows must have unique ids')
++})

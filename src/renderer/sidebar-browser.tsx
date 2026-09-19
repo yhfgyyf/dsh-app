@@ -11,6 +11,7 @@ export interface BrowserContext {
     isExpanded(): boolean; toggleExpanded(): void;
     active(): { contentId: string } | undefined;
     openResource(address: string, options?: { kind?: string; params?: { source?: boolean } }): void;
+    openResourceIn(sessionId: string, address: string, options: { kind: string; paneId: string; params: { source: boolean } }): void;
   };
   sidebarRightTabs: { register(definition: { id: string; kind: string; patterns?: string[]; priority: 'extension'; title(address: string): string; guide?: { order: number; title(): string; description(): string }[] }): Disposer };
   slots: {
@@ -21,13 +22,13 @@ export interface BrowserContext {
 interface TabProps {
   sessionId: string;
   useSessions<T>(selector: (state: { byId: Record<string, { cwd?: string } | undefined> }) => T): T;
-  useTabInfo(): { tab: { id: string; kind: string; contentId: string; visible: boolean; signal: AbortSignal; navigation: { revision: number }; actions: { openResource(address: string, options?: { replaceTab?: boolean }): void } } };
-  ctx: BrowserContext;
+  useTabInfo(): { panel: { id: string }; tab: { id: string; kind: string; contentId: string; visible: boolean; signal: AbortSignal; navigation: { revision: number }; actions: { openResource(address: string, options?: { replaceTab?: boolean }): void } } };
   retain(id: string, signal: AbortSignal): void;
+  openSource(sessionId: string, address: string, paneId: string): void;
 }
 
-function BrowserTab({ sessionId, useSessions, useTabInfo, ctx, retain }: TabProps) {
-  const { tab } = useTabInfo();
+function BrowserTab({ sessionId, useSessions, useTabInfo, retain, openSource }: TabProps) {
+  const { tab, panel } = useTabInfo();
   const id = `${sessionId}:${tab.id}`;
   const cwd = useSessions(sessions => sessions.byId[sessionId]?.cwd);
   const preview = tab.kind === 'preview';
@@ -98,7 +99,7 @@ function BrowserTab({ sessionId, useSessions, useTabInfo, ctx, retain }: TabProp
       <button title="前进" aria-label="前进" disabled={!state?.canGoForward} onClick={() => { void window.dshDesktop?.browserAction(id, 'forward'); }}>→</button>
       <button title={state?.loading ? '停止加载' : '刷新'} aria-label={state?.loading ? '停止加载' : '刷新'} disabled={!opened} onClick={() => { setError(undefined); void window.dshDesktop?.browserAction(id, state?.loading ? 'stop' : 'reload'); }}>{state?.loading ? '×' : '↻'}</button>
       <form onSubmit={navigate}><input aria-label={preview ? '预览文件路径' : '网址'} placeholder="输入网址" value={address} readOnly={preview} onChange={event => setAddress(event.target.value)} /></form>
-      {preview ? <button onClick={() => ctx.sidebarRight.openResource(tab.contentId, { kind: 'text', params: { source: true } })}>源码</button> : <button title="在外部浏览器打开" aria-label="在外部浏览器打开" disabled={!externalWebUrl(state?.url)} onClick={() => { if (state) void window.dshDesktop?.openExternal(state.url); }}>↗</button>}
+      {preview ? <button onClick={() => openSource(sessionId, tab.contentId, panel.id)}>源码</button> : <button title="在外部浏览器打开" aria-label="在外部浏览器打开" disabled={!externalWebUrl(state?.url)} onClick={() => { if (state) void window.dshDesktop?.openExternal(state.url); }}>↗</button>}
     </div>
     {(error || state?.error) && <p className="desktop-browser-error" role="alert">{error || state?.error}</p>}
     <div className="desktop-browser-viewport" ref={viewport}>
@@ -109,6 +110,10 @@ function BrowserTab({ sessionId, useSessions, useTabInfo, ctx, retain }: TabProp
 
 export function installSidebarBrowser(ctx: BrowserContext): void {
   const lifetimes = new Map<string, { signal: AbortSignal; close: Disposer }>();
+  // Tab actions preserve ownership but do not accept a renderer kind override.
+  const openSource = (sessionId: string, address: string, paneId: string) => {
+    ctx.sidebarRight.openResourceIn(sessionId, address, { kind: 'text', paneId, params: { source: true } });
+  };
   const retain = (id: string, signal: AbortSignal) => {
     if (lifetimes.get(id)?.signal === signal) return;
     lifetimes.get(id)?.close();
@@ -129,6 +134,6 @@ export function installSidebarBrowser(ctx: BrowserContext): void {
     { id: PREVIEW_TAB_ID, kind: 'preview', patterns: ['*.html', '*.htm', '*.svg', '*.png', '*.jpg', '*.jpeg', '*.gif', '*.webp', '*.pdf'], priority: 'extension' as const, title: browserTitle },
   ]) {
     ctx.effect(() => ctx.sidebarRightTabs.register(definition), `desktop: ${definition.kind} tab`);
-    ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: definition.id, inject: () => ({ ctx, retain }) }, BrowserTab)), `desktop: ${definition.kind} body`);
+    ctx.effect(() => ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: definition.id, inject: () => ({ retain, openSource }) }, BrowserTab)), `desktop: ${definition.kind} body`);
   }
 }

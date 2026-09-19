@@ -1,0 +1,19 @@
+{
+  "dsh": "0.1.6-alpha.2",
+  "files": [
+    {
+      "package": "@deepseek-ai/dsh-client-ui-plugin-manager",
+      "path": "@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js",
+      "before": "c09baef5697c4fe58604a9c272a02f5f02b34290b40d7ef372886699d7785656",
+      "after": "0d4dd5fa4a93036f7d092cdd6a45119f7f9b6c296c4906a07854d97d1c1dc901",
+      "patchSha256": "2c3f607b41fef30aa61d6e1024d587d42d2200ddf47198e0f7e13b66a2d2653a",
+      "upgrades": [
+        {
+          "before": "1de57f1b0b966e38ec06c7480f867613cc4569c86cd606e20650cf4fd2445d4c",
+          "patch": "upgrade-0.1.14.patch",
+          "patchSha256": "acc2c1d6d5252a24088b1372523609f50a3ba7843d4fe9ad8ebe78d0a7a08554"
+        }
+      ]
+    }
+  ]
+}

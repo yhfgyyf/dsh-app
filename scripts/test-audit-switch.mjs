@@ -23,7 +23,7 @@ export function apply(ctx) {
   });
 }`);
 await writeFile(join(data, 'core/desktop.patch.yml'), '- insert:\n    - id: audit-test-inspect\n      name: ' + JSON.stringify(inspectPlugin) + '\n');
-await writeFile(join(home, 'settings.yaml'), 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-flash\n');
+await writeFile(join(home, 'settings.yaml'), 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n');
 const core = new DesktopRuntime({ runtimeRoot: join(root, '.runtime'), entry: join(root, '.runtime/app/index.ts'), home: join(data, 'core'), configHome: home, cwd: data, onExit: () => {} });
 const results = [];
 let client;
