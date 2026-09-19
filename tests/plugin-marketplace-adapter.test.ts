@@ -90,7 +90,7 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     await writeFile(join(runtimeNodeModules, packageName, 'package.json'), JSON.stringify({ name: packageName, version: '0.1.6-alpha.2' }));
     await writeFile(target, source);
     const patch = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace/client.patch');
-    const reversed = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), patch], { cwd: scratch, encoding: 'utf8' });
+    const reversed = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), patch], { cwd: scratch, encoding: 'utf8' });
     assert.equal(reversed.status, 0, reversed.stderr);
     const before = await readFile(target, 'utf8');
     const options = { runtimeNodeModules, backupHome: join(scratch, 'backup') };
@@ -102,7 +102,7 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     assert.equal(await readFile(target, 'utf8'), source);
     // An already-installed 0.1.14 adapter has its own exact migration path.
     const upgradePatch = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace/upgrade-0.1.14.patch');
-    const oldVersion = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), upgradePatch], { cwd: scratch, encoding: 'utf8' });
+    const oldVersion = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), upgradePatch], { cwd: scratch, encoding: 'utf8' });
     assert.equal(oldVersion.status, 0, oldVersion.stderr);
     assert.deepEqual(await applyPluginMarketplace({ ...options, mode: 'check' }), { pending: 1 });
     assert.equal((await applyPluginMarketplace(options)).changed, 1);

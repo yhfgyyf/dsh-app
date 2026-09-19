@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { basename, isAbsolute, join, resolve, sep } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { startRegistry } = require('./fixtures/plugin-marketplace-registry.cjs');
 const root = join(__dirname, '..');
 const reports = join(root, '.test-data', 'plugin-marketplace-native');
@@ -224,7 +225,7 @@ async function run(host) {
   writeFileSync(join(home, '.credentials.yaml'), JSON.stringify({
     version: 1, refs: { DSH_MARKETPLACE_LOCAL_KEY: 'disposable-marketplace-fixture' }, records: {},
   }), { mode: 0o600 });
-  process.env.NODE_OPTIONS = `--require=${registry.preload}`;
+  process.env.NODE_OPTIONS = `--import=${pathToFileURL(registry.preload).href}`;
   process.env.npm_config_userconfig = join(data, 'empty-npmrc');
   process.env.npm_config_registry = registry.origin;
   writeFileSync(process.env.npm_config_userconfig, '');
