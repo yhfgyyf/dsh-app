@@ -25,7 +25,7 @@ for(const name of ['web','tui']) {
  await writeFile(join(dir,'package.json'),JSON.stringify(manifest,null,2));
  await writeFile(join(dir,'cordis.patch.yml'),'- id: session-telemetry-otel\n  disabled: true\n');
 }
-await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-flash\n');
+await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n');
 const processes:ChildProcess[]=[]; const cores:DesktopRuntime[]=[]; const clients:Awaited<ReturnType<typeof connectFixture>>[]=[];
 const results:{name:string;status:string}[]=[];
 const until=async(fn:()=>boolean|Promise<boolean>,timeout=15000)=>{const t=Date.now();while(!await fn()){if(Date.now()-t>timeout)throw Error('Timed out');await new Promise(r=>setTimeout(r,50));}};

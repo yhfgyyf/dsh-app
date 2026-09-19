@@ -44,6 +44,8 @@ function restore() {
 }
 
 async function verifySelection(contents, text, until) {
+  contents.setBackgroundThrottling(false);
+  contents.focus();
   await contents.executeJavaScript('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
   const position = await contents.executeJavaScript(`(() => {
     const text = ${JSON.stringify(text)};

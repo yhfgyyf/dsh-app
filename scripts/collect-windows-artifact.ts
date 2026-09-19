@@ -14,6 +14,21 @@ if (nativeRuns.some(run => run.failures.length)) throw new Error('Native compute
 await writeFile(join(output, 'windows-computer-native-report.json'), JSON.stringify({ ...nativeLatest, runs: nativeRuns }, null, 2));
 await cp(join(root, '.test-data/computer-tools-latest.json'), join(output, 'windows-computer-tools-report.json'));
 await cp(join(root, '.test-data/computer-settings-latest.json'), join(output, 'windows-computer-settings-report.json'));
+const marketplaceRoot = join(root, '.test-data/plugin-marketplace-native');
+const marketplaceLatest = (await readdir(marketplaceRoot, { withFileTypes: true })).filter(entry => entry.isDirectory() && /^\d+$/.test(entry.name)).sort((a, b) => Number(b.name) - Number(a.name))[0];
+if (!marketplaceLatest) throw new Error('Marketplace verification report is missing.');
+const marketplaceDirectory = join(marketplaceRoot, marketplaceLatest.name);
+const marketplace = JSON.parse(await readFile(join(marketplaceDirectory, 'report.json'), 'utf8'));
+if (!Array.isArray(marketplace.failures) || marketplace.failures.length || !Array.isArray(marketplace.checks) || !marketplace.checks.length) throw new Error('Marketplace verification did not pass.');
+const marketplaceScreenshots = ['marketplace-high-risk-review.png', 'marketplace-enabled.png'];
+for (const name of marketplaceScreenshots) await cp(join(marketplaceDirectory, name), join(output, 'windows-' + name));
+// Publish only acceptance evidence, not the fixture home, configuration or logs.
+await writeFile(join(output, 'windows-plugin-marketplace-report.json'), JSON.stringify({
+  status: 'pass', run: marketplaceLatest.name, package: marketplace.package,
+  checks: marketplace.checks, failures: marketplace.failures,
+  modelRequests: marketplace.modelRequests, reviewedArchiveSha256: marketplace.reviewedArchive?.sha256,
+  screenshots: marketplaceScreenshots.map(name => 'windows-' + name),
+}, null, 2));
 for (const [from, to] of [['.test-data/windows-installer-report.json', 'windows-installer-report.json'], ['.test-data/native-owned/report.json', 'windows-native-report.json'], ['docs/evidence/three-surfaces.json', 'windows-three-surfaces-report.json'], ['.test-data/updates-native/latest.json', 'windows-updates-report.json'], ['.test-data/artifact-links-native/latest.json', 'windows-artifact-links-report.json'], ['.test-data/sidebar-browser-native/report.json', 'windows-sidebar-browser-report.json']]) await cp(join(root, from), join(output, to));
 await writeFile(join(output, 'SHA256SUMS-windows.txt'), `${artifact.sha256}  ${basename(artifact.installer)}\n`);
 await writeFile(join(output, 'windows-artifact.json'), JSON.stringify({ ...artifact, app: undefined, installer: basename(artifact.installer) }, null, 2));

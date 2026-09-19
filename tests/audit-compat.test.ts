@@ -18,7 +18,7 @@ test('the packaged audit dock only mounts for the current audit preset, even wit
     } : {}); } } },
     location: { origin: 'http://localhost:3080' },
   });
-  const render = (preset?: string, sessionId = 'one') => exports.AuditDock({ sessionId, view: { active: true }, useSessions: (select: any) => select({ byId: { [sessionId]: { projectionValues: { agentPreset: preset } } } }) });
+  const render = (preset?: string, sessionId = 'one') => exports.AuditDock({ sessionId, view: { active: true }, useProjection: (name: string) => { assert.equal(name, 'agentPreset'); return preset; } });
   for (const preset of ['standard', 'code', 'minimal', 'cordis', 'auto', undefined]) assert.equal(render(preset), null, String(preset));
   const audit = render('audit');
   assert.equal(typeof audit.type, 'function');
@@ -31,7 +31,7 @@ test('the packaged audit dock only mounts for the current audit preset, even wit
 // Exercise the exact patched runtime function, including failed partial registration.
 const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-tool-cordis/lib/index.js'), 'utf8');
 const start = source.indexOf('const hostInspectLeases = new WeakMap();');
-const end = source.indexOf('/** Register the Cordis tools and explicit', start);
+const end = source.indexOf('/** Register read-only runtime inspection tools.', start);
 assert.ok(start >= 0 && end > start, 'Prepare the Audit-compatible runtime before testing.');
 const providers = ['Service', 'Event', 'Builtin', 'Tool'];
 const acquire = new Function('hostInspectProviders', source.slice(start, end) + '\nreturn acquireHostInspectProviders;')((root: any) => providers.map(id => ({ manifest: { id }, root })));

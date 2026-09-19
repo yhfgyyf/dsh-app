@@ -1,0 +1,127 @@
+--- a/presets/audit/agent.cordis.yml
++++ b/presets/audit/agent.cordis.yml
+@@ -1,9 +1,9 @@
+-# The `code` agent preset: the standard coding agent, presented as Code Mode.
+-#
+-# Everything in `standard` is here unchanged. What is added is the `tool-presentation`
+-# row: instead of one tool call per action, the model writes a TypeScript
+-# program against a generated SDK and `run_code` executes it, so a sequence
+-# that would be five round trips becomes one.
++# The `ptc` agent preset: the standard coding agent, presented as PTC mode.
++#
++# Most of `standard` is here unchanged. The deliberate exception is the
++# general-purpose `workflow` tool: PTC mode uses `run_code` as its model-authored
++# composition surface. The `tool-presentation` row turns the remaining registry
++# into a generated SDK, so a sequence that would be five round trips becomes one.
+ #
+ # The registry itself stays on the host plane — the agent loop's scheduler and
+ # the API proxy's presenters are its consumers — so what this preset owns is
+@@ -101,9 +101,14 @@
+ - id: tool-skill
+   name: '@deepseek-ai/dsh-tool-skill'
+ 
+-# Stable bridge for future Audit capabilities. The tool name and schema do
+-# not change when a dynamic capability is added, preserving the prompt prefix.
+-# Audit findings are deliberately not available through this model-facing seam.
++# ── goals ───────────────────────────────────────────────────────────────────
++
++# The goal service and session driver stay on the host plane, where the Gateway
++# can resolve them. The human command and model-facing tool register into this
++# preset's scoped layers.
++- id: command-goal
++  name: '@deepseek-ai/dsh-command-goal'
++
+ - id: audit-capability-tool
+   name: ../../lib/tool.js
+ 
+@@ -115,6 +120,7 @@
+ # resolves `goals` on the host and an entry-local realm here would hide it. The
+ # registry is keyed by session anyway, so one host instance serves every
+ # session. What a preset chooses is whether its agent can call the goal tool.
++
+ - id: tool-goal
+   name: '@deepseek-ai/dsh-tool-goal'
+ 
+@@ -203,8 +209,13 @@
+       config:
+         provider: spawn
+         toolName: subagent
++        modelSelectionSettings: true
+         backgroundMode: continuable
+ 
++    # Fork omits model selection so provider/model stay equal to the parent and
++    # the inherited history remains eligible for KV Cache reuse. This preset
++    # keeps fork continuable; parent and child inherit the same messaging tool,
++    # while the parent id and return guidance follow the inherited history.
+     - id: tool-subagent-fork
+       name: '@deepseek-ai/dsh-tool-subagent'
+       config:
+@@ -234,16 +245,27 @@
+         backgroundMode: one-shot
+         maxDepth: provider-managed
+ 
+-    - id: workflow-worker-thread
+-      name: '@deepseek-ai/dsh-workflow-worker-thread'
++    - id: workflow-ptc
++      name: '@deepseek-ai/dsh-workflow-ptc'
++      # No consumer here: `tool-workflow` is off in PTC mode and `tool-ralph`
++      # below is off by default. Restore this row together with `tool-ralph`.
++      disabled: true
+       config:
+         provider: spawn
+ 
+     - id: tool-workflow
+       name: '@deepseek-ai/dsh-tool-workflow'
+-
++      # Do not publish a second model-authored orchestration surface beside
++      # `run_code` in PTC mode.
++      disabled: true
++
++    # Off by default with the base row it mirrors. Preset files take no patches,
++    # so a session that wants it duplicates this preset under a new id and drops
++    # `disabled` from this row and from the engine above; the shipped root
++    # shadows a copy that reuses this id.
+     - id: tool-ralph
+       name: '@deepseek-ai/dsh-tool-ralph'
++      disabled: true
+       config:
+         subagentProvider: spawn
+         maxRounds: 64
+@@ -263,16 +285,14 @@
+ - id: tool-web
+   name: '@deepseek-ai/dsh-tool-web'
+   config:
+-    fetch: false
++    fetch: true
+     searchTimeoutMs: 60000
+ 
+ # ── presentation ────────────────────────────────────────────────────────────
+ 
+-# PTC/Code Mode for this agent alone. The row waits for the host's `codeRuntime`
++# PTC mode for this agent alone. The row waits for the host's `ptcRuntime`
+ # rather than assuming it: a deployment that composes no TypeScript runtime
+ # fails this preset at mount, naming this id, instead of at the first request.
+-# DSH 0.1.2 renamed the presentation enum from `code` to `ptc`; inspect the
+-# installed presenter so one plugin release remains compatible with rc.1/rc.2.
+ - id: tool-presentation
+   name: '@deepseek-ai/dsh-agent-tool-presentation'
+   config:
+@@ -284,9 +304,14 @@
+ # these registered but agent-scoped-restricted during ordinary work. A user
+ # acceptance of critical remediation temporarily lifts that restriction, so
+ # the next request sees the Cordis SDK only at the tail repair boundary.
++
++- id: present
++  name: '@deepseek-ai/dsh-tool-present'
++
++- id: tool-plugin-manager
++  name: '@deepseek-ai/dsh-plugin-manager/tools'
++  disabled: true
++
++# Model-facing Cordis tools; Audit controls their remediation boundary.
+ - id: tool-cordis
+   name: '@deepseek-ai/dsh-tool-cordis'
+-
+-# The composition-authoring skills are intentionally not part of the standing
+-# skill catalog. Audit registers and injects them only for a user-approved
+-# critical remediation, then removes them after the verification audit.

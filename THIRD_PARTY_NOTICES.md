@@ -20,6 +20,11 @@ texts and notices are included under `dist/renderer/licenses` in the app.
 Spreadsheet code pages are distributed with SheetJS. Exact dependency versions
 and integrity hashes are pinned in `package-lock.json`.
 
+Plugin installation includes pnpm 11.7.0 (MIT), isolated under
+`runtime/package-manager/node_modules/pnpm` in the application resources. Its
+license and bundled dependency notices accompany the package. The exact package
+and integrity hash are pinned in `runtime/pnpm/package-lock.json`.
+
 Computer use includes Cua Driver and its Node SDK 0.25.0 (MIT), pinned to
 `trycua/cua` commit `45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f`.
 Its native Node bridge is derived from UniFFI Bindgen React Native 0.31.0-3

@@ -21,10 +21,10 @@ if(process.argv.includes('--verify'))throw Error('The complete patch is not inst
 if(states.some(x=>x==='patched'))throw Error('Partial application detected; restore the saved package before retrying');
 if(process.argv.includes('--check')){console.log(`Compatible stock runtime: ${states.length} patch targets.`);process.exit(0);}
 if(process.argv.slice(2).some(x=>x!=='--apply'))throw Error('Usage: apply.mjs [--apply|--check|--verify]');
-const backup=join(process.env.DSH_HOME??join(homedir(),'.dsh'),'backups','local-fixes-alpha2-'+new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(backup,{recursive:true,mode:0o700});
+const backup=join(process.env.DSH_HOME??join(homedir(),'.dsh'),'backups','local-fixes-0.1.6-alpha.2-'+new Date().toISOString().replace(/[:.]/g,'-'));await mkdir(backup,{recursive:true,mode:0o700});
 for(const f of manifest.files){const dest=join(backup,f.path);await mkdir(dirname(dest),{recursive:true});await cp(join(nm,f.path),dest);}
 await writeFile(join(backup,'manifest.json'),JSON.stringify(manifest,null,2));
-const work=await mkdtemp(join(tmpdir(),'dsh-alpha2-patch-'));
+const work=await mkdtemp(join(tmpdir(),'dsh-patch-'));
 try{for(const args of [['--check'],[]]){const result=spawnSync('git',['-c','core.autocrlf=false','-c','core.eol=lf','apply','--unsafe-paths','--directory='+nm.replaceAll('\\','/'),...args,join(dir,'dsh-local-fixes.patch')],{cwd:work,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||'git apply failed');}
 for(const f of manifest.files)if(sha(await readFile(join(nm,f.path)))!==f.after)throw Error('Post-apply checksum mismatch: '+f.path);
 console.log(`Applied and SHA-256 verified ${manifest.files.length} files. Backup: ${backup}`);

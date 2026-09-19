@@ -7,17 +7,20 @@ import { installLocalOpen } from './local-open.tsx';
 import { ComputerControl, ComputerSettings } from './computer-use.tsx';
 import { installDocumentPreviews } from './document-preview.tsx';
 import type { DocumentContext } from './document-preview.tsx';
+import { installPluginMarketplace } from './plugin-marketplace.tsx';
+import type { MarketplaceConnection } from './plugin-marketplace.tsx';
+import { installPluginSecurityReview } from './plugin-security.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
-type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string };
+type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string | undefined };
 
 // The narrow, verified public faces consumed from the installed DSH runtime.
 interface DesktopContext extends BrowserContext, DocumentContext {
   effect(factory: () => Disposer, label?: string): void;
   on(event: 'theme/change', listener: (snapshot: ThemeSnapshot) => void): Disposer;
   get(name: 'uiWorkspace'): { startSession(): void };
-  get(name: 'connection'): { state: StateSource; reconnect(): void };
+  get(name: 'connection'): MarketplaceConnection & { state: StateSource; reconnect(): void };
   layout: { toggleSidebar(): void };
   theme: {
     getTheme(): ThemeSnapshot;
@@ -107,6 +110,8 @@ export function apply(ctx: DesktopContext) {
   installSidebarBrowser(ctx);
   installDocumentPreviews(ctx);
   installLocalOpen(ctx);
+  installPluginMarketplace(ctx);
+  installPluginSecurityReview(ctx);
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };

@@ -1,0 +1,8 @@
+{
+  "dsh": "0.1.6-alpha.2",
+  "package": "@deepseek-ai/dsh-client-ui-sidebar-right",
+  "path": "@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
+  "upstream": true,
+  "sha256": "5eee7e8d43822caa8b05c9727fd89f89718faf6783af8a26a4eff5374184be18",
+  "reason": "Keep official dock, guide, terminal and floating-pane lifecycle; no replacement store patch."
+}

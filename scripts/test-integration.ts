@@ -193,11 +193,11 @@ try {
     const requestId = randomUUID();
     const controlBefore = control.frames.length;
     await rpc('session/prompt', { request: { sessionId, requestId, mode: 'queue', content: [{ type: 'text', text: '待编辑队列消息' }] } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'queue' && frame.items.some((item: any) => item.rpcId === requestId)));
-    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'queue' && frame.items.some((item: any) => item.rpcId === requestId));
-    const itemId = queueFrame.items.find((item: any) => item.rpcId === requestId).id;
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId)));
+    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId));
+    const itemId = queueFrame.value['next-turn'].find((item: any) => item.source?.rpcId === requestId).id;
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'edit', content: [{ type: 'text', text: '已编辑队列消息' }] } } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'queue' && JSON.stringify(frame.items).includes('已编辑队列消息')));
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && JSON.stringify(frame.value['next-turn']).includes('已编辑队列消息')));
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'remove' } } });
     await rpc('session/cancel', { request: { sessionId } });
     await session.wait(frames => frames.slice(before).some(frame => frame.type === 'event' && frame.event.type === 'turn/end'));
@@ -206,7 +206,7 @@ try {
     const before = session.frames.length;
     const png = pngFixture().toString('base64');
     await writeFile(join(root, '.test-data/desktop-fixture.png'), pngFixture());
-    const model = catalog.groups.flatMap((group: any) => group.models).find((model: any) => model.id.includes('vision'));
+    const model = catalog.groups.flatMap((group: any) => group.models).find((model: any) => model.id === 'deepseek-flash'); 
     assert.ok(model);
     await rpc('session/selectModel', { request: { sessionId, provider: 'deepseek-official', model: model.id, reasoningEffort: 'high' } });
     await rpc('session/prompt', { request: { sessionId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: '附件测试图片。' }, { type: 'image', mediaType: 'image/png', data: png, name: 'desktop-fixture.png' }] } });
