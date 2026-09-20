@@ -150,12 +150,33 @@
       "repository": "yhfgyyf/dsh-progressive-tools",
       "commit": "3df3e891d9b75dd3d5e3c70b0ba471857ad5166f",
       "version": "0.3.2",
-      "patchSha256": "6665edee9978da0c5d5e8cd204181624c0a8ce9794820ed6c957f00cfd73210b",
+      "patchSha256": "836f4ee18baa284631a87113b0b58c67f3cf4756f8c01674d125df20f342f68e",
       "files": [
+        {
+          "path": "README.md",
+          "before": "3d3e5c5792bfb94ccc4a4d13f402e9f05a29db4a038d4dfbaa3248b72a3f394b",
+          "after": "9c9e1fecda7a4f9ad3104c0903728424cac81c2b5bf8b95a13dbdf631f0e21b1",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "README.zh.md",
+          "before": "a7b6e0ad176e007021635aa5d91d3734d17d9f7c7811b6406ab2c2d7d199b5f6",
+          "after": "376f41951092fea17bde2f1cdd7ed54a06e5e1c9c3784cd180177522f3ebdacc",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/index.d.ts",
+          "before": "c40fd41bc92324b85720c4152a4a70f321854896d2eb2ea78fb2affb84756647",
+          "after": "62796d48d6ffad2f80c611f9337b554c7458452f762e774a610c270c470276c3",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
         {
           "path": "lib/index.js",
           "before": "b2078ceb216ba369e685081b74441e359ceb8a54762a0cf14dc6472da7a62436",
-          "after": "fe2b60e1427e72077c7178441bf6a978197b02d829f0f9bab75d77a306a6f97d",
+          "after": "b703a4516206200c0a3123b630df3e33a0c24af7ec0f3cf36e0107587ea03787",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -176,28 +197,49 @@
         {
           "path": "src/index.ts",
           "before": "f5cfed60bb00bff84d24d80c5e598d9e0dc30816cbff2e2e2cf256fb819eecf3",
-          "after": "5bc8d404408c7d816b630ca6581a745eefe0fce060ca9284c19a616b8fc36d15",
+          "after": "fd3f6e819e059c69331da7dc544ff476f5d8af4905bbb1ba5cda923327547810",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "src/invoke-result.ts",
+          "before": null,
+          "after": "73b461b3dea61aa99968768140d4b104e9636051cacbbab8e69f239ee7e76820",
+          "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "src/native-deferred.ts",
+          "before": "d3465c19726cc5bf747594ed70f4f8fe106f7c9feb053bf3e1ab81d5d52a20b4",
+          "after": "42c86592536e02d68a2989700cfff3a94214a6c2f4373f8a932dfddfa149c2b7",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
         {
           "path": "tests/agent-progressive-tools.spec.ts",
           "before": "23dc162cdb033ab76fd6f418a5ee28f17da9c56278fad3116d6a914a0b849197",
-          "after": "0086d3991e00416c1da16945173933c64273a3dda6e7d6c8c800957e935035e2",
+          "after": "d6aad54e2c04b4c8a4bd48d8e107458e1bdc9baf5cc8e9843437f5dd2d026ccb",
           "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "tests/invoke-result.spec.ts",
+          "before": null,
+          "after": "830d1b3b209af72f20321384d6fb6f697fe17ffca457c69fe25e0f1d636a56de",
+          "beforeMode": null,
           "afterMode": "100644"
         },
         {
           "path": "tests/loader-composition.spec.ts",
           "before": "d0d63767e263d7ad21cfbc4c03220158e99cb01229897a2a47e728d894b7c1be",
-          "after": "8d9b5557190a2b59f40fd008e284df48f87c74e7ee1b5cfa24fee8316ea32409",
+          "after": "5b342fec6d5e125c0d784b134d56273efa84a09d6c4cf405fdc8bd1174cecb5f",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
         {
           "path": "tests/native-deferred.spec.ts",
           "before": "be509b5ac86196076c1fa0f1532c6b9ba6b00d475ebd8effe27aa4aebad17a1b",
-          "after": "1e787fbc5a47e78b600ffd7c2d3eacc4c916bb139e9691bf20454d1799f12bf6",
+          "after": "13bcb3a55b994b2e7e8e6301d3179ef5824e7b1047fa6078821421263603e0ad",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
