@@ -110,7 +110,7 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
     assert.equal(await readFile(target, 'utf8'), source);
     const previous = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace/upgrade-0.1.16.patch');
-    const requiredReview = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), previous], { cwd: scratch, encoding: 'utf8' });
+    const requiredReview = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), previous], { cwd: scratch, encoding: 'utf8' });
     assert.equal(requiredReview.status, 0, requiredReview.stderr);
     assert.equal((await applyPluginMarketplace(options)).changed, 1);
     assert.equal(await readFile(target, 'utf8'), source);

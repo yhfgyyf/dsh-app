@@ -33,7 +33,7 @@
     "test:updates": "electron tests/updates-native.cjs",
     "test:update-network": "electron tests/update-network.cjs",
     "package": "npm run check && node scripts/package.ts",
-    "check": "npm run typecheck && npm test && npm run build",
+    "check": "npm run typecheck && npm run build && npm test",
     "setup:runtime": "node scripts/bootstrap-runtime.ts",
     "test:three-surfaces": "node scripts/test-three-surfaces.ts",
     "package:windows": "npm run check && node scripts/package-windows.ts",
