@@ -9,11 +9,11 @@ import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots';
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives';
 import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit';
 import { ArtifactMarkdown } from './artifact-markdown.tsx';
+import { createDesktopModuleFacade, DesktopSlotCore } from './univer-slot-compat.ts';
 import './updates.css';
 import { DESKTOP_PLUGIN_ID, withDesktopPlugin } from '../shared/dsh-boot.ts';
 import '../shared/desktop-api.ts';
 
-type Registration = { id: string; factory(require: (name: string) => unknown): any };
 const target = window as unknown as { __ModuleLoader__: any };
 const root = document.getElementById('root')!;
 const status = ReactDomClient.createRoot(root);
@@ -25,8 +25,8 @@ let context: Cordis.Context | undefined;
 async function bootDesktop() {
   const hostGraph = await window.dshDesktop!.getBoot();
   const graph = withDesktopPlugin(hostGraph, (await window.dshDesktop!.getInfo()).version);
-  const queue: Registration[] = [];
-  const facade = { mode: 'queue', pendingQueue: queue, load(registration: Registration) { queue.push(registration); } };
+  const facade = createDesktopModuleFacade();
+  const queue = facade.pendingQueue;
   target.__ModuleLoader__ = facade;
   const loadScript = (url: string) => new Promise<void>((resolve, reject) => {
     const script = document.createElement('script');
@@ -41,7 +41,7 @@ async function bootDesktop() {
   const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: {
     react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient,
     '@deepseek-ai/cordis': Cordis, '@deepseek-ai/dsh-client-store': ClientStore,
-    '@deepseek-ai/dsh-client-ui-slots': UiSlots, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
+    '@deepseek-ai/dsh-client-ui-slots': { ...UiSlots, SlotCore: DesktopSlotCore }, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
     '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
   } });
   const ctx = context = new Cordis.Context();

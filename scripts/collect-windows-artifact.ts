@@ -32,6 +32,15 @@ await writeFile(join(output, 'windows-plugin-marketplace-report.json'), JSON.str
   modelRequests: marketplace.modelRequests, reviewedArchiveSha256: marketplace.reviewedArchive?.sha256,
   screenshots: marketplaceScreenshots.map(name => 'windows-' + name),
 }, null, 2));
+const univerRoot = join(root, '.test-data/univer-client');
+const univer = JSON.parse(await readFile(join(univerRoot, 'report.json'), 'utf8'));
+if (univer.status !== 'pass' || !Array.isArray(univer.failures) || univer.failures.length || !Array.isArray(univer.checks) || univer.checks.length < 3 || univer.clientSha256 !== 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7') throw new Error('Published Univer client verification did not pass.');
+await cp(join(univerRoot, 'ready.png'), join(output, 'windows-univer-client-ready.png'));
+await writeFile(join(output, 'windows-univer-client-report.json'), JSON.stringify({
+  status: univer.status, checks: univer.checks, failures: univer.failures,
+  clientSha256: univer.clientSha256, platform: univer.platform, scope: univer.scope,
+  screenshot: 'windows-univer-client-ready.png',
+}, null, 2));
 for (const [from, to] of [['.test-data/windows-installer-report.json', 'windows-installer-report.json'], ['.test-data/native-owned/report.json', 'windows-native-report.json'], ['docs/evidence/three-surfaces.json', 'windows-three-surfaces-report.json'], ['.test-data/updates-native/latest.json', 'windows-updates-report.json'], ['.test-data/artifact-links-native/latest.json', 'windows-artifact-links-report.json'], ['.test-data/sidebar-browser-native/report.json', 'windows-sidebar-browser-report.json']]) await cp(join(root, from), join(output, to));
 await writeFile(join(output, 'SHA256SUMS-windows.txt'), `${artifact.sha256}  ${basename(artifact.installer)}\n`);
 await writeFile(join(output, 'windows-artifact.json'), JSON.stringify({ ...artifact, app: undefined, installer: basename(artifact.installer) }, null, 2));

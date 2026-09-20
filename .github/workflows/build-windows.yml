@@ -31,6 +31,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Published Univer client startup and legacy turn preview
+        timeout-minutes: 3
+        run: npm run test:univer-client
       - name: Plugin marketplace review and explicit installation consent
         timeout-minutes: 4
         run: npm run test:plugin-marketplace
@@ -95,6 +98,8 @@ jobs:
             .test-data/computer-*-latest.json
             .test-data/computer-tools-*/**
             .test-data/plugin-marketplace-native/**
+            .test-data/univer-client/report.json
+            .test-data/univer-client/*.png
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
