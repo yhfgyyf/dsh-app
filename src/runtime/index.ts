@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { copyFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -61,13 +62,17 @@ try {
   };
   const resolution = await createProfileResolutionGeneration({ installAnchor, profile });
   const patches = readProfilePatches('dsh-desktop', profileContext, profile);
-  context = await boot('dsh-desktop', join(directory, 'cordis.yml'), patches, async (ctx: any) => {
+  // Imports and package metadata must share the profile's resolution scope.
+  // Bundle-relative module paths have already been anchored by readProfilePatches.
+  const rootConfig = join(profileDir, '.desktop.cordis.yml');
+  await copyFile(join(directory, 'cordis.yml'), rootConfig);
+  context = await boot('dsh-desktop', rootConfig, patches, async (ctx: any) => {
     context = ctx;
     ctx.provide('launchEnvironment', launchEnvironment);
     ctx.provide('profileContext', profileContext);
     ctx.provide('appReady', appReady);
     await ctx.plugin(PluginPackages, { generation: resolution });
-  }, pathToFileURL(join(runtimeRoot, 'package.json')).href);
+  });
   const connection = context.get('connection');
   const server = context.get('webServer');
   const modules = context.get('clientModules');

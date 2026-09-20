@@ -3,7 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import type { PackageReviewMaterials } from '../shared/plugin-security.ts';
 
 const REGISTRY = 'https://registry.npmjs.org';
-export const PACKAGE_ARCHIVE_LIMIT = 64 * 1024 * 1024;
+export const PACKAGE_ARCHIVE_LIMIT = 256 * 1024 * 1024;
 const EXPANDED_LIMIT = 256 * 1024 * 1024;
 const MATERIAL_LIMIT = 128 * 1024;
 const FILE_LIMIT = 16 * 1024;

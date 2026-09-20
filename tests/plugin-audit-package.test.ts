@@ -76,30 +76,42 @@ test('large plugin assets pass archive limits without expanding model review mat
   assert.ok(result.files.some(file => file.path === 'install.js' && file.content.includes('never execute')));
   assert.equal(result.sha256, createHash('sha256').update(f.archive).digest('hex'));
 });
-test('an advertised archive larger than 64 MiB is rejected before reading its body', async () => {
+test('advertised archive sizes above 64 MiB and up to 256 MiB pass the download size check', async () => {
+  for (const contentLength of [64 * MiB + 1, 256 * MiB]) {
+    const f = fixture();
+    const result = await inspectNpmPackage(pkg.name, idle(), {
+      fetch: async (url, init) => url.endsWith('.tgz')
+        ? new Response(new Uint8Array(f.archive), { headers: { 'content-length': String(contentLength) } })
+        : f.fetch(url, init),
+    });
+    assert.equal(result.scope.archiveBytes, f.archive.length);
+    assert.equal(result.sha256, createHash('sha256').update(f.archive).digest('hex'));
+  }
+});
+test('an advertised archive larger than 256 MiB is rejected before reading its body', async () => {
   let cancelled = false;
   const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
-  const message = await archiveFailure(new Response(body, { headers: { 'content-length': String(64 * MiB + 1) } }));
+  const message = await archiveFailure(new Response(body, { headers: { 'content-length': String(256 * MiB + 1) } }));
   assert.match(message, /安装包/);
-  assert.match(message, /64 MiB/);
+  assert.match(message, /256 MiB/);
   assert.equal(cancelled, true);
 });
-test('missing or understated content-length cannot bypass the 64 MiB streaming limit', async () => {
+test('missing or understated content-length cannot bypass the 256 MiB streaming limit', async () => {
   for (const contentLength of [undefined, '1']) {
     let sent = 0; let cancelled = false;
     const chunk = new Uint8Array(MiB);
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
         // Leave unread chunks beyond the limit so cancellation remains observable.
-        if (sent >= 68 * MiB) { controller.close(); return; }
+        if (sent >= 260 * MiB) { controller.close(); return; }
         controller.enqueue(chunk); sent += chunk.byteLength;
       },
       cancel() { cancelled = true; },
     });
     const message = await archiveFailure(new Response(body, { headers: contentLength === undefined ? {} : { 'content-length': contentLength } }));
     assert.match(message, /安装包/);
-    assert.match(message, /64 MiB/);
-    assert.ok(sent > 64 * MiB && sent < 68 * MiB);
+    assert.match(message, /256 MiB/);
+    assert.ok(sent > 256 * MiB && sent < 260 * MiB);
     assert.equal(cancelled, true);
   }
 });
@@ -111,7 +123,7 @@ test('npm metadata retains its separate 1 MiB limit', async () => {
 test('HTTP and empty response errors remain distinct from archive size errors', async () => {
   const httpMessage = await archiveFailure(new Response('unavailable', { status: 503 }));
   const emptyMessage = await archiveFailure(new Response(null));
-  const sizeMessage = await archiveFailure(new Response('x', { headers: { 'content-length': String(64 * MiB + 1) } }));
+  const sizeMessage = await archiveFailure(new Response('x', { headers: { 'content-length': String(256 * MiB + 1) } }));
   assert.match(httpMessage, /503/);
   assert.doesNotMatch(httpMessage, /大小限制|检查上限/);
   assert.match(emptyMessage, /空|响应体/);

@@ -16,7 +16,7 @@ const source = await readFile(join(root, '.runtime/node_modules', relativeClient
 test('Settings marketplace and sidebar share the official controller with only one install dialog owner', async () => {
   const element = (type: any, props: any) => ({ type, props });
   const dependencies: Record<string, unknown> = {
-    react: { useState: (value: unknown) => [value, () => {}], useEffect() {} },
+    react: { useState: (value: unknown) => [value, () => {}], useEffect() {}, useId: () => 'fixture-id' },
     'react/jsx-runtime': { jsx: element, jsxs: element, Fragment: 'fragment' },
     '@deepseek-ai/dsh-client-ui-primitives': {},
     '@deepseek-ai/dsh-client-ui-slots': { resolveSlotLabel: (label: any) => typeof label === 'function' ? label() : label },
@@ -59,7 +59,7 @@ test('Settings marketplace and sidebar share the official controller with only o
         renderFactorySlot: (name: string, props: any) => element(factories.get(name).component, props),
       });
       const dialog = tree.props.children.find((node: any) => node?.type?.name === 'InstallDialog');
-      return { slots, dialog: dialog.props.install };
+      return { slots, dialog: dialog.props.install, dialogProps: dialog.props };
     };
     assert.equal(render(main, mainFace).slots.length, 0);
     assert.ok(factories.get('plugins.install.dialog').options.children['plugins.install.review']);
@@ -68,6 +68,15 @@ test('Settings marketplace and sidebar share the official controller with only o
     assert.equal(render(market, marketFace).dialog.spec, 'dsh-marketplace-test@1.2.3');
     assert.equal(render(market, marketFace).dialog.open, true);
     assert.equal(render(main, mainFace).dialog.open, false, 'Underlying sidebar must not open a second modal');
+    const dialogProps = render(market, marketFace).dialogProps;
+    const modal = factories.get('plugins.install.dialog').component({ ...dialogProps, t: (key: string) => key });
+    const [reviewButton, directButton] = modal.props.footer.props.children;
+    assert.equal(reviewButton.props.children, 'installReviewFirst');
+    assert.equal(reviewButton.props.onClick, marketFace.reviewBeforeInstall);
+    assert.equal(directButton.props.children.at(-1), 'installDirect');
+    assert.equal(directButton.props.onClick, marketFace.runInstall);
+    assert.equal(reviewButton.props.disabled, false);
+    assert.equal(directButton.props.disabled, false);
     marketFace.runInstall();
     await new Promise(resolve => setImmediate(resolve));
     assert.deepEqual(inspected, ['dsh-marketplace-test@1.2.3']);
@@ -99,6 +108,11 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     assert.equal(applied.changed, 1);
     assert.equal(await readFile(join(applied.backup, relativeClient), 'utf8'), before);
     assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
+    assert.equal(await readFile(target, 'utf8'), source);
+    const previous = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace/upgrade-0.1.16.patch');
+    const requiredReview = spawnSync('git', ['apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), previous], { cwd: scratch, encoding: 'utf8' });
+    assert.equal(requiredReview.status, 0, requiredReview.stderr);
+    assert.equal((await applyPluginMarketplace(options)).changed, 1);
     assert.equal(await readFile(target, 'utf8'), source);
     // An already-installed 0.1.14 adapter has its own exact migration path.
     const upgradePatch = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace/upgrade-0.1.14.patch');

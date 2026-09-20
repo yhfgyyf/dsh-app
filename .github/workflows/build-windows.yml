@@ -24,6 +24,9 @@ jobs:
         run: npm run check
       - name: Shared model settings
         run: npm run test:model-settings
+      - name: Preset switching and cold session restoration
+        timeout-minutes: 2
+        run: npm run test:audit-switch
       - name: Web, TUI and App ownership
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle

@@ -16,16 +16,53 @@ interface RuntimeContext {
   profileContext: { dir: string };
   effect(factory: () => (() => void | Promise<void>), label?: string): unknown;
 }
+class PackageCacheError extends Error {
+  code: string;
+  constructor(code: string, message: string) { super(message); this.code = code; }
+}
 export function apply(ctx: RuntimeContext) {
   let active = false;
   const reviews = new Map<string, { report: PluginSecurityReport; path: string }>();
   const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
   const failure = (code: string, message: string): RpcResult => ({ ok: false, error: { code: 'plugin-review/' + code, message, details: {} } });
+  const installFailure = (code: string, message: string): RpcResult => ({ ok: false, error: { code: 'plugin-install/' + code, message, details: {} } });
+  const cacheArchive = async (archive: Buffer, sha256: string, signal: AbortSignal): Promise<string> => {
+    signal.throwIfAborted();
+    const directory = join(ctx.profileContext.dir, 'reviewed-packages');
+    await mkdir(directory, { recursive: true, mode: 0o700 });
+    const directoryStat = await lstat(directory);
+    if (!directoryStat.isDirectory() || directoryStat.isSymbolicLink()) throw new PackageCacheError('cache', '安装包缓存路径无效，未开始安装。');
+    const path = join(directory, sha256 + '.tgz');
+    try { await writeFile(path, archive, { flag: 'wx', mode: 0o444 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+    const stat = await lstat(path);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size > PACKAGE_ARCHIVE_LIMIT || stat.size !== archive.length || hash(await readFile(path)) !== sha256) throw new PackageCacheError('changed', '安装包缓存与下载内容不一致，未开始安装。');
+    signal.throwIfAborted();
+    return path;
+  };
   ctx.effect(() => ctx.connection.rpc.handle('/desktop-plugin-security', async (endpoint, payload, signal) => {
     const body = payload as { args?: { spec?: unknown; reviewId?: unknown } } | null;
     if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).some(key => key !== 'args')
-      || !body.args || typeof body.args !== 'object' || Array.isArray(body.args)) return failure('invalid-input', '插件检查参数无效。');
+      || !body.args || typeof body.args !== 'object' || Array.isArray(body.args)) return endpoint === 'prepare-direct-install'
+        ? installFailure('invalid-input', '插件安装准备参数无效。') : failure('invalid-input', '插件检查参数无效。');
     for (const [id, review] of reviews) if (Date.now() - Date.parse(review.report.checkedAt) >= 600000) reviews.delete(id);
+    if (endpoint === 'prepare-direct-install') {
+      if (Object.keys(body.args).some(key => key !== 'spec') || typeof body.args.spec !== 'string' || body.args.spec.length > 320
+        || !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*@\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(body.args.spec)) return installFailure('invalid-input', '直接安装准备需要公共 npm 包的精确版本。');
+      try {
+        let archive: Buffer | undefined;
+        const inspected = await inspectNpmPackage(body.args.spec, signal, { onArchive: bytes => { archive = bytes; } });
+        if (!archive) return installFailure('unavailable', '无法下载或准备安装包，未开始安装。请重试。');
+        const path = await cacheArchive(archive, inspected.sha256, signal);
+        return { ok: true, value: { spec: inspected.spec, sha256: inspected.sha256, installSpec: path } };
+      } catch (error) {
+        if (signal.aborted) return installFailure('cancelled', '安装包准备已取消，未开始安装。');
+        if (error instanceof PackageCacheError) return installFailure(error.code, error.message);
+        const detail = error instanceof PackageInspectionError
+          ? error.message.replaceAll('未完成检查', '未开始安装').replaceAll('检查上限', '大小上限').replaceAll('审查材料', '安装包') : '请重试。';
+        return installFailure('unavailable', '安装包下载或准备失败：' + detail);
+      }
+    }
     if (endpoint === 'prepare-install') {
       if (Object.keys(body.args).some(key => key !== 'reviewId') || typeof body.args.reviewId !== 'string') return failure('invalid-input', '安装确认参数无效。');
       const reviewed = reviews.get(body.args.reviewId);
@@ -50,21 +87,14 @@ export function apply(ctx: RuntimeContext) {
       }, llm: ctx.llm, agentDefaultModel: ctx.agentDefaultModel });
       if (report.error?.code === 'package-unavailable' && inspectionProblem) { report.error.message = inspectionProblem; report.summary = inspectionProblem; }
       if (report.error || !archive || !report.sha256) return { ok: true, value: report };
-      signal.throwIfAborted();
-      const directory = join(ctx.profileContext.dir, 'reviewed-packages');
-      await mkdir(directory, { recursive: true, mode: 0o700 });
-      if (!(await lstat(directory)).isDirectory() || (await lstat(directory)).isSymbolicLink()) return failure('cache', '安装包缓存路径无效，未开始安装。');
-      const path = join(directory, report.sha256 + '.tgz');
-      try { await writeFile(path, archive, { flag: 'wx', mode: 0o444 }); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
-      const stat = await lstat(path);
-      if (!stat.isFile() || stat.isSymbolicLink() || stat.size !== archive.length || hash(await readFile(path)) !== report.sha256) return failure('changed', '安装包缓存与审查内容不一致，未开始安装。');
-      signal.throwIfAborted();
+      const path = await cacheArchive(archive, report.sha256, signal);
       report.reviewId = randomUUID();
       if (reviews.size >= 32) reviews.delete(reviews.keys().next().value!);
       reviews.set(report.reviewId, { report, path });
       return { ok: true, value: report };
-    } catch { return failure('unavailable', '无法保存已检查的安装包，未开始安装。请重试。');
+    } catch (error) {
+      if (error instanceof PackageCacheError) return failure(error.code, error.message);
+      return failure('unavailable', '无法保存已检查的安装包，未开始安装。请重试。');
     } finally { active = false; }
   }), name);
 }

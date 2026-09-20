@@ -4,6 +4,7 @@ import { cp, mkdir, mkdtemp, readFile, rename } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { patchPnpm } from './patch-pnpm.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const run = promisify(execFile);
@@ -26,6 +27,7 @@ export async function preparePackageManager() {
   await run(node, [npmCli, 'ci', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund'], { cwd: install, windowsHide: true });
   // No executable links enter the packaged runtime; the host calls pnpm's JS entry.
   await cp(install, runtime, { recursive: true, dereference: true });
+  await patchPnpm(join(runtime, 'node_modules/pnpm'));
   const entry = join(runtime, 'node_modules/pnpm/bin/pnpm.mjs');
   const version = (await run(node, ['--expose-internals', entry, '--version'], { cwd: staging })).stdout.trim();
   assert.equal(version, manifest.dependencies.pnpm, 'Installed pnpm differs from its exact pin');

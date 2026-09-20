@@ -650,3 +650,65 @@ index 0000000000000000000000000000000000000000..66bf34a3fed01516dbf6004c8e5456b2
 +  const ids = [...result.matchAll(/^- id: ([^\n]+)/gm)].map(match => match[1])
 +  assert.equal(new Set(ids).size, ids.length, 'top-level preset rows must have unique ids')
 +})
+diff --git a/index.js b/index.js
+index 21381c29824fee7b53cd3e059c51eb018507b419..67b84faf255565f3374aaee4889fdc1f59adb52a 100644
+--- a/index.js
++++ b/index.js
+@@ -17,7 +17,9 @@ export const Config = ServiceConfig
+  * as a new, bounded remediation message instead of rewriting prior history.
+  */
+ export function apply (ctx, config) {
+-  const restoreRoster = installPresetRoot(ctx.agentPresets, discoverPresets, AUDIT_PRESET_ROOT, 'system', ctx.baseUrl)
++  const packages = ctx.get('pluginPackages')
++  const resolves = packages === undefined ? undefined : (specifier, base) => packages.packageOf(specifier, base) !== undefined
++  const restoreRoster = installPresetRoot(ctx.agentPresets, discoverPresets, AUDIT_PRESET_ROOT, 'system', ctx.baseUrl, resolves)
+   ctx.effect(() => restoreRoster, name + '.roster()')
+ 
+   const service = new AuditService(ctx, config)
+diff --git a/lib/roster.js b/lib/roster.js
+index fb64f9f01e3dcbca999dd1d3ff6a6234ead21802..ad784a3671275ba8b80b5c4f2a2553697badcb6c 100644
+--- a/lib/roster.js
++++ b/lib/roster.js
+@@ -17,12 +17,12 @@ export function mergePresetLists (packagePresets, existingPresets) {
+  * AgentPresets.resolve() calls list(), so selection, mounting, resume, and UI
+  * discovery all see the audit preset without touching the shipped roster.
+  */
+-export function installPresetRoot (agentPresets, discover, root = AUDIT_PRESET_ROOT, trust = 'system', harnessBase) {
++export function installPresetRoot (agentPresets, discover, root = AUDIT_PRESET_ROOT, trust = 'system', harnessBase, resolves) {
+   const previous = agentPresets.list
+   const previousResolve = agentPresets.resolve
+   async function listWithAudit () {
+     const [packagePresets, existingPresets] = await Promise.all([
+-      discover([{ path: root, trust }], harnessBase),
++      discover([{ path: root, trust }], harnessBase, resolves),
+       previous.call(agentPresets)
+     ])
+     return mergePresetLists(packagePresets, existingPresets)
+diff --git a/test/roster.test.mjs b/test/roster.test.mjs
+index a8d216135ad200263b37eb75a819eec03f3cb26a..b4e8790649c9d8247d04a634a2f7d10d5874ec4a 100644
+--- a/test/roster.test.mjs
++++ b/test/roster.test.mjs
+@@ -64,3 +64,23 @@ test('installPresetRoot extends the list seam and restores on dispose', async ()
+   assert.equal(agentPresets.list, originalList)
+   assert.equal(agentPresets.resolve, originalResolve)
+ })
++
++test('profile package lookup determines preset health instead of a disk-only lookup', async () => {
++  const base = 'file:///desktop/profile/'
++  let installed = true
++  const resolves = (specifier, harnessBase) => {
++    assert.equal(harnessBase, base)
++    return installed && specifier === '@deepseek-ai/dsh-persona'
++  }
++  const roster = { list: async () => [{ id: 'standard' }] }
++  const discover = async (_roots, harnessBase, lookup) => [{
++    id: 'audit',
++    broken: lookup?.('@deepseek-ai/dsh-persona', harnessBase) ? undefined : 'missing plugin'
++  }]
++  const restore = installPresetRoot(roster, discover, '/plugin/presets', 'system', base, resolves)
++  assert.equal((await roster.list())[0].broken, undefined)
++  installed = false
++  assert.equal((await roster.list())[0].broken, 'missing plugin', 'a missing dependency remains broken')
++  restore()
++  assert.deepEqual(await roster.list(), [{ id: 'standard' }])
++})

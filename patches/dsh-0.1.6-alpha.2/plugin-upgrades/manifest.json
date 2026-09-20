@@ -6,8 +6,22 @@
       "repository": "yhfgyyf/dsh-auto-preset-router",
       "commit": "0a292c14405879d66f6bba5150db82510bd05955",
       "version": "0.2.4",
-      "patchSha256": "91f659f98c3aa37745b760b4a140d3cea8aba405d3993ded091594ec77243630",
+      "patchSha256": "23eee8386fbccdebb654a22e91723c8c99deab7d5e3d3dd852743a757b4af520",
       "files": [
+        {
+          "path": "index.js",
+          "before": "1063f2a7237251f9e9e97e458708e2396441af741d525ac3d454d999b2188697",
+          "after": "ba64140a8249f80ecd45ce43e37aea952f6cd7df3c6a97a3944e6751ef31d4b4",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/config.js",
+          "before": "825bccbe9c494bf80e97cce3aa11f9080e7c64303624ff331538837190954444",
+          "after": "999c1dff96a24715dfd80ea5bf968cdc0f8d2ea85ccfa41b19bacfb570b7be42",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
         {
           "path": "package.json",
           "before": "94d022c451041a7c9123b454ce1d6d8cbe84e8a0283b6ad2aa9be681697f0166",
@@ -21,6 +35,13 @@
           "after": "1e759d24c22095f17e1763e2dc9144e3891025b6c47027976e57e13f586ab29c",
           "beforeMode": "100644",
           "afterMode": "100644"
+        },
+        {
+          "path": "test/config.test.mjs",
+          "before": "621db67caa2b498c2470a779eed7af2d823ff19e1ea9e2f1b495c2f51d3b2e7f",
+          "after": "f606335ab3f760ea67138917003c5370e07f0ebfbe04975bb996acb1b74fd3c5",
+          "beforeMode": "100644",
+          "afterMode": "100644"
         }
       ]
     },
@@ -29,12 +50,26 @@
       "repository": "yhfgyyf/dsh-audit-mode",
       "commit": "2e22f39f1afe24a094568de29adb65f79fc74fde",
       "version": "0.6.1",
-      "patchSha256": "135e73a4186912ee7a6db31a9a933efbc0dfb47b7de59fb08ba91a59ed33e8cd",
+      "patchSha256": "8e373d8de45d2541f225722dee5c1fe3b18c73365c29ab3f98d8bb97e2ff25b2",
       "files": [
+        {
+          "path": "index.js",
+          "before": "e888fb6abc6766abd1077cf1433ffd17d2274d6a0f40e31c07e64dae371065a0",
+          "after": "e36fa9d8475cad2afd91c302804cb0e23d755860c5c21f722f9d8caa058221a0",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
         {
           "path": "lib/client.js",
           "before": "28bcb89b8b9a8bd0198073c922784f302bc22ccc4b2a90b6c981a402b43770df",
           "after": "80895aa50cf6b0f6cc12023f04e33bba053d4051652e7a1596c8a0359cb26fc9",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/roster.js",
+          "before": "3b5dd8f8d98bfefadf1f5d533b1e69e4915e710299c73114bbc5492556acb0be",
+          "after": "8c55e93e5bfc75d28e11885ee55345fbd15a64a3a4165cc746a4145498f68649",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -99,6 +134,13 @@
           "before": null,
           "after": "09f57c524553fc6fb285383e6c92b6ee796bd0e0e6d2f090241f705753078d79",
           "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/roster.test.mjs",
+          "before": "520a786a20261f059cc40960fe131795674bb9106cea2abc458301f64c7f2c2e",
+          "after": "7642be55c950f28aa68853ce9cebba986875810e277daa20383c248e74c4b33c",
+          "beforeMode": "100644",
           "afterMode": "100644"
         }
       ]
