@@ -212,9 +212,9 @@ async function run(host) {
   assert.equal(enabled(), false, 'Direct installation unexpectedly enabled the bundle');
   await clickText(['立即启用', 'Enable now'], dialog);
   await until(() => enabled(), 'Directly installed bundle could not be enabled');
-  await until(() => js(`!!document.querySelector('[data-plugin-package="${registry.name}"] button')`), 'Direct package card missing');
-  await js(`document.querySelector('[data-plugin-package="${registry.name}"] button').click()`);
-  await until(() => js(`!!document.querySelector('[data-plugin-detail="${registry.name}"]')`), 'Direct package detail missing');
+  await until(() => js(`!document.querySelector('[data-install-phase]')`), 'Direct enable flow did not close the installation dialog');
+  await until(() => js(`(() => {if(document.querySelector('[data-plugin-detail="${registry.name}"]'))return true;const button=document.querySelector('[data-plugin-package="${registry.name}"] button');if(button&&!button.disabled)button.click();return false;})()`), 'Direct package detail missing');
+  await until(() => js(`Array.from(document.querySelectorAll('[data-plugin-detail="${registry.name}"] [data-plugin-row]')).some(row=>row.textContent.includes('marketplace-acceptance-fixture')&&/运行中|Running/.test(row.textContent))`), 'Directly installed fixture entry did not become an active host plugin');
   await clickText(['卸载', 'Uninstall'], `document.querySelector('[data-plugin-detail="${registry.name}"]')`);
   await clickText(['卸载', 'Uninstall'], dialog);
   await until(() => !installed() && !enabled(), 'Direct-install fixture cleanup did not complete', 30000);
