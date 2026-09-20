@@ -11,7 +11,7 @@ export interface PluginReviewDependencies {
     config: CallConfig;
     stream(options: CallConfig & { system: string; messages: readonly unknown[]; tools: never[]; signal: AbortSignal }): AsyncIterable<unknown>;
   }> };
-  /** Internal test seam; production has one three-minute deadline including package inspection. */
+  /** Internal test seam; production has one five-minute deadline including package inspection. */
   timeoutMs?: number;
 }
 
@@ -145,7 +145,7 @@ export async function reviewPlugin(spec: string, callerSignal: AbortSignal, depe
   const controller = new AbortController();
   const signal = AbortSignal.any([callerSignal, controller.signal]);
   let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, dependencies.timeoutMs ?? 180000);
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, dependencies.timeoutMs ?? 300000);
   const report: PluginSecurityReport = {
     status: 'incomplete', spec, checkedAt: new Date().toISOString(), risk: 'unknown', summary: '检查尚未完成。', findings: [],
     limitations: [...BASE_LIMITATIONS], requiresConfirmation: true,

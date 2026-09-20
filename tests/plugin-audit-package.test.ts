@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { gzipSync } from 'node:zlib';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdtemp, readFile, rm, chmod, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -9,10 +9,10 @@ import { inspectNpmPackage, readNpmArchive } from '../src/runtime/plugin-audit-p
 import { apply as applySecurityHost } from '../src/runtime/plugin-security-host.ts';
 
 const idle = () => new AbortController().signal;
-function tar(entries: { name: string; content?: string; type?: string }[]): Buffer {
+function tar(entries: { name: string; content?: string | Buffer; type?: string }[]): Buffer {
   const buffers: Buffer[] = [];
   for (const item of entries) {
-    const content = Buffer.from(item.content ?? '');
+    const content = Buffer.isBuffer(item.content) ? item.content : Buffer.from(item.content ?? '');
     const header = Buffer.alloc(512);
     header.write(item.name); header.write('0000644\0', 100);
     header.write(content.length.toString(8).padStart(11, '0') + '\0', 124);
@@ -38,6 +38,93 @@ function fixture(override: { manifest?: object; archive?: Buffer; metadata?: Rec
   };
   return { archive, metadata, calls, fetch };
 }
+const MiB = 1024 * 1024;
+let largeArchive: Buffer | undefined;
+function largeFixture() {
+  largeArchive ??= tar([
+    { name: 'package/package.json', content: JSON.stringify(pkg) },
+    { name: 'package/bundle.yml', content: '- insert:\n    - name: ./index.js\n' },
+    { name: 'package/index.js', content: 'export function apply() {}\n' },
+    { name: 'package/install.js', content: 'throw new Error("never execute this audit fixture");\n' },
+    { name: 'package/assets/random.bin', content: randomBytes(11 * MiB) },
+    { name: 'package/assets/padding.bin', content: Buffer.alloc(23 * MiB) },
+  ]);
+  assert.ok(largeArchive.length > 10 * MiB && largeArchive.length < 64 * MiB);
+  return fixture({ archive: largeArchive });
+}
+async function archiveFailure(response: Response): Promise<string> {
+  const f = fixture();
+  let message = '';
+  await assert.rejects(inspectNpmPackage(pkg.name, idle(), {
+    fetch: async (url, init) => url.endsWith('.tgz') ? response : f.fetch(url, init),
+  }), (error: Error) => { message = error.message; return true; });
+  return message;
+}
+test('large plugin assets pass archive limits without expanding model review material', async () => {
+  const f = largeFixture();
+  const result = await inspectNpmPackage(pkg.name, idle(), { fetch: f.fetch });
+  assert.equal(result.scope.archiveBytes, f.archive.length);
+  assert.ok(result.scope.expandedBytes > 32 * MiB && result.scope.expandedBytes < 256 * MiB);
+  assert.equal(result.scope.filesTotal, 6);
+  assert.equal(result.scope.filesReviewed, 4);
+  assert.ok(result.scope.bytesReviewed <= 128 * 1024);
+  assert.equal(result.scope.omittedFiles, 2);
+  assert.equal(result.scope.truncated, true);
+  assert.ok(result.limitations.some(text => text.includes('省略 2 个文件')));
+  assert.equal(result.files[0].path, 'package.json');
+  assert.equal(result.files[1].path, 'bundle.yml');
+  assert.ok(result.files.some(file => file.path === 'install.js' && file.content.includes('never execute')));
+  assert.equal(result.sha256, createHash('sha256').update(f.archive).digest('hex'));
+});
+test('an advertised archive larger than 64 MiB is rejected before reading its body', async () => {
+  let cancelled = false;
+  const body = new ReadableStream<Uint8Array>({ cancel() { cancelled = true; } });
+  const message = await archiveFailure(new Response(body, { headers: { 'content-length': String(64 * MiB + 1) } }));
+  assert.match(message, /安装包/);
+  assert.match(message, /64 MiB/);
+  assert.equal(cancelled, true);
+});
+test('missing or understated content-length cannot bypass the 64 MiB streaming limit', async () => {
+  for (const contentLength of [undefined, '1']) {
+    let sent = 0; let cancelled = false;
+    const chunk = new Uint8Array(MiB);
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // Leave unread chunks beyond the limit so cancellation remains observable.
+        if (sent >= 68 * MiB) { controller.close(); return; }
+        controller.enqueue(chunk); sent += chunk.byteLength;
+      },
+      cancel() { cancelled = true; },
+    });
+    const message = await archiveFailure(new Response(body, { headers: contentLength === undefined ? {} : { 'content-length': contentLength } }));
+    assert.match(message, /安装包/);
+    assert.match(message, /64 MiB/);
+    assert.ok(sent > 64 * MiB && sent < 68 * MiB);
+    assert.equal(cancelled, true);
+  }
+});
+test('npm metadata retains its separate 1 MiB limit', async () => {
+  await assert.rejects(inspectNpmPackage(pkg.name, idle(), {
+    fetch: async () => new Response('{}', { headers: { 'content-length': String(MiB + 1) } }),
+  }), (error: Error) => /npm/.test(error.message) && /1 MiB/.test(error.message));
+});
+test('HTTP and empty response errors remain distinct from archive size errors', async () => {
+  const httpMessage = await archiveFailure(new Response('unavailable', { status: 503 }));
+  const emptyMessage = await archiveFailure(new Response(null));
+  const sizeMessage = await archiveFailure(new Response('x', { headers: { 'content-length': String(64 * MiB + 1) } }));
+  assert.match(httpMessage, /503/);
+  assert.doesNotMatch(httpMessage, /大小限制|检查上限/);
+  assert.match(emptyMessage, /空|响应体/);
+  assert.notEqual(emptyMessage, httpMessage);
+  assert.notEqual(emptyMessage, sizeMessage);
+});
+test('expanded archives still stop at 256 MiB even when compressed bytes are small', () => {
+  // Concatenated gzip members avoid allocating a 257 MiB source fixture.
+  const member = gzipSync(Buffer.alloc(MiB));
+  const archive = Buffer.concat(Array.from({ length: 257 }, () => member));
+  assert.ok(archive.length < MiB);
+  assert.throws(() => readNpmArchive(archive), /256 MiB/);
+});
 test('the exact npm archive is verified and inspected in memory, including scripts without executing them', async () => {
   const f = fixture();
   const result = await inspectNpmPackage(pkg.name, idle(), { fetch: f.fetch });
@@ -75,7 +162,6 @@ test('tar traversal, duplicate paths, links, unsupported extensions and broken h
     [{ name: 'package/a', type: '2' }], [{ name: 'package/a', type: '1' }],
     [{ name: 'package/a' }, { name: 'package/a' }], [{ name: 'package/a', type: 'S' }],
   ]) assert.throws(() => readNpmArchive(tar(entries)));
-  assert.throws(() => readNpmArchive(gzipSync(Buffer.alloc(33 * 1024 * 1024))), /32 MiB/);
   assert.throws(() => readNpmArchive(gzipSync(Buffer.alloc(512, 1))), /tar/);
 });
 test('review material truncation is explicit and preserves the package and bundle first', async () => {
@@ -94,9 +180,9 @@ test('review material truncation is explicit and preserves the package and bundl
   assert.ok(result.limitations.some(text => text.includes('截断')));
 });
 
-test('only a completed DSH report can prepare the same hashed archive for official installation', async () => {
+test('only a completed DSH report can prepare the same large hashed archive for official installation', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'dsh-review-artifact-'));
-  const f = fixture(); const originalFetch = globalThis.fetch;
+  const f = largeFixture(); const originalFetch = globalThis.fetch;
   let handler: any; let models = 0;
   globalThis.fetch = f.fetch as typeof fetch;
   const answer = JSON.stringify({ summary: '仅为测试报告。', risk: 'low', findings: [], limitations: [] });
@@ -115,6 +201,8 @@ test('only a completed DSH report can prepare the same hashed archive for offici
     const result = await handler('review', { args: { spec: pkg.name + '@1.2.3' } }, idle());
     assert.equal(result.ok, true); assert.equal(result.value.status, 'complete');
     assert.ok(result.value.reviewId);
+    assert.equal(models, 1);
+    assert.ok(result.value.scope.archiveBytes > 10 * MiB);
     const prepared = await handler('prepare-install', { args: { reviewId: result.value.reviewId } }, idle());
     assert.equal(prepared.ok, true);
     assert.equal(prepared.value.spec, pkg.name + '@1.2.3');

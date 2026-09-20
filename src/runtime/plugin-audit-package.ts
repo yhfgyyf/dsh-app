@@ -3,8 +3,8 @@ import { gunzipSync } from 'node:zlib';
 import type { PackageReviewMaterials } from '../shared/plugin-security.ts';
 
 const REGISTRY = 'https://registry.npmjs.org';
-const ARCHIVE_LIMIT = 10 * 1024 * 1024;
-const EXPANDED_LIMIT = 32 * 1024 * 1024;
+export const PACKAGE_ARCHIVE_LIMIT = 64 * 1024 * 1024;
+const EXPANDED_LIMIT = 256 * 1024 * 1024;
 const MATERIAL_LIMIT = 128 * 1024;
 const FILE_LIMIT = 16 * 1024;
 type Fetcher = (input: string, init: RequestInit) => Promise<Response>;
@@ -20,12 +20,17 @@ function parseSpec(spec: string): { name: string; selector: string } {
   if (!match || match[1].length > 214) fail('自动源码检查目前支持公共 npm 包名或精确版本；Git、本地路径及版本范围尚未检查。');
   return { name: match[1], selector: match[2] ?? 'latest' };
 }
-async function bytes(url: string, limit: number, signal: AbortSignal, fetcher: Fetcher): Promise<Buffer> {
+async function bytes(url: string, limit: number, label: string, signal: AbortSignal, fetcher: Fetcher): Promise<Buffer> {
   signal.throwIfAborted();
   const response = await fetcher(url, { signal, redirect: 'error', headers: { accept: '*/*' } });
-  if (!response.ok || !response.body || Number(response.headers.get('content-length')) > limit) {
+  if (!response.ok) {
     await response.body?.cancel();
-    fail('无法读取安装包或响应超出检查大小限制。');
+    fail(`${label}读取失败（HTTP ${response.status}），未完成检查。`);
+  }
+  if (!response.body) fail(`${label}响应为空，未完成检查。`);
+  if (Number(response.headers.get('content-length')) > limit) {
+    await response.body.cancel();
+    fail(`${label}超过 ${limit / 1024 / 1024} MiB 检查上限。`);
   }
   const reader = response.body.getReader();
   const cancel = () => { void reader.cancel().catch(() => {}); };
@@ -38,7 +43,7 @@ async function bytes(url: string, limit: number, signal: AbortSignal, fetcher: F
       signal.throwIfAborted();
       if (next.done) break;
       size += next.value.length;
-      if (size > limit) { await reader.cancel(); fail('安装包超过检查大小限制。'); }
+      if (size > limit) { await reader.cancel(); fail(`${label}超过 ${limit / 1024 / 1024} MiB 检查上限。`); }
       chunks.push(next.value);
     }
     return Buffer.concat(chunks, size);
@@ -85,7 +90,7 @@ function pax(buffer: Buffer): Record<string, string> {
 export function readNpmArchive(archive: Buffer): { files: Map<string, Buffer>; expandedBytes: number } {
   let data: Buffer;
   try { data = gunzipSync(archive, { maxOutputLength: EXPANDED_LIMIT }); }
-  catch { return fail('安装包无法解压，或展开后超过 32 MiB 检查上限。'); }
+  catch { return fail('安装包无法解压，或展开后超过 256 MiB 检查上限。'); }
   const files = new Map<string, Buffer>(); let offset = 0; let entries = 0;
   let attributes: Record<string, string> | undefined;
   let longName: string | undefined;
@@ -132,12 +137,12 @@ function strings(value: unknown): Record<string, string> {
 }
 export async function inspectNpmPackage(spec: string, callerSignal: AbortSignal, options: { fetch?: Fetcher; timeoutMs?: number; onArchive?: (archive: Buffer) => void } = {}): Promise<PackageReviewMaterials> {
   const { name, selector } = parseSpec(spec);
-  const timer = AbortSignal.timeout(options.timeoutMs ?? 25000);
+  const timer = AbortSignal.timeout(options.timeoutMs ?? 180000);
   const signal = AbortSignal.any([callerSignal, timer]);
   const fetcher = options.fetch ?? fetch;
   let manifest: Json;
   try {
-    const metadata = JSON.parse((await bytes(`${REGISTRY}/${encodeURIComponent(name)}/${encodeURIComponent(selector)}`, 1024 * 1024, signal, fetcher)).toString('utf8'));
+    const metadata = JSON.parse((await bytes(`${REGISTRY}/${encodeURIComponent(name)}/${encodeURIComponent(selector)}`, 1024 * 1024, 'npm 插件信息', signal, fetcher)).toString('utf8'));
     manifest = record(metadata) ?? fail('npm 插件信息无效。');
   } catch (error) {
     if (error instanceof PackageInspectionError) throw error;
@@ -153,7 +158,7 @@ export async function inspectNpmPackage(spec: string, callerSignal: AbortSignal,
   try { url = new URL(String(dist?.tarball)); } catch { return fail('npm 安装包地址无效。'); }
   if (url.origin !== REGISTRY || url.username || url.password || url.search || url.hash) fail('安装包不来自公共 npm registry，未完成检查。');
   let archive: Buffer;
-  try { archive = await bytes(url.href, ARCHIVE_LIMIT, signal, fetcher); }
+  try { archive = await bytes(url.href, PACKAGE_ARCHIVE_LIMIT, '安装包', signal, fetcher); }
   catch (error) { if (error instanceof PackageInspectionError) throw error; return fail('下载审查材料失败或超时，未完成检查。'); }
   if (!timingSafeEqual(createHash('sha512').update(archive).digest(), Buffer.from(integrity.slice(7), 'base64'))) fail('安装包摘要校验失败，不能确认它是所请求的版本。');
   const { files: archiveFiles, expandedBytes } = readNpmArchive(archive);

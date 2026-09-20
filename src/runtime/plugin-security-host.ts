@@ -1,4 +1,4 @@
-import { inspectNpmPackage, PackageInspectionError } from './plugin-audit-package.ts';
+import { inspectNpmPackage, PackageInspectionError, PACKAGE_ARCHIVE_LIMIT } from './plugin-audit-package.ts';
 import { reviewPlugin } from './plugin-security.ts';
 import type { PluginReviewDependencies } from './plugin-security.ts';
 import type { PluginSecurityReport } from '../shared/plugin-security.ts';
@@ -32,7 +32,7 @@ export function apply(ctx: RuntimeContext) {
       if (!reviewed) return failure('expired', '检查报告已过期，请重新检查。');
       try {
         const stat = await lstat(reviewed.path);
-        if (!stat.isFile() || stat.isSymbolicLink() || stat.size > 10 * 1024 * 1024 || hash(await readFile(reviewed.path)) !== reviewed.report.sha256) return failure('changed', '已检查的安装包发生变化，请重新检查。');
+        if (!stat.isFile() || stat.isSymbolicLink() || stat.size > PACKAGE_ARCHIVE_LIMIT || hash(await readFile(reviewed.path)) !== reviewed.report.sha256) return failure('changed', '已检查的安装包发生变化，请重新检查。');
         signal.throwIfAborted();
         return { ok: true, value: { spec: reviewed.report.spec, sha256: reviewed.report.sha256!, installSpec: reviewed.path } };
       } catch { return failure('unavailable', '已检查的安装包不可用，请重新检查。'); }
