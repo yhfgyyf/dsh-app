@@ -62,7 +62,12 @@ app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', details => {
     if (details.level !== 'error') return;
     const message = sanitize(details.message);
-    if (reloading && message === '[cordis-client-runner] syncing inspect providers failed: Error: client api: dynamicCordisRunner/syncInspectManifest has no active Connection') {
+    // Reload tears down the old inspection transport and its pending RPCs.
+    if (reloading && [
+      '[cordis-client-runner] syncing inspect providers failed: Error: client api: dynamicCordisRunner/syncInspectManifest has no active Connection',
+      '[cordis-client-runner] syncing inspect providers failed: Error: gateway/cancelled: client api: Remote invocation "dynamicCordisRunner/syncInspectManifest" was aborted',
+      '[cordis-client-runner] syncing inspect providers failed: Error: cannot get required service "remote" in inactive context',
+    ].includes(message)) {
       report.expectedReloadMessages.push(message);
       return;
     }
