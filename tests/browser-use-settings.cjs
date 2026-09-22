@@ -1,4 +1,4 @@
-const { app, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
@@ -43,6 +43,7 @@ ipcMain.handle = (channel, listener) => {
 };
 async function run(event) {
   const host = event.sender;
+  if (restore) BrowserWindow.fromWebContents(host).setContentSize(900, 600);
   const js = code => host.executeJavaScript(code, true);
   if (!restore) {
     await until(() => js("Array.from(document.querySelectorAll('button')).some(b=>['继续','Continue'].includes(b.textContent))"), 'Onboarding missing');
@@ -78,6 +79,27 @@ async function run(event) {
   assert.equal(Boolean(live.restartRequired), false);
   await js("document.querySelector('.desktop-browser-use-connect').click()");
   await until(() => js("!!document.querySelector('#desktop-browser-use-token')"), 'Credential form missing');
+  await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  const visibility = await js(`new Promise(resolve => {
+    const input = document.querySelector('#desktop-browser-use-token');
+    const save = document.querySelector('.desktop-browser-use-credentials button[type=submit]');
+    const visible = new Map();
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) visible.set(entry.target, entry.isIntersecting && entry.intersectionRatio >= 0.99);
+      if (visible.size !== 2) return;
+      observer.disconnect();
+      const rect = input.getBoundingClientRect();
+      resolve({ input: visible.get(input), save: visible.get(save), focused: document.activeElement === input,
+        inputTop: rect.top, inputBottom: rect.bottom, viewport: { width: innerWidth, height: innerHeight } });
+    }, { threshold: 1 });
+    observer.observe(input); observer.observe(save);
+  })`);
+  report.credentialVisibility = visibility;
+  writeFileSync(join(data, `credentials-expanded-${restore ? 'restore' : 'enable'}.png`), (await host.capturePage()).toPNG());
+  assert.equal(visibility.input, true, 'Opening automatic connection must show the token input inside the scrollable Settings panel');
+  assert.equal(visibility.save, true, 'The credential save button must be visible without extra scrolling');
+  assert.equal(visibility.focused, true, 'The token input must accept typing immediately after opening');
+  report.checks.push('Opening automatic connection brings the token input and save button into view and focuses the input');
   assert.equal(await js("document.querySelector('#desktop-browser-use-token').type"), 'password');
   assert.equal(await js("document.querySelector('#desktop-browser-use-token').value"), '');
   const credentialsPath = join(data, 'browser-use-credentials.json');

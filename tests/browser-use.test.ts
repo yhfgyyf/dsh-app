@@ -1,8 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { browserCandidates, browserProfileRoot, DesktopBrowserUse } from '../src/main/browser-use.ts';
 import { createBrowserUseController } from '../src/runtime/browser-use.ts';
 import { defaultPreferences, parsePreferences } from '../src/shared/config.ts';
+
+const extensionFixture = { async findPlaywrightExtensionProfile() { return 'Default'; }, playwrightExtensionInstallUrl: 'https://example.invalid/playwright-extension' };
 
 test('Browser Use stays off for existing preferences and rejects invalid switch values', () => {
   const old: any = defaultPreferences();
@@ -36,13 +42,13 @@ test('existing browser login uses extension-owned tab groups without isolated pr
   const previous = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
   process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = 'untrusted-inherited-test-value';
   const calls: any[] = [];
-  const scope = {};
+  const scope = { on() {} };
   const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply(scope); return { dispose: async () => {} }; } };
   try {
     const control = await createBrowserUseController(ctx, async id => {
       assert.equal(id, '@deepseek-ai/dsh-experimental-browser-use-runtime/mcp');
       return { mountSessionMcp(target: any, options: any) { assert.equal(target, scope); calls.push(options); } };
-    }, '/runtime/playwright/cli.js');
+    }, '/runtime/playwright/cli.js', extensionFixture);
     await control.configure({ enabled: true, executablePath: '/browser', userDataDir: '/existing-profile' });
     assert.deepEqual(calls[0].args, ['/runtime/playwright/cli.js', '--browser', 'chrome', '--extension', '--executable-path', '/browser', '--user-data-dir', '/existing-profile']);
     assert.equal(calls[0].exclusive, false);
@@ -74,13 +80,44 @@ test('the provider is opt-in, uses the selected browser, and disposal completes 
 
 test('only a saved extension token reaches MCP, through env rather than arguments', async () => {
   const calls: any[] = [];
-  const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply({}); return { dispose: async () => {} }; } };
-  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp(_ctx: any, options: any) { calls.push(options); } }), '/cli.js');
+  const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply({ on() {} }); return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp(_ctx: any, options: any) { calls.push(options); } }), '/cli.js', extensionFixture);
   const token = 'fixture-explicit-extension-token';
   await control.configure({ enabled: true, executablePath: '/browser', userDataDir: '/profile', extensionToken: token });
   assert.equal(calls[0].env.PLAYWRIGHT_MCP_EXTENSION_TOKEN, token);
   assert.ok(!calls[0].args.some((arg: string) => arg.includes(token)));
   await control.configure({ enabled: false });
+});
+
+test('a missing extension never starts a handshake and installation is rechecked on the next call', async () => {
+  const require = createRequire(new URL('../.runtime/package.json', import.meta.url));
+  const extension = require(join(dirname(require.resolve('playwright-core/package.json')), 'lib/tools/utils/extension.js'));
+  const userDataDir = await mkdtemp(join(tmpdir(), 'dsh-extension-profile-'));
+  let guard: any, forwarded = 0;
+  const scope = { on(event: string, handler: any) { assert.equal(event, 'tools/execute'); guard = handler; } };
+  const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply(scope); return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp() {} }), '/cli.js', extension);
+  const next = async () => { forwarded++; return 'forwarded'; };
+  try {
+    await mkdir(join(userDataDir, 'Default'));
+    await control.configure({ enabled: true, executablePath: '/browser', userDataDir });
+    assert.equal(typeof guard, 'function');
+    await assert.rejects(guard({ name: 'mcp__playwright-mcp__browser_tabs' }, next), /安装.*Playwright Extension/);
+    await assert.rejects(guard({ name: 'mcp__playwright-mcp__browser_navigate' }, next), /安装.*Playwright Extension/);
+    assert.equal(forwarded, 0, 'No failed handshake may be cached while the extension is missing');
+    assert.equal(await guard({ name: 'read' }, next), 'forwarded', 'Other tools remain available');
+    // Reuse the pinned upstream probe, including non-default profiles and unpacked installs.
+    await mkdir(join(userDataDir, 'Profile 1'));
+    await writeFile(join(userDataDir, 'Profile 1', 'Secure Preferences'), JSON.stringify({ extensions: { settings: { [extension.playwrightExtensionId]: { state: 1 } } } }));
+    assert.equal(await guard({ name: 'mcp__playwright-mcp__browser_tabs' }, next), 'forwarded');
+    assert.equal(forwarded, 2, 'Installing the extension permits a fresh first handshake without recreating the provider');
+    await rm(join(userDataDir, 'Profile 1'), { recursive: true });
+    await assert.rejects(guard({ name: 'mcp__playwright-mcp__browser_tabs' }, next), /安装.*Playwright Extension/);
+    assert.equal(forwarded, 2, 'Removing the extension is detected again');
+  } finally {
+    await control.configure({ enabled: false });
+    await rm(userDataDir, { recursive: true, force: true });
+  }
 });
 
 test('saving a credential preserves the active session, applies after restart, and never returns plaintext', async () => {

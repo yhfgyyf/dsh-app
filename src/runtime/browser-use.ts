@@ -1,5 +1,10 @@
+type ExtensionUtils = {
+  findPlaywrightExtensionProfile(userDataDir: string): Promise<string | undefined>;
+  playwrightExtensionInstallUrl: string;
+};
+
 /** Own the official provider's lifetime without restarting the DSH core. */
-export async function createBrowserUseController(ctx: any, load: (id: string) => Promise<any>, playwrightCli?: string) {
+export async function createBrowserUseController(ctx: any, load: (id: string) => Promise<any>, playwrightCli?: string, extension?: ExtensionUtils) {
   if (!ctx.get('browserUse')) {
     const registry = await load('@deepseek-ai/dsh-browser-use');
     await ctx.plugin(registry.default ?? registry);
@@ -17,9 +22,10 @@ export async function createBrowserUseController(ctx: any, load: (id: string) =>
         if (ctx.get('browserUse')?.providerName) throw new Error('已有其他浏览器操作插件启用，请先停用该插件。');
         if (!config.executablePath) throw new Error('浏览器路径不可用。');
         if (config.userDataDir) {
-          if (!playwrightCli) throw new Error('浏览器操作组件不可用。');
+          if (!playwrightCli || !extension) throw new Error('浏览器操作组件不可用。');
           const { mountSessionMcp } = await load('@deepseek-ai/dsh-experimental-browser-use-runtime/mcp');
           const executablePath = config.executablePath, userDataDir = config.userDataDir;
+          const extensionUtils = extension;
           // The official extension keeps each MCP client's tabs separate while
           // using the existing profile's login state. Only an explicitly saved
           // credential may bypass confirmation; inherited tokens stay blocked.
@@ -27,6 +33,15 @@ export async function createBrowserUseController(ctx: any, load: (id: string) =>
             name: 'desktop-browser-use-playwright-extension',
             inject: ['browserUse', 'agents', 'tools', 'systemPrompt'],
             apply(scope: any) {
+              // An explicit executable skips Playwright's own missing-extension
+              // guard. Check each call before MCP can cache a pending handshake.
+              scope.on('tools/execute', async (exec: any, next: () => Promise<any>) => {
+                if (!exec.name.startsWith('mcp__playwright-mcp__')) return next();
+                if (!await extensionUtils.findPlaywrightExtensionProfile(userDataDir)) {
+                  throw new Error('请先由用户在当前浏览器安装并启用 Playwright Extension，再重试。安装地址：' + extensionUtils.playwrightExtensionInstallUrl);
+                }
+                return next();
+              });
               const env = Object.fromEntries(Object.keys(process.env).filter(key => key.toUpperCase().startsWith('PLAYWRIGHT_MCP_')).map(key => [key, '']));
               env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = config.extensionToken ?? '';
               mountSessionMcp(scope, {

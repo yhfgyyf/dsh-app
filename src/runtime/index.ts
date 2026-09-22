@@ -96,7 +96,8 @@ try {
     await ctx.plugin(PluginPackages, { resolution });
   });
   const connection = context.get('connection');
-  browserUse = await createBrowserUseController(context, load, join(dirname(require.resolve('@playwright/mcp/package.json')), 'cli.js'));
+  const extensionUtils = require(join(dirname(require.resolve('playwright-core/package.json')), 'lib/tools/utils/extension.js'));
+  browserUse = await createBrowserUseController(context, load, join(dirname(require.resolve('@playwright/mcp/package.json')), 'cli.js'), extensionUtils);
   const server = context.get('webServer');
   const modules = context.get('clientModules');
   if (!connection || !server || !modules) throw new Error('Desktop host services are incomplete.');

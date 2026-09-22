@@ -50,6 +50,27 @@ try {
   const before = await create();
   assert.equal((await catalog(before)).provider, null);
   checks.push('Browser Use is absent by default');
+  const emptyProfile = join(data, 'extension-profile');
+  await mkdir(join(emptyProfile, 'Default'), { recursive: true });
+  // If the preflight regresses, Node exits on browser flags without opening any user browser.
+  await core.configureBrowserUse({ enabled: true, executablePath: process.execPath, userDataDir: emptyProfile });
+  const extensionSession = await create();
+  await call(extensionSession, 'describe_tools', { names: ['mcp__playwright-mcp__browser_tabs'] });
+  for (const [name, args] of [
+    ['invoke_tool', { name: 'mcp__playwright-mcp__browser_tabs', arguments: { action: 'list' } }],
+    ['mcp__playwright-mcp__browser_tabs', { action: 'list' }],
+  ] as const) {
+    const started = Date.now();
+    const result = await client.rpc('execute', { sessionId: extensionSession, name, arguments: args }, false, '/browser-use-test');
+    assert.equal(result.isError, true);
+    const message = result.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('\n');
+    assert.match(message, /Playwright Extension/);
+    assert.match(message, /安装/);
+    assert.doesNotMatch(message, /Request timed out/);
+    assert.ok(Date.now() - started < 5000, 'Missing extensions must not wait for the 60-second MCP timeout');
+  }
+  checks.push('Extension mode rejects a missing extension promptly through both progressive and native tool calls');
+  await core.configureBrowserUse({ enabled: false });
   await core.configureBrowserUse({ enabled: true, executablePath: browser.path });
   const first = await create();
   assert.equal((await catalog(first)).provider, 'playwright-mcp');
