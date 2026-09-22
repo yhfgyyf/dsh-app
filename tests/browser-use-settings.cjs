@@ -45,13 +45,19 @@ async function run(event) {
   const host = event.sender;
   if (restore) BrowserWindow.fromWebContents(host).setContentSize(900, 600);
   const js = code => host.executeJavaScript(code, true);
+  const finishOnboarding = () => until(() => js(`(() => {
+    const button = Array.from(document.querySelectorAll('button')).find(b =>
+      ['继续', 'Continue', '稍后配置', 'Configure later'].includes(b.textContent));
+    if (button) {
+      if (!button.disabled) button.click();
+      return false;
+    }
+    return document.getElementById('root')?.inert === false;
+  })()`), 'Onboarding did not release the Settings controls');
   if (!restore) {
     await until(() => js("Array.from(document.querySelectorAll('button')).some(b=>['继续','Continue'].includes(b.textContent))"), 'Onboarding missing');
-    await js("Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent)).click()");
-    // In 0.1.7 the model step may be omitted when a provider is already available.
-    await sleep(300);
-    await js("Array.from(document.querySelectorAll('button')).find(b=>['稍后配置','Configure later'].includes(b.textContent))?.click()");
   }
+  await finishOnboarding();
   await js("document.querySelector('button.VOzbGW_trigger').click()");
   const selector = '.desktop-browser-use-settings [role="switch"]';
   await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
@@ -80,6 +86,8 @@ async function run(event) {
   const window = BrowserWindow.fromWebContents(host);
   window.show(); window.focus(); host.focus();
   await until(() => js('document.hasFocus()'), 'Settings window could not receive keyboard focus');
+  // The optional credential step can appear after its provider readiness request finishes.
+  await finishOnboarding();
   await js("document.querySelector('.desktop-browser-use-connect').click()");
   await until(() => js("!!document.querySelector('#desktop-browser-use-token')"), 'Credential form missing');
   await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
@@ -93,6 +101,7 @@ async function run(event) {
       observer.disconnect();
       const rect = input.getBoundingClientRect();
       resolve({ input: visible.get(input), save: visible.get(save), focused: document.activeElement === input,
+        rootInert: document.getElementById('root').inert,
         documentFocused: document.hasFocus(), activeElement: { tag: document.activeElement?.tagName, id: document.activeElement?.id },
         inputTop: rect.top, inputBottom: rect.bottom, viewport: { width: innerWidth, height: innerHeight } });
     }, { threshold: 1 });
@@ -100,6 +109,7 @@ async function run(event) {
   })`);
   report.credentialVisibility = visibility;
   writeFileSync(join(data, `credentials-expanded-${restore ? 'restore' : 'enable'}.png`), (await host.capturePage()).toPNG());
+  assert.equal(visibility.rootInert, false, 'Onboarding must finish before interacting with Settings');
   assert.equal(visibility.input, true, 'Opening automatic connection must show the token input inside the scrollable Settings panel');
   assert.equal(visibility.save, true, 'The credential save button must be visible without extra scrolling');
   assert.equal(visibility.focused, true, 'The token input must accept typing immediately after opening');
