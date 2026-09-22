@@ -11,7 +11,7 @@ import * as Cordis from '@deepseek-ai/cordis';
 import Loader from '@deepseek-ai/cordis-plugin-loader';
 import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots';
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots';
-import { createDesktopModuleFacade, DesktopSlotCore } from '../src/renderer/univer-slot-compat.ts';
+import { createDesktopModuleFacade, DesktopSlotCore, legacyUniverMatch } from '../src/renderer/univer-slot-compat.ts';
 
 const name = 'conversation.chat.turnTail';
 const registrant = 'dsh-univer-office';
@@ -134,7 +134,8 @@ test('public module facade names only anonymous Univer exports across queued and
   assert.equal(named.name, registrant);
   assert.equal(named.__esModule, true);
   assert.equal(Object.getPrototypeOf(named), Object.getPrototypeOf(original));
-  assert.deepEqual(Object.getOwnPropertyDescriptor(named, 'apply'), Object.getOwnPropertyDescriptor(original, 'apply'));
+  assert.equal(typeof named.apply, 'function');
+  assert.equal(original.apply, apply, 'The installed module exports are unchanged');
   assert.equal(original.name, undefined);
   assert.equal(materialized, 1);
   target.load({ id: registrant, factory: () => explicit });
@@ -147,6 +148,40 @@ test('public module facade names only anonymous Univer exports across queued and
   assert.equal(live.at(-1).factory(() => {}), original);
   target.load({ id: registrant, factory: () => original });
   assert.equal(live.at(-1).factory(() => {}).name, registrant, 'Reloaded anonymous exports must retain the same source identity');
+});
+
+test('legacy Univer receives tool result wrappers without changing current session events', () => {
+  for (const content of [[], [{ type: 'text', text: '{"operation":"status","file":"book.xlsx"}' }], [{ type: 'image', source: { kind: 'file', path: '/image.png' } }]]) {
+    const match = { event: { type: 'tool/result', seq: 12, data: { turn: 1, step: 2, message: { role: 'tool', toolCallId: 'call-1', isError: true, content } } } };
+    const before = structuredClone(match);
+    const adapted = legacyUniverMatch(match);
+    assert.equal(adapted.event.data.message.role, 'user');
+    assert.deepEqual(adapted.event.data.message.content, [{ type: 'tool-result', toolCallId: 'call-1', isError: true, content }]);
+    assert.equal(adapted.event.seq, 12);
+    assert.deepEqual(match, before);
+  }
+  for (const match of [{ event: { type: 'tool/call', data: {} } }, { event: { type: 'tool/result', data: { message: { role: 'user', content: [] } } } }]) assert.equal(legacyUniverMatch(match), match);
+});
+
+test('legacy Univer adapter is scoped to its conversation definition', () => {
+  const facade = createDesktopModuleFacade();
+  const registrations: any[] = [];
+  const seen: any[] = [];
+  const other = { kind: 'other', update() {} };
+  facade.load({ id: registrant, factory: () => ({ apply(ctx: any) {
+    const events = ctx.get('uiConversation').events;
+    events.register({ kind: 'univerTurn', update(context: any, match: any) { seen.push(match); return context.state; } });
+    events.register(other);
+  } }) });
+  facade.pendingQueue[0].factory(() => {}).apply({ get(name: string) {
+    assert.equal(name, 'uiConversation'); return { events: { register(definition: any) { registrations.push(definition); } } };
+  } });
+  assert.equal(registrations[1], other);
+  const match = { event: { type: 'tool/result', data: { message: { role: 'tool', toolCallId: 'call-2', content: [] } } } };
+  const state = { files: [] };
+  assert.equal(registrations[0].update({ state }, match), state);
+  assert.equal(seen[0].event.data.message.content[0].toolCallId, 'call-2');
+  assert.equal(match.event.data.message.role, 'tool');
 });
 
 test('actual module Loader and SlotRegistry identify the legacy contribution by package name', async () => {

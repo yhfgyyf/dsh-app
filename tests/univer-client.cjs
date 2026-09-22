@@ -32,7 +32,7 @@ process.env.DSH_TELEMETRY_DISABLED = '1';
 const report = {
   status: 'running', checks: [], failures: [], console: [], expectedReloadMessages: [], externalRequests: [],
   clientSha256, clientBytes, platform: process.platform,
-  scope: 'Original npm Univer 0.3.2 browser client startup, ordinary historical turn and reload; inert host, no Office engine or online model.',
+  scope: 'Original npm Univer 0.3.2 client startup, V3 history migrated to V4 tool results and reload; inert host, no Office engine or online model.',
   data, readyCount: 0,
 };
 const sanitize = text => String(text).replace(/token=[^\s&"']+/g, 'token=[redacted]');
@@ -134,7 +134,7 @@ async function run(event) {
   await rpc('workspace/create', { request: { path: workspace } });
   await rpc('session/rename', { request: { sessionId, title } });
   await openOrdinaryTurn();
-  report.checks.push('A real historical ordinary chat turn renders without undefined matched data or a spurious Univer preview');
+  report.checks.push('Historical tool results migrated to V4 and the assistant reply render with Univer active, without a spurious Office preview');
   const firstReady = report.readyCount;
   reloading = true;
   host.reload();
@@ -201,8 +201,12 @@ export function apply(ctx) {
     event('session/title', { title, messageSeqs: [], source: { kind: 'user' } }),
     event('turn/start', { turn: 1 }), event('step/start', { turn: 1, step: 1 }),
     event('user/message', { role: 'user', id: randomUUID(), source: { kind: 'user' }, content: [{ type: 'text', text: 'Show an ordinary reply without Office tools.' }] }, true),
-    event('assistant/message', { turn: 1, step: 1, stream: [], usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, message: { role: 'assistant', id: randomUUID(), source: { kind: 'model', provider: 'fixture', model: 'fixture' }, content: [{ type: 'text', text: reply }] } }, true),
-    event('step/end', { turn: 1, step: 1 }), event('turn/end', { turn: 1, reason: { kind: 'completed' } }),
+    event('assistant/message', { turn: 1, step: 1, stream: [], usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, message: { role: 'assistant', id: randomUUID(), source: { kind: 'model', provider: 'fixture', model: 'fixture' }, content: [{ type: 'tool-call', id: 'ordinary-call', name: 'example', arguments: '{}' }] } }, true),
+    event('tool/call', { turn: 1, step: 1, callId: 'ordinary-call', name: 'example', arguments: '{}' }),
+    event('tool/result', { turn: 1, step: 1, message: { role: 'user', id: randomUUID(), source: { kind: 'tool', callId: 'ordinary-call' }, content: [{ type: 'tool-result', toolCallId: 'ordinary-call', content: [{ type: 'text', text: 'ordinary result' }] }] } }, true),
+    event('step/end', { turn: 1, step: 1 }), event('step/start', { turn: 1, step: 2 }),
+    event('assistant/message', { turn: 1, step: 2, stream: [], usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 }, message: { role: 'assistant', id: randomUUID(), source: { kind: 'model', provider: 'fixture', model: 'fixture' }, content: [{ type: 'text', text: reply }] } }, true),
+    event('step/end', { turn: 1, step: 2 }), event('turn/end', { turn: 1, reason: { kind: 'completed' } }),
   ];
   writeFileSync(join(sessionDir, 'session.v3.jsonl.zstd'), Buffer.concat(rows.map(row => zstdCompressSync(Buffer.from(JSON.stringify(row) + '\n')))));
   const blocked = join(data, 'blocked-fetches.jsonl');

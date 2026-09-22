@@ -28,7 +28,6 @@ export function BrowserUseSettings() {
       <span>浏览器操作（Browser Use）</span>
       <button type="button" className="desktop-computer-switch" role="switch" aria-label="浏览器操作" aria-checked={state.enabled} aria-busy={busy} disabled={busy} onClick={() => { void toggle(); }}><span /></button>
     </div>
-    <p className="desktop-browser-use-note">{state.enabled ? '已开启。新建或重新打开会话后可用。' : '允许 AI 在独立的浏览器窗口中操作网页。'}</p>
     {(error || state.error) && <p className="desktop-browser-use-note" role="alert">{error || state.error}</p>}
   </div>;
 }
