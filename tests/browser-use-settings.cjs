@@ -77,6 +77,9 @@ async function run(event) {
   assert.equal(live.phase, restore ? 'disabled' : 'ready');
   assert.equal(Boolean(live.extensionTokenConfigured), restore);
   assert.equal(Boolean(live.restartRequired), false);
+  const window = BrowserWindow.fromWebContents(host);
+  window.show(); window.focus(); host.focus();
+  await until(() => js('document.hasFocus()'), 'Settings window could not receive keyboard focus');
   await js("document.querySelector('.desktop-browser-use-connect').click()");
   await until(() => js("!!document.querySelector('#desktop-browser-use-token')"), 'Credential form missing');
   await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
@@ -90,6 +93,7 @@ async function run(event) {
       observer.disconnect();
       const rect = input.getBoundingClientRect();
       resolve({ input: visible.get(input), save: visible.get(save), focused: document.activeElement === input,
+        documentFocused: document.hasFocus(), activeElement: { tag: document.activeElement?.tagName, id: document.activeElement?.id },
         inputTop: rect.top, inputBottom: rect.bottom, viewport: { width: innerWidth, height: innerHeight } });
     }, { threshold: 1 });
     observer.observe(input); observer.observe(save);
