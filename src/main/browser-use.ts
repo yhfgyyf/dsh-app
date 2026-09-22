@@ -1,14 +1,14 @@
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { join, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { homedir } from 'node:os';
 import type { BrowserUseConfig, BrowserUseState } from '../shared/browser-use.ts';
 import { parseExtensionToken, type BrowserUseCredentials } from './browser-use-credentials.ts';
 
 export function browserCandidates(platform: string, home: string, env: NodeJS.ProcessEnv): { name: string; path: string }[] {
-  if (platform === 'darwin') return ['/Applications', join(home, 'Applications')].flatMap(directory => [
-    { name: 'Google Chrome', path: join(directory, 'Google Chrome.app/Contents/MacOS/Google Chrome') },
-    { name: 'Microsoft Edge', path: join(directory, 'Microsoft Edge.app/Contents/MacOS/Microsoft Edge') },
+  if (platform === 'darwin') return ['/Applications', posix.join(home, 'Applications')].flatMap(directory => [
+    { name: 'Google Chrome', path: posix.join(directory, 'Google Chrome.app/Contents/MacOS/Google Chrome') },
+    { name: 'Microsoft Edge', path: posix.join(directory, 'Microsoft Edge.app/Contents/MacOS/Microsoft Edge') },
   ]);
   if (platform === 'win32') return [...new Set([env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter((value): value is string => Boolean(value)))].flatMap(directory => [
     { name: 'Google Chrome', path: win32.join(directory, 'Google/Chrome/Application/chrome.exe') },
@@ -19,7 +19,7 @@ export function browserCandidates(platform: string, home: string, env: NodeJS.Pr
 
 export function browserProfileRoot(browser: string, platform: string, home: string, env: NodeJS.ProcessEnv): string {
   const edge = browser === 'Microsoft Edge';
-  if (platform === 'darwin') return join(home, 'Library/Application Support', edge ? 'Microsoft Edge' : 'Google/Chrome');
+  if (platform === 'darwin') return posix.join(home, 'Library/Application Support', edge ? 'Microsoft Edge' : 'Google/Chrome');
   if (platform === 'win32') return win32.join(env.LOCALAPPDATA ?? win32.join(home, 'AppData/Local'), edge ? 'Microsoft/Edge/User Data' : 'Google/Chrome/User Data');
   throw new Error('当前系统不支持浏览器操作。');
 }
