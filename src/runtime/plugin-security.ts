@@ -169,7 +169,7 @@ export async function reviewPlugin(spec: string, callerSignal: AbortSignal, depe
     signal.throwIfAborted();
     // Same immutable Message shape as DSH createUserMessage; no session or history is created.
     const message = Object.freeze({ id: randomUUID(), role: 'user',
-      source: Object.freeze({ kind: 'plugin', plugin: 'dsh-desktop-plugin-marketplace' }),
+      source: Object.freeze({ kind: 'plugin:dsh-desktop-plugin-marketplace' }),
       content: Object.freeze([Object.freeze({ type: 'text', text: data })]),
     });
     const answer = await reviewText(call.stream({ ...call.config, system: SYSTEM, messages: [message], tools: [], signal }), signal);

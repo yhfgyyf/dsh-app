@@ -104,6 +104,33 @@ diff --git a/presets/auto/router.js b/presets/auto/router.js
  export const ROUTER_REASONING_EFFORT = 'off'
  export const FALLBACK_PRESET = 'standard'
  export const ROUTER_CLASSIFIED_EVENT = 'auto-router/classified'
+@@ -91,7 +91,7 @@
+           skills
+         })}`
+       }],
+-      source: { kind: 'plugin', plugin: name }
++      source: { kind: `plugin:${name}` }
+     }],
+     system: CAPABILITY_SELECTOR_SYSTEM_PROMPT,
+     temperature: 0,
+@@ -176,7 +176,7 @@
+     id: `message-${randomUUID()}`,
+     role: 'user',
+     content: [{ type: 'text', text: lines.join('\n') }],
+-    source: { kind: 'plugin', plugin: name }
++    source: { kind: `plugin:${name}` }
+   })
+ }
+ 
+@@ -304,7 +304,7 @@
+       id: `message-${randomUUID()}`,
+       role: 'user',
+       content: [{ type: 'text', text: `Classify this JSON-framed first user task:\n${framed}` }],
+-      source: { kind: 'plugin', plugin: name }
++      source: { kind: `plugin:${name}` }
+     }],
+     system: ROUTER_SYSTEM_PROMPT,
+     temperature: 0,
 @@ -394,7 +394,7 @@
   */
  export function apply(ctx) {
@@ -154,3 +181,32 @@ diff --git a/test/config.test.mjs b/test/config.test.mjs
 +  restore()
 +  assert.deepEqual(await roster.list(), [{ id: 'standard' }])
 +})
+diff --git a/test/router.test.mjs b/test/router.test.mjs
+--- a/test/router.test.mjs
++++ b/test/router.test.mjs
+@@ -74,7 +74,7 @@
+     currentModel: 'some-user-model'
+   })
+   assert.equal(request.provider, 'deepseek-official')
+-  assert.equal(request.model, 'deepseek-v4-flash')
++  assert.equal(request.model, 'deepseek-flash')
+ })
+ 
+ test('routing policy sends every repository-analysis or programming task to code', () => {
+@@ -196,6 +196,7 @@
+       })
+     },
+     agentPresets: {
++      composedPreset: () => 'auto',
+       async list() {
+         return presetIds.map((id) => ({ id }))
+       },
+@@ -241,7 +242,7 @@
+     data: { agentPreset: 'code' }
+   })
+   assert.equal(harness.nextTurn[0], harness.message)
+-  assert.equal(harness.nextTurn[1].source.kind, 'plugin')
++  assert.equal(harness.nextTurn[1].source.kind, 'plugin:dsh-auto-preset-router')
+   assert.match(harness.nextTurn[1].content[0].text, /<auto-capability-hints>/u)
+   assert.match(harness.nextTurn[1].content[0].text, /`repository-repair`/u)
+   assert.doesNotMatch(harness.nextTurn[1].content[0].text, /修改代码实现并运行测试/u)

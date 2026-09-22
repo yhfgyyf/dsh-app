@@ -9,6 +9,7 @@ import type { BrowserUseState } from '../shared/browser-use.ts';
 const api: DesktopAPI = {
   getBrowserUseState: () => ipcRenderer.invoke('desktop:browser-use-state'),
   setBrowserUseEnabled: enabled => ipcRenderer.invoke('desktop:browser-use-enabled', enabled),
+  saveBrowserUseToken: token => ipcRenderer.invoke('desktop:browser-use-token', token),
   onBrowserUseState: listener => {
     const callback = (_event: unknown, state: BrowserUseState) => listener(state);
     ipcRenderer.on('desktop:browser-use-state', callback);

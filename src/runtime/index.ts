@@ -38,7 +38,8 @@ process.on('message', (message: any) => {
   if (message?.type === 'browser-use-configure' && typeof message.id === 'string') {
     const config = message.config;
     const configure = async () => {
-      if (!browserUse || closing || typeof config?.enabled !== 'boolean' || (config.enabled && typeof config.executablePath !== 'string')) throw new Error('浏览器操作配置不可用。');
+      if (!browserUse || closing || typeof config?.enabled !== 'boolean' || (config.enabled && (typeof config.executablePath !== 'string' || (config.userDataDir !== undefined && (typeof config.userDataDir !== 'string' || !config.userDataDir.trim()))))) throw new Error('浏览器操作配置不可用。');
+      if (config.extensionToken !== undefined && (typeof config.extensionToken !== 'string' || !/^[A-Za-z0-9_+/=-]{16,1024}$/.test(config.extensionToken) || !config.userDataDir)) throw new Error('浏览器连接令牌配置无效。');
       await browserUse.configure(config);
     };
     void configure().then(() => process.send?.({ type: 'browser-use-result', id: message.id }), error => process.send?.({ type: 'browser-use-result', id: message.id, error: error instanceof Error ? error.message : '浏览器操作配置失败。' }));
@@ -95,7 +96,7 @@ try {
     await ctx.plugin(PluginPackages, { resolution });
   });
   const connection = context.get('connection');
-  browserUse = await createBrowserUseController(context, load);
+  browserUse = await createBrowserUseController(context, load, join(dirname(require.resolve('@playwright/mcp/package.json')), 'cli.js'));
   const server = context.get('webServer');
   const modules = context.get('clientModules');
   if (!connection || !server || !modules) throw new Error('Desktop host services are incomplete.');

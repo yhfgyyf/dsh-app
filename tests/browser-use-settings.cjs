@@ -1,7 +1,7 @@
-const { app, ipcMain } = require('electron');
+const { app, ipcMain, safeStorage } = require('electron');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
-const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const root = join(__dirname, '..');
 const data = process.env.DSH_BROWSER_SETTINGS_TEST_DATA;
 assert.ok(data, 'Run through scripts/test-browser-use-settings.ts');
@@ -64,14 +64,44 @@ async function run(event) {
   report.checks.push(restore ? 'A new app/core process restores the enabled preference' : 'Settings contains Browser Use with the Computer Use switch style and defaults off');
   for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'https://untrusted.invalid/' } }]) {
     await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-enabled')(invalid, true)));
+    await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-token')(invalid, 'fixture-rejected-extension-token')));
   }
   await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-enabled')(event, 'true')));
+  await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-token')(event, {})));
   await js(`document.querySelector(${JSON.stringify(selector)}).click()`);
   await until(async () => !(await state()).busy && (await state()).enabled === (restore ? 'false' : 'true'), 'Browser toggle failed');
   assert.equal(JSON.parse(readFileSync(join(data, 'desktop.json'), 'utf8')).browserUseEnabled, !restore);
   const live = await handlers.get('desktop:browser-use-state')(event);
   assert.equal(live.enabled, !restore);
   assert.equal(live.phase, restore ? 'disabled' : 'ready');
+  assert.equal(Boolean(live.extensionTokenConfigured), restore);
+  assert.equal(Boolean(live.restartRequired), false);
+  await js("document.querySelector('.desktop-browser-use-connect').click()");
+  await until(() => js("!!document.querySelector('#desktop-browser-use-token')"), 'Credential form missing');
+  assert.equal(await js("document.querySelector('#desktop-browser-use-token').type"), 'password');
+  assert.equal(await js("document.querySelector('#desktop-browser-use-token').value"), '');
+  const credentialsPath = join(data, 'browser-use-credentials.json');
+  const fixtureToken = 'fixture-browser-auto-connect-token';
+  if (!restore) {
+    await js(`(() => { const input=document.querySelector('#desktop-browser-use-token');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify('PLAYWRIGHT_MCP_EXTENSION_TOKEN=' + fixtureToken)});input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    await until(() => js("!document.querySelector('.desktop-browser-use-credentials button[type=submit]').disabled"), 'Save did not become available');
+    await js("document.querySelector('.desktop-browser-use-credentials').requestSubmit()");
+    await until(async () => (await handlers.get('desktop:browser-use-state')(event)).extensionTokenConfigured, 'Credential save failed');
+    const stored = readFileSync(credentialsPath, 'utf8');
+    assert.ok(!stored.includes(fixtureToken));
+    assert.equal(safeStorage.decryptString(Buffer.from(JSON.parse(stored).encryptedToken, 'base64')), fixtureToken);
+    assert.ok(!readFileSync(join(data, 'desktop.json'), 'utf8').includes(fixtureToken));
+    report.checks.push('Settings saves an explicitly supplied token with native OS encryption; preferences and IPC state contain no plaintext token');
+  } else {
+    await js("Array.from(document.querySelectorAll('.desktop-browser-use-credentials button')).find(b=>b.textContent==='清除令牌').click()");
+    await until(async () => !(await handlers.get('desktop:browser-use-state')(event)).extensionTokenConfigured, 'Credential clear failed');
+    assert.equal(existsSync(credentialsPath), false);
+    report.checks.push('A cold restart decrypts the credential without returning it to the renderer; clearing removes the encrypted file');
+  }
+  const saved = await handlers.get('desktop:browser-use-state')(event);
+  assert.equal(saved.restartRequired, true);
+  assert.ok(!JSON.stringify(saved).includes(fixtureToken));
+  await until(() => js("!document.querySelector('#desktop-browser-use-token')"), 'Credential form did not clear after saving');
   writeFileSync(join(data, `settings-${restore ? 'disabled' : 'enabled'}.png`), (await host.capturePage()).toPNG());
   report.checks.push('Settings toggle reaches the real provider and saves the result; untrusted IPC is rejected');
 }

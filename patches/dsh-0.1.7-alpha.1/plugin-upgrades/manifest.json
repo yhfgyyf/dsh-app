@@ -6,7 +6,7 @@
       "repository": "yhfgyyf/dsh-auto-preset-router",
       "commit": "0a292c14405879d66f6bba5150db82510bd05955",
       "version": "0.2.4",
-      "patchSha256": "8af04e72757b13375a0024aacf68cf9b840eec14a8ea76820ad67224651184cd",
+      "patchSha256": "b53f88f1288468582addb53c81e87baa20c1823be04d0c3d189a552276834ee3",
       "files": [
         {
           "path": "cordis.patch.yml",
@@ -39,7 +39,7 @@
         {
           "path": "presets/auto/router.js",
           "before": "9240688b9d7a47cc593b4aae64e2878f9f8011e54dd3ed789defe7aa442e3a75",
-          "after": "3955a1dcd4146653d6a182999f60660fa07b1bfb9087de71a30fdc1db5d7a4da",
+          "after": "57d500218fd4e0fcb1018639f0dab2da7cebca9d59833160b997aa6f1593c65f",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -56,6 +56,13 @@
           "after": "f606335ab3f760ea67138917003c5370e07f0ebfbe04975bb996acb1b74fd3c5",
           "beforeMode": "100644",
           "afterMode": "100644"
+        },
+        {
+          "path": "test/router.test.mjs",
+          "before": "455dde7c50a3df5cd005f96ebfd8cd99d37adcb31c7617a463ecc5ed32cd8ab3",
+          "after": "9d9371558ba0c1b9788e199ce9ed8a72a39bf840d2da465782e548802a9e267e",
+          "beforeMode": "100644",
+          "afterMode": "100644"
         }
       ]
     },
@@ -64,7 +71,7 @@
       "repository": "yhfgyyf/dsh-audit-mode",
       "commit": "2e22f39f1afe24a094568de29adb65f79fc74fde",
       "version": "0.6.1",
-      "patchSha256": "81e1bb400686485671821c8c7262c1fb91e41834c1a13b706cebc3b1377f88f4",
+      "patchSha256": "094b01377a646044a4ef07311be3526f046c1ba3f4037e83a72c71a3cbcbc033",
       "files": [
         {
           "path": "index.js",
@@ -81,6 +88,13 @@
           "afterMode": "100644"
         },
         {
+          "path": "lib/reviewer.js",
+          "before": "3d5d1e166f7defccf27152918946f4b3ca8a11c55f02280d909fba6f1ee40a3c",
+          "after": "e738931724de9514c1a710eeae6c872e9b8625f3235e34e1e2b5fbb993a35264",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
           "path": "lib/roster.js",
           "before": "3b5dd8f8d98bfefadf1f5d533b1e69e4915e710299c73114bbc5492556acb0be",
           "after": "8c55e93e5bfc75d28e11885ee55345fbd15a64a3a4165cc746a4145498f68649",
@@ -90,7 +104,7 @@
         {
           "path": "lib/service.js",
           "before": "36997bf65cec9b9945c032c06d46fefe78c8aa3bd597d31a5e0e8389d973bc2b",
-          "after": "ce78e626982057941c3e4b40f8a2322c8e43b334199f799081a262288a597bf4",
+          "after": "7bb77a090821a335055536251a7452285524bfd24a7d60b3c71c826d9f81be19",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -132,7 +146,7 @@
         {
           "path": "scripts/check-remediation-runtime.mjs",
           "before": "8c53dce70e6b39c42b07f17f1a35460285fcc2659aba3a4848cc856625589761",
-          "after": "06e27791ce4148dcc8a13628aff620599ce23ed9f73355c65898e4d60acd2c13",
+          "after": "e8c74a5b076c32d3ae5975dc07e6bc7fa7cb3ae414ecb1e048cfff91453ad531",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -148,6 +162,13 @@
           "before": null,
           "after": "09f57c524553fc6fb285383e6c92b6ee796bd0e0e6d2f090241f705753078d79",
           "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/reviewer.test.mjs",
+          "before": "29c474e19697fd75b4c9c00102c86a8c786809f67d8b7d44c8588f8d8d4ba2d0",
+          "after": "ebda6802f46eeee6acbc77d16e697089799e683e131a933ec6974acdda47fc33",
+          "beforeMode": "100644",
           "afterMode": "100644"
         },
         {

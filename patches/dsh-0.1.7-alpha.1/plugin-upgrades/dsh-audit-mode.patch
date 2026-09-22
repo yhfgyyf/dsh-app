@@ -56,6 +56,18 @@ diff --git a/lib/client.js b/lib/client.js
  			var sessionId = props.sessionId;
  			var view = props.view;
  			var onAudit = props.onAudit;
+diff --git a/lib/reviewer.js b/lib/reviewer.js
+--- a/lib/reviewer.js
++++ b/lib/reviewer.js
+@@ -271,7 +271,7 @@
+         provider: route,
+         model,
+         reasoningEffort: effort,
+-        messages: [message('user', framed, { kind: 'plugin', plugin: 'dsh-audit-mode' })],
++        messages: [message('user', framed, { kind: 'plugin:dsh-audit-mode' })],
+         system: baseInstructions,
+         tools: [],
+         temperature: 0,
 diff --git a/lib/roster.js b/lib/roster.js
 --- a/lib/roster.js
 +++ b/lib/roster.js
@@ -90,7 +102,26 @@ diff --git a/lib/service.js b/lib/service.js
  ])
  const REMEDIATION_SKILLS = Object.freeze([
    {
-@@ -54,8 +50,9 @@
+@@ -39,12 +35,16 @@
+ function auditMessage (text) {
+   return createUserMessage({
+     content: [{ type: 'text', text }],
+-    source: { kind: 'plugin', plugin: AUDIT_PLUGIN }
++    source: { kind: `plugin:${AUDIT_PLUGIN}` }
+   })
+ }
+ 
+ function isRemediationMessage (message) {
+-  return message?.source?.kind === 'plugin' && [AUDIT_PLUGIN, RETIRED_PLUGIN].includes(message.source.plugin)
++  const source = message?.source
++  return [AUDIT_PLUGIN, RETIRED_PLUGIN].some(plugin =>
++    source?.kind === `plugin:${plugin}` ||
++    (source?.kind === 'plugin' && source.plugin === plugin)
++  )
+ }
+ 
+ function capabilityLeasePrompt (remediation, skills) {
+@@ -54,8 +54,9 @@
      'Load the `editing-cordis-compositions` skill through the stable `skill` tool before changing DSH.',
      'Load `cordis-plugin-development` only when the accepted remediation changes a plugin or model-facing tool.',
      `Available remediation skills: ${skills.map(skill => `\`${skill.name}\``).join(', ')}.`,
@@ -601,7 +632,13 @@ diff --git a/scripts/check-remediation-runtime.mjs b/scripts/check-remediation-r
          elevated: verdict === 'critical'
        }
      }),
-@@ -83,6 +81,9 @@
+@@ -78,11 +76,14 @@
+   'cordis-plugin-development'
+ ])
+ assert.equal(critical.sent.length, 1)
+-assert.equal(critical.sent[0].message.source.kind, 'plugin')
++assert.equal(critical.sent[0].message.source.kind, 'plugin:dsh-audit-mode')
+ const criticalText = critical.sent[0].message.content.map((block) => block.text ?? '').join('\n')
  assert.match(criticalText, /editing-cordis-compositions/)
  assert.match(criticalText, /cordis-plugin-development/)
  assert.match(criticalText, /<audit-capability-lease/)
@@ -615,8 +652,9 @@ diff --git a/scripts/check-remediation-runtime.mjs b/scripts/check-remediation-r
  assert.equal(warning.restrictions[0].disposed, false)
  assert.equal(warning.skillDefinitions.length, 0)
  assert.equal(warning.sent.length, 1)
+-assert.equal(warning.sent[0].message.source.kind, 'plugin')
 +assert.equal(warning.sent[0].target, 'next-step')
- assert.equal(warning.sent[0].message.source.kind, 'plugin')
++assert.equal(warning.sent[0].message.source.kind, 'plugin:dsh-audit-mode')
  
  const queueFailure = fixture('critical')
 -queueFailure.agent.send = () => { throw new Error('inbox unavailable') }
@@ -701,6 +739,21 @@ new file mode 100644
 +  const ids = [...result.matchAll(/^- id: ([^\n]+)/gm)].map(match => match[1])
 +  assert.equal(new Set(ids).size, ids.length, 'top-level preset rows must have unique ids')
 +})
+diff --git a/test/reviewer.test.mjs b/test/reviewer.test.mjs
+--- a/test/reviewer.test.mjs
++++ b/test/reviewer.test.mjs
+@@ -110,9 +110,11 @@
+   assert.equal(requests[0].provider, 'fast-route')
+   assert.equal(requests[0].model, 'fast-model')
+   assert.deepEqual(requests[0].tools, [])
++  assert.deepEqual(requests[0].messages[0].source, { kind: 'plugin:dsh-audit-mode' })
+   assert.equal(requests[1].provider, 'default-route')
+   assert.equal(requests[1].model, 'audit-model')
+   assert.deepEqual(requests[1].tools, [])
++  assert.deepEqual(requests[1].messages[0].source, { kind: 'plugin:dsh-audit-mode' })
+   assert.deepEqual(JSON.parse(audit.text), { verdict: 'pass', summary: 'dsh reviewed', findings: [] })
+   assert.match(audit.rawText, /"type":"object"/)
+ })
 diff --git a/test/roster.test.mjs b/test/roster.test.mjs
 --- a/test/roster.test.mjs
 +++ b/test/roster.test.mjs

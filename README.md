@@ -85,7 +85,9 @@ Codex 登录通过 DSH 自己的授权服务保存到共享凭据文件，过期
 
 ## 浏览器操作（Browser Use）
 
-macOS 和 Windows 在“设置 → 通用设置”中提供 Browser Use 开关，位于“电脑操作”下方，默认关闭。需要本机已安装 Chrome 或 Edge；后端使用官方 DSH Playwright MCP，无需另装 Python 服务。开关状态随 App 重启保留。
+macOS 和 Windows 在“设置 → 通用设置”中提供 Browser Use 开关，位于“电脑操作”下方，默认关闭。后端继续使用 Playwright MCP，通过 [Microsoft 官方 Playwright 扩展](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm) 接入本机 Chrome（没有 Chrome 时使用 Edge），沿用该浏览器已有的登录状态，无需另装 Python 服务。默认在首次操作时由用户在扩展页面授权并选择标签页；不同会话使用各自的标签页组。关闭 Browser Use 会断开 DSH 连接，原浏览器登录状态保留。开关状态随 App 重启保留。
+
+需要跳过连接确认页时，点击同一行的“自动连接”，粘贴扩展提供的 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`（也支持完整的环境变量行），保存后重启 App。保存令牌代表允许 DSH 自动连接浏览器并使用已有登录会话。令牌通过系统加密存储单独保存在本机，不写入普通偏好设置，也不会回传给设置页面或进入对话；没有可用的系统加密时拒绝保存。清除令牌后重启 App，即恢复手动确认。更改在重启后生效，以免中断正在运行的会话。
 
 开启后新建或重新打开会话，AI 可导航网页、填写表单、点击和截图。每个会话使用独立的浏览器上下文，不自动使用日常浏览器的登录状态。关闭开关会卸载浏览器工具并关闭其浏览器连接。右侧网页预览可继续单独使用。
 

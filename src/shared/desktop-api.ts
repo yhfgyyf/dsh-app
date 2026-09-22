@@ -21,6 +21,7 @@ export type DesktopInfo = {
 export interface DesktopAPI {
   getBrowserUseState(): Promise<BrowserUseState>;
   setBrowserUseEnabled(enabled: boolean): Promise<BrowserUseState>;
+  saveBrowserUseToken(token: string | null): Promise<BrowserUseState>;
   onBrowserUseState(listener: (state: BrowserUseState) => void): () => void;
   getComputerState(): Promise<ComputerState>;
   setComputerEnabled(enabled: boolean): Promise<ComputerState>;

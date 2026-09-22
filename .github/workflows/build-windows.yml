@@ -27,6 +27,9 @@ jobs:
       - name: Preset switching and cold session restoration
         timeout-minutes: 2
         run: npm run test:audit-switch
+      - name: Auto first turns, Audit remediation and saved conversations
+        timeout-minutes: 2
+        run: npm run test:auto-conversation
       - name: Web, TUI and App ownership
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle

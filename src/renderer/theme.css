@@ -85,4 +85,12 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-computer-switch:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .desktop-browser-use-settings { margin-top: 16px; }
 .desktop-browser-use-note { margin: 6px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.desktop-browser-use-actions { display: flex; align-items: center; gap: 14px; }
+.desktop-browser-use-connect { border: 0; padding: 2px 0; color: inherit; background: none; font: inherit; cursor: pointer; }
+.desktop-browser-use-credentials { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--dsw-alias-border-main, #8885); border-radius: 8px; font-size: 12px; }
+.desktop-browser-use-credentials p { margin: 0; color: var(--dsw-alias-label-secondary); }
+.desktop-browser-use-credentials input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #8886; border-radius: 5px; color: inherit; background: transparent; }
+.desktop-browser-use-credential-actions { display: flex; gap: 8px; }
+.desktop-browser-use-credential-actions button { padding: 4px 12px; border: 1px solid #8886; border-radius: 5px; color: inherit; background: transparent; cursor: pointer; }
+.desktop-browser-use-actions button:disabled, .desktop-browser-use-credential-actions button:disabled { opacity: .5; cursor: default; }
 .desktop-titlebar .desktop-computer-stop { color: #e34c4c; font-size: 12px; }

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, protocol, screen, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, protocol, safeStorage, screen, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
 import { readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, extname, resolve } from 'node:path';
@@ -16,6 +16,7 @@ import { installTextContextMenu } from './context-menu.ts';
 import { openLocal } from './local-open.ts';
 import { DesktopComputerUse } from './computer-use.ts';
 import { DesktopBrowserUse } from './browser-use.ts';
+import { BrowserUseCredentialsFile } from './browser-use-credentials.ts';
 import { CuaComputerDriver } from './computer-use-driver.ts';
 import { ComputerPreviewWindow } from './computer-preview.ts';
 import { resetDshComputerPermissions } from './macos-privacy.ts';
@@ -237,6 +238,7 @@ else {
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
     handle('desktop:browser-use-state', () => browserUse.state);
+    handle('desktop:browser-use-token', value => browserUse.saveExtensionToken(value));
     handle('desktop:browser-use-enabled', async value => {
       if (typeof value !== 'boolean') throw new Error('浏览器操作开关值无效。');
       const state = await browserUse.setEnabled(value);
@@ -330,7 +332,8 @@ else {
     });
     browserUse = new DesktopBrowserUse(config => runtime.configureBrowserUse(config), state => {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:browser-use-state', state);
-    });
+    }, undefined, new BrowserUseCredentialsFile(app.getPath('userData'), safeStorage));
+    await browserUse.restoreCredentials();
     await installProtocols();
     updates = new DesktopUpdates({
       currentVersion: app.getVersion(), platform: process.platform, arch: process.arch,
