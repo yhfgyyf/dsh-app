@@ -69,19 +69,25 @@ Windows 从 v0.1.6 起将旧安装目录整体保留在相邻备份目录，再�
 - 聊天与右侧栏支持选中文字后右键复制，输入框提供剪切、粘贴、撤销与全选。
 - “在本地打开”使用系统默认应用打开右侧当前文件；菜单可选择其他应用、在文件夹中显示、选择文件或文件夹。没有当前文件时弹出文件选择器，工作区文件夹作为单独菜单项保留。
 
-内置 DSH `0.1.5-rc.1`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
+内置 DSH `0.1.7-alpha.1`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
 
 部分能力依赖所选模型或外部工具：MP4 需要提供方支持 `video_url`；Audit 的 Codex / Claude Code 后端需要对应 CLI，也可配置 DSH 模型后端。安装包不包含模型账号、密钥或这些外部 CLI。
 
 ## 与 Web / TUI 共享
 
-App、Web 和 TUI 可共用同一个 `DSH_HOME`，默认 `~/.dsh`。会话、附件、工作区和模型配置在这里保存。App 自己的窗口与端口状态位于系统 Application Support / AppData 下的 `DSH Desktop` 目录。
+App、Web 和 TUI 可共用同一个 `DSH_HOME`，默认 `~/.dsh`。会话、附件、工作区和 API 凭据在这里保存。DSH 0.1.7 的模型与界面设置改为按 profile 保存；App 首次启动会导入旧设置并保留原件，此后各 profile 的设置独立。App 自己的 profile、窗口与端口状态位于系统 Application Support / AppData 下的 `DSH Desktop` 目录。
 
 Codex 登录通过 DSH 自己的授权服务保存到共享凭据文件，过期令牌由现有提供方自动刷新。Web/TUI 的安装步骤见[构建说明](docs/BUILDING.md)。TUI 使用 `/login openai-codex`，远程终端可加 `--device`；`/auth` 查看状态，`/logout openai-codex` 退出。授权输入不会作为聊天提交或进入输入历史。
 
 使用官方会话生命周期锁：同一会话同时只有一个进程可以写入。其他端尝试恢复、修改或删除占用中的会话会收到占用错误；持有端退出后可以接手。切换页面不保证释放会话，跨进程实时跟随活动流也不属于当前功能。
 
-本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.1.5-rc.1)。
+本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.1.7-alpha.1)。
+
+## 浏览器操作（Browser Use）
+
+macOS 和 Windows 在“设置 → 通用设置”中提供 Browser Use 开关，位于“电脑操作”下方，默认关闭。需要本机已安装 Chrome 或 Edge；后端使用官方 DSH Playwright MCP，无需另装 Python 服务。开关状态随 App 重启保留。
+
+开启后新建或重新打开会话，AI 可导航网页、填写表单、点击和截图。每个会话使用独立的浏览器上下文，不自动使用日常浏览器的登录状态。关闭开关会卸载浏览器工具并关闭其浏览器连接。右侧网页预览可继续单独使用。
 
 ## 电脑操作
 

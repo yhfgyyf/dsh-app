@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DesktopRuntime } from '../src/main/runtime.ts';
@@ -14,7 +14,7 @@ await mkdir(join(root,'.test-data'),{recursive:true});
 await mkdir(join(root,'docs/evidence'),{recursive:true});
 const data=await mkdtemp(join(root,'.test-data/three-surfaces-'));
 const home=join(data,'shared-home'); await mkdir(home);
-const nm=join(upgrade.globalPackage,'node_modules');
+const nm=dirname(dirname(upgrade.globalPackage));
 for(const name of ['web','tui']) {
  const dir=join(home,'profiles',name);await mkdir(join(dir,'node_modules'),{recursive:true});
  const plugins=['dsh-auto-preset-router','dsh-audit-mode','dsh-progressive-tools',...(name==='tui'?['dsh-tui-app']:[])];
@@ -25,7 +25,7 @@ for(const name of ['web','tui']) {
  await writeFile(join(dir,'package.json'),JSON.stringify(manifest,null,2));
  await writeFile(join(dir,'cordis.patch.yml'),'- id: session-telemetry-otel\n  disabled: true\n');
 }
-await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-flash\n');
+await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n');
 const processes:ChildProcess[]=[]; const cores:DesktopRuntime[]=[]; const clients:Awaited<ReturnType<typeof connectFixture>>[]=[];
 const results:{name:string;status:string}[]=[];
 const until=async(fn:()=>boolean|Promise<boolean>,timeout=15000)=>{const t=Date.now();while(!await fn()){if(Date.now()-t>timeout)throw Error('Timed out');await new Promise(r=>setTimeout(r,50));}};

@@ -31,6 +31,12 @@ exports.run = async ({ host, until, report, data }) => {
     await js(`Array.from(document.querySelectorAll('.hWmORq_body button[title]')).find(b=>b.title.endsWith(${JSON.stringify('/' + name)})).click()`);
   };
   const text = selector => js(`(${visible(selector)})?.innerText || ''`);
+  const chooseViewer = async title => {
+    await until(() => js(`!!(${visible('[data-document-viewer-menu]')})`), 'Document viewer menu missing');
+    await js(`(${visible('[data-document-viewer-menu]')}).click()`);
+    await until(() => js(`Array.from(document.querySelectorAll('[role="menuitem"]')).some(item=>item.textContent.trim()===${JSON.stringify(title)})`), 'Document viewer choice missing: ' + title);
+    await js(`Array.from(document.querySelectorAll('[role="menuitem"]')).find(item=>item.textContent.trim()===${JSON.stringify(title)}).click()`);
+  };
   for (const name of ['utf8.txt', 'utf8-bom.txt', 'utf16le.txt', 'utf16be.txt', 'gbk.txt', '工作区外文本.txt']) {
     await open(name);
     await until(async () => (await text('[data-document-preview="text"]')).includes('桌面文本预览：你好，世界。'), name + ' did not decode Chinese text');
@@ -45,6 +51,8 @@ exports.run = async ({ host, until, report, data }) => {
     }
   };
   await open('大写.DOCX');
+  await until(async () => (await text('[data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office"]')).includes('DOCX_PREVIEW_OK'), 'Default Office DOCX preview did not render text');
+  await chooseViewer('Word 文档');
   await until(() => js(`(${visible('[data-office-preview="docx"]')})?.dataset.officeStatus === 'ready'`), 'DOCX failed to render');
   const word = await until(() => officeFrame('DOCX_PREVIEW_OK'), 'DOCX preview contains no document text');
   const wordInfo = await word.executeJavaScript(`({text:document.body.innerText,tables:document.querySelectorAll('table').length,images:Array.from(document.images).filter(i=>i.complete&&i.naturalWidth>0).length,desktop:typeof window.dshDesktop,isolated:(()=>{try{return !parent.document}catch{return true}})()})`);
@@ -76,6 +84,8 @@ exports.run = async ({ host, until, report, data }) => {
   report.checks.push('XLSX renders Chinese cells and cached formulas, switches worksheets, XLS/ODS open, and CSV preserves quoted commas');
 
   await open('sample.pptx');
+  await until(async () => (await text('[data-document-preview="@deepseek-ai/dsh-client-ui-sidebar-documentpreview/office"]')).includes('PPTX_SLIDE_1_OK'), 'Default Office PPTX preview did not render text');
+  await chooseViewer('PowerPoint 演示');
   await until(() => js(`(${visible('[data-office-preview="pptx"]')})?.dataset.officeStatus === 'ready'`), 'PPTX failed to render');
   const slides = await until(() => officeFrame('PPTX_SLIDE_1_OK'), 'PPTX first slide is blank');
   await until(() => slides.executeJavaScript(`document.body.innerText.includes('PPTX_SLIDE_2_OK')`), 'PPTX second slide is blank');
@@ -92,8 +102,11 @@ exports.run = async ({ host, until, report, data }) => {
   await until(() => js(`(()=>{const v=(${visible('[data-document-preview="media"]')})?.querySelector('video');return v&&v.readyState>=2&&v.videoWidth===64&&v.videoHeight===48})()`), 'MP4 first frame did not decode');
   report.checks.push('Video sidebar decodes the real H.264 MP4 frame and exposes playback controls');
   await open('broken.docx');
+  await chooseViewer('Word 文档');
   await until(() => js(`(${visible('[data-office-preview="docx"]')})?.dataset.officeStatus === 'error'`), 'Damaged DOCX did not show an explicit failure');
   await open('old.doc');
-  await until(async () => (await text('[data-document-preview="unsupported-office"]')).includes('DOCX'), 'Legacy DOC did not explain conversion');
-  report.checks.push('Damaged Office files and legacy DOC show explicit, actionable states instead of binary text or a blank panel');
+  await until(() => js(`!!(${visible('[data-textpreview-failed]')})`), 'Malformed legacy DOC did not show an explicit Office failure');
+  assert.match(await text('[data-textpreview-failed]'), /无法预览|转换失败|cannot be previewed|Office conversion did not produce/);
+  assert.equal(await js(`Array.from((${visible('[data-textpreview-failed]')}).querySelectorAll('button')).some(button=>['重试','Retry'].includes(button.textContent.trim())&&!button.disabled)`), true, 'Malformed legacy DOC failure must offer retry');
+  report.checks.push('Official Office previews are the default, local Word/Slides remain selectable, and damaged Office files show explicit, actionable failures');
 };

@@ -1,8 +1,10 @@
 // Replay a historical, model-free session through the actual desktop UI.
 const { app, ipcMain, BrowserWindow, webContents } = require('electron');
+app.commandLine.appendSwitch('lang', 'en-US');
 const assert = require('node:assert/strict');
 const { mkdirSync, writeFileSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { randomUUID, createHash } = require('node:crypto');
 const { zstdCompressSync } = require('node:zlib');
 const interactions = require('./desktop-interactions.cjs');
@@ -91,6 +93,8 @@ ipcMain.handle = (channel, listener) => originalHandle(channel, async (...args) 
     setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
       report.ui = await args[0].sender.executeJavaScript('document.body.innerText.slice(0, 3000)').catch(() => 'unavailable');
       report.layout = await args[0].sender.executeJavaScript(`({width:innerWidth,collapsed:!!document.querySelector('[data-sidebar-collapsed]'),buttons:Array.from(document.querySelectorAll('button')).map(b=>b.getAttribute('aria-label')||b.title||b.textContent).filter(Boolean).slice(0,25)})`).catch(() => null);
+      report.artifactElements = await args[0].sender.executeJavaScript(`Array.from(document.querySelectorAll('.hWmORq_body button[title], .hWmORq_body a, .hWmORq_body img')).map(element=>({tag:element.tagName,title:element.title,text:element.textContent,src:element.getAttribute('src')}))`).catch(() => null);
+      report.previews = await args[0].sender.executeJavaScript(`Array.from(document.querySelectorAll('[data-office-preview], [data-document-preview], iframe')).map(element=>({tag:element.tagName,dataset:{...element.dataset},text:element.innerText,visible:element.checkVisibility({checkVisibilityCSS:true}),rect:element.getBoundingClientRect().toJSON()}))`).catch(() => null);
       finish(error);
     }), 300);
   }
@@ -100,6 +104,7 @@ async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
   window.setSize(980, 720);
+  host.setBackgroundThrottling(false);
   window.show(); window.focus();
   const js = code => host.executeJavaScript(code, true);
   await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
@@ -116,7 +121,9 @@ async function run(event) {
   await js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Artifact link acceptance')).click()`);
   await until(() => js(`!!document.querySelector('.hWmORq_body code button[title$="/pelican.svg"]')`), 'Bare SVG filename did not become a file link');
   const titles = await js(`Array.from(document.querySelectorAll('.hWmORq_body button[title]')).map(b=>b.title)`);
-  for (const name of ['pelican.svg', 'preview.png', 'report.md', 'canvas.html', 'my image.svg']) assert.ok(titles.includes(join(workspace, name).replaceAll('\\', '/')), name);
+  for (const name of ['pelican.svg', 'preview.png', 'report.md']) assert.ok(titles.includes(join(workspace, name).replaceAll('\\', '/')), name);
+  // Alpha.2's official Markdown file delegate retains authored relative destinations.
+  for (const name of ['canvas.html', 'my image.svg']) assert.ok(titles.includes(name), name);
   assert.equal(titles.some(path => path.endsWith('missing.png') || path.endsWith('missing-fenced.png')), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body pre button[title]')`), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body button button')`), false);
@@ -153,7 +160,7 @@ async function run(event) {
   await js(`document.querySelector('.desktop-computer summary').click()`);
   report.checks.push('PNG remains decoded and visible while the computer popover is open');
   await interactions.verifyLocalFile(host, workspace, 'preview.png', until);
-  const canvasPage = await opened('.hWmORq_body button[title$="/canvas.html"]', 'canvas.html');
+  const canvasPage = await opened('.hWmORq_body button[title="canvas.html"]', 'canvas.html');
   assert.equal(await canvasPage.executeJavaScript(`chart.getContext('2d').getImageData(0,0,1,1).data[3]`), 255);
   report.checks.push('Authored relative HTML link opens the working Canvas preview');
   await interactions.verifySelection(canvasPage, 'Preview selection', until);
@@ -189,6 +196,6 @@ async function run(event) {
 // Electron's CommonJS runtime cannot strip TypeScript, so generate the PNG
 // with the same source helper using the bundled Node before booting the app.
 const { execFileSync } = require('node:child_process');
-execFileSync(join(root, '.runtime/bin/node'), ['--input-type=module', '-e', `import {pngFixture} from ${JSON.stringify('file://' + join(root, 'tests/png-fixture.ts'))};import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(join(workspace, 'preview.png'))},pngFixture());`]);
+execFileSync(join(root, '.runtime/bin', process.platform === 'win32' ? 'node.exe' : 'node'), ['--input-type=module', '-e', `import {pngFixture} from ${JSON.stringify(pathToFileURL(join(root, 'tests/png-fixture.ts')).href)};import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(join(workspace, 'preview.png'))},pngFixture());`]);
 app.setAppPath(root);
 require('../dist/main/index.cjs');

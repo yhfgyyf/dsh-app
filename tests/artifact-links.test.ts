@@ -37,9 +37,29 @@ test('web URLs, executable schemes, non-path code and unresolved relative paths 
 });
 
 test('Markdown image destinations resolve relative and encoded paths through the authenticated file endpoint', () => {
-  assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
-  assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'https://outside.invalid/a.png', '/workspace'), undefined);
-  assert.equal(localPathMediaUrl('file:', 'null', '/tmp/a.png'), undefined);
+  assert.equal(localPathMediaUrl('http://localhost:1234/', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
+  assert.equal(localPathMediaUrl('http://localhost:1234/', 'https://outside.invalid/a.png', '/workspace'), undefined);
+  assert.equal(localPathMediaUrl('file:///', '/tmp/a.png'), undefined);
+});
+
+test('artifact preview collection preserves the official file delegate and line navigation', async () => {
+  const primitives = await readFile(join(clientNodeModules, '@deepseek-ai/dsh-client-ui-primitives/lib/index.js'), 'utf8');
+  const start = primitives.indexOf('function localDestinationMention(');
+  const end = primitives.indexOf('function MarkdownFileLink(', start);
+  assert.ok(start > 0 && end > start);
+  const FileLink = Symbol('official file delegate');
+  const render = new Function('parseFileLink', 'jsx', 'MarkdownFileLink', 'renderSafeLink', 'normalizeUri', 'markdownCss',
+    primitives.slice(start, end) + '\nreturn renderAnchor;')(
+    () => ({ path: '/tmp/chart.png', line: 7 }),
+    (type: unknown, props: unknown) => ({ type, props }), FileLink,
+    () => { throw new Error('Local files must use the scoped delegate'); }, (uri: string) => uri, {},
+  );
+  const collected: string[] = [];
+  const context = { fileMentions: { resolve: (path: string) => { collected.push(path); return { open() {} }; } } };
+  const result = render('/tmp/chart.png#L7-L9', ['Chart'], 'key', true, false, context);
+  assert.equal(result.type, FileLink);
+  assert.deepEqual(result.props.file, { path: '/tmp/chart.png', line: 7 });
+  assert.deepEqual(collected, ['/tmp/chart.png'], 'The fragment is navigation, not part of the preview filename');
 });
 
 test('Windows artifact addresses preserve session reads across casing, separators and outside paths', () => {

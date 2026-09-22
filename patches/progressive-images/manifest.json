@@ -2,6 +2,5 @@
   "package": "dsh-progressive-tools",
   "version": "0.3.2",
   "path": "lib/index.js",
-  "before": "b2078ceb216ba369e685081b74441e359ceb8a54762a0cf14dc6472da7a62436",
-  "after": "33d5aa0a30de1cd278353a7e032e84dac5ed807c36fe85c9f1a1e43fe6c695b0"
+  "sha256": "b703a4516206200c0a3123b630df3e33a0c24af7ec0f3cf36e0107587ea03787"
 }

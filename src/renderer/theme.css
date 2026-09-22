@@ -83,4 +83,6 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-computer-switch[aria-checked="true"] span { transform: translateX(14px); }
 .desktop-computer-switch:disabled { cursor: progress; opacity: .6; }
 .desktop-computer-switch:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
+.desktop-browser-use-settings { margin-top: 16px; }
+.desktop-browser-use-note { margin: 6px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .desktop-titlebar .desktop-computer-stop { color: #e34c4c; font-size: 12px; }

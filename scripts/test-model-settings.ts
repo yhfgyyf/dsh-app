@@ -50,6 +50,8 @@ try {
   const credential = async (client: typeof a, ref: string) => (await client.rpc('credentials/describe', { refs: [ref] }))[ref];
   await check('both independent cores load existing shared providers and default model', async () => {
     for (const client of [a, b]) {
+      await until(async () => !!(await namespace(client, 'llm-pi-ai'))?.value.providers['desktop-shared']);
+      await until(async () => (await client.rpc('session/modelCatalog')).default.provider === 'desktop-shared');
       assert.partialDeepStrictEqual((await namespace(client, 'llm-pi-ai')).value.providers['desktop-shared'], profile);
       const catalog = await client.rpc('session/modelCatalog');
       assert.equal(catalog.default.provider, 'desktop-shared');
@@ -63,11 +65,11 @@ try {
       assert.deepEqual(await credential(client, 'DESKTOP_DOTENV_TEST_KEY'), { configured: true, source: 'user-env', writable: true });
     }
   });
-  await check('model edits hot-reload in both directions and preserve unrelated configuration', async () => {
+  await check('model edits persist in their profile and preserve the legacy shared document', async () => {
     await a.rpc('settings/update', { ns: 'llm-pi-ai', patch: { providers: { 'desktop-shared': { ...profile, displayName: 'Updated by first core' } } } });
-    await until(async () => (await namespace(b, 'llm-pi-ai')).value.providers['desktop-shared'].displayName === 'Updated by first core');
+    assert.equal((await namespace(b, 'llm-pi-ai')).value.providers['desktop-shared'].displayName, profile.displayName);
     await b.rpc('settings/update', { ns: 'llm-pi-ai', patch: { providers: { 'desktop-shared': { ...profile, displayName: 'Updated by second core' } } } });
-    await until(async () => (await namespace(a, 'llm-pi-ai')).value.providers['desktop-shared'].displayName === 'Updated by second core');
+    assert.equal((await namespace(a, 'llm-pi-ai')).value.providers['desktop-shared'].displayName, 'Updated by first core');
     const raw = await readFile(settingsFile, 'utf8');
     assert.match(raw, /Shared settings comment must survive/);
     assert.equal(parse(raw).untouched.preserve, true);
@@ -80,15 +82,14 @@ try {
     assert.equal(parse(await readFile(credentialsFile, 'utf8')).refs.DESKTOP_SHARED_TEST_KEY, 'replacement-disposable-test-value');
     if (process.platform !== 'win32') assert.equal((await stat(credentialsFile)).mode & 0o777, 0o600);
   });
-  await check('concurrent settings writers preserve both changes', async () => {
+  await check('concurrent settings writers preserve changes within the same profile', async () => {
     await Promise.all([
       a.rpc('settings/update', { ns: 'ui-theme', patch: { preference: 'light' } }),
-      b.rpc('settings/update', { ns: 'locale', patch: { preference: 'en' } }),
+      a.rpc('settings/update', { ns: 'locale', patch: { preference: 'en' } }),
     ]);
-    const disk = parse(await readFile(settingsFile, 'utf8'));
-    assert.equal(disk['ui-theme'].preference, 'light');
-    assert.equal(disk.locale.preference, 'en');
-    assert.equal(disk.untouched.preserve, true);
+    const disk = parse(await readFile(join(data, 'core-1/profiles/desktop/cordis.patch.yml'), 'utf8'));
+    assert.equal(disk.find((entry: any) => entry.id === 'ui-theme').config.preference, 'light');
+    assert.equal(disk.find((entry: any) => entry.id === 'locale').config.preference, 'en');
   });
   await check('both cores load sessions from the same DSH home', async () => {
     const created = await a.rpc('session/create', { request: { cwd: data, agentPreset: 'standard' } });
@@ -103,7 +104,7 @@ try {
     a.close();
     await cores[0].stop();
     const restarted = await start(1);
-    assert.equal((await namespace(restarted, 'llm-pi-ai')).value.providers['desktop-shared'].displayName, 'Updated by second core');
+    assert.equal((await namespace(restarted, 'llm-pi-ai')).value.providers['desktop-shared'].displayName, 'Updated by first core');
     assert.equal((await credential(restarted, 'DESKTOP_SHARED_TEST_KEY')).configured, true);
   });
 } catch (error) {

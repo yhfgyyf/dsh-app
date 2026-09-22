@@ -24,10 +24,25 @@ jobs:
         run: npm run check
       - name: Shared model settings
         run: npm run test:model-settings
+      - name: Preset switching and cold session restoration
+        timeout-minutes: 2
+        run: npm run test:audit-switch
       - name: Web, TUI and App ownership
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Browser Use tools, isolation and settings persistence
+        timeout-minutes: 4
+        run: |
+          npm run test:browser-use
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:browser-use-settings
+      - name: Published Univer client startup and legacy turn preview
+        timeout-minutes: 3
+        run: npm run test:univer-client
+      - name: Plugin marketplace review and explicit installation consent
+        timeout-minutes: 4
+        run: npm run test:plugin-marketplace
       - name: Computer use approval and image transport
         timeout-minutes: 4
         run: npm run test:computer-tools
@@ -88,6 +103,9 @@ jobs:
             .test-data/computer-native/**
             .test-data/computer-*-latest.json
             .test-data/computer-tools-*/**
+            .test-data/plugin-marketplace-native/**
+            .test-data/univer-client/report.json
+            .test-data/univer-client/*.png
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

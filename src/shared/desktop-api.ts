@@ -2,6 +2,7 @@ import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-brows
 import type { UpdateSchedule, UpdateState } from './updates.ts';
 import type { LocalOpenRequest } from './local-open.ts';
 import type { ComputerState } from './computer-use.ts';
+import type { BrowserUseState } from './browser-use.ts';
 
 export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
 
@@ -14,9 +15,13 @@ export type DesktopInfo = {
   error?: string;
   zoomFactor: number;
   platform: string;
+  arch: string;
 };
 
 export interface DesktopAPI {
+  getBrowserUseState(): Promise<BrowserUseState>;
+  setBrowserUseEnabled(enabled: boolean): Promise<BrowserUseState>;
+  onBrowserUseState(listener: (state: BrowserUseState) => void): () => void;
   getComputerState(): Promise<ComputerState>;
   setComputerEnabled(enabled: boolean): Promise<ComputerState>;
   stopComputerUse(): Promise<void>;

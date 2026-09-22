@@ -64,30 +64,35 @@ try {
     await writeFile(new URL(`../.test-data/${mode}-events.json`, import.meta.url), JSON.stringify(frames, null, 2));
     const data = JSON.stringify(frames);
     assert.ok(data.includes('Hello, DSH Desktop'), 'parent must finish with the fixture reply');
-    const result = frames.filter(frame => frame.event?.type === 'tool/result').flatMap(frame => frame.event.data.message.content).at(-1);
+    const result = frames.filter(frame => frame.event?.type === 'tool/result').map(frame => frame.event.data.message).at(-1);
     assert.equal(result?.isError, false, JSON.stringify(result));
     const output = result.content.map((block: any) => block.text ?? '').join('');
-    if (mode === 'workflow') { const run = JSON.parse(output); assert.equal(run.agentsStarted, 1); assert.equal(run.result.verified, true); assert.ok(run.result.result.includes('Hello, DSH Desktop')); }
-    if (mode === 'subagent') { const run = JSON.parse(output); assert.equal(run.kind, 'foreground'); assert.ok(run.runId); assert.ok(JSON.stringify(run.output).includes('Hello, DSH Desktop')); }
-    if (mode === 'jobs') assert.ok(/jobId|job_id/.test(output), output);
+    if (mode === 'workflow') { assert.match(output, /completed \(1 agent\)/); assert.match(output, /"verified": true/); assert.ok(output.includes('Hello, DSH Desktop')); }
+    if (mode === 'subagent') assert.ok(output.includes('Hello, DSH Desktop'));
+    if (mode === 'jobs') assert.match(output, /started background job \S+/);
   });
-  await check('dynamic Cordis defines a host package and runs, stops and removes the disposable plugin', async () => {
+  await check('Creator lists the live Host API and current tool schemas without changing plugins', async () => {
     const created = await client.rpc('session/create', { request: { cwd: new URL('../.test-data/workspace', import.meta.url).pathname, agentPreset: 'cordis' } });
     const agentId = created.sessionId;
     const stream = client.follow('session/follow', { request: { address: { kind: 'session', sessionId: agentId } } });
     try {
       await stream.wait(frames => frames.some(frame => frame.type === 'snapshot'));
-      await client.rpc('session/prompt', { request: { sessionId: agentId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: '[desktop-cordis] 验证无副作用的动态插件生命周期。' }] } });
+      await client.rpc('session/prompt', { request: { sessionId: agentId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: '[desktop-cordis] 验证只读 Host API 与当前工具目录。' }] } });
       await stream.wait(frames => frames.some(frame => frame.event?.type === 'turn/end'), 20000);
-      const inventory = await client.rpc('dynamicCordisRunner/inventory');
-      const plugin = inventory.find((row: any) => row.agentId === agentId && row.packages.some((pkg: any) => pkg.name === 'Desktop lifecycle fixture'));
-      assert.ok(plugin, 'defined Cordis package must appear in real inventory');
-      const params = { agentId, pluginId: plugin.pluginId };
-      const started = await client.rpc('dynamicCordisRunner/runHostHalf', { ...params, packageId: plugin.packages[0].packageId, mode: 'run', requestId: null, approveFutureVersions: false });
-      assert.equal(started.ok, true, JSON.stringify(started));
-      assert.equal((await client.rpc('dynamicCordisRunner/stopFromPanel', params)).ok, true);
-      assert.equal((await client.rpc('dynamicCordisRunner/undefineFromPanel', params)).ok, true);
-      assert.equal((await client.rpc('dynamicCordisRunner/inventory')).some((row: any) => row.pluginId === plugin.pluginId), false);
+      await writeFile(new URL('../.test-data/cordis-events.json', import.meta.url), JSON.stringify(stream.frames, null, 2));
+      const results = stream.frames.filter(frame => frame.event?.type === 'tool/result').map(frame => frame.event.data.message);
+      const result = results.at(-1);
+      assert.equal(result?.isError, false, JSON.stringify(result));
+      const output = result.content.map((block: any) => block.text ?? '').join('');
+      const inspection = JSON.parse(output);
+      assert.equal(inspection.platform, 'host');
+      assert.equal(inspection.provider, 'Tool');
+      assert.equal(inspection.method, 'listTools');
+      const tools = inspection.data.tools.map((tool: any) => tool.name);
+      for (const name of ['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']) assert.ok(tools.includes(name), name);
+      for (const name of ['cordis_define', 'cordis_run', 'cordis_stop', 'cordis_undefine']) assert.equal(tools.includes(name), false, name);
+      assert.ok(JSON.stringify(stream.frames).includes('Hello, DSH Desktop'));
+      await writeFile(new URL('../.test-data/cordis-events.json', import.meta.url), JSON.stringify(stream.frames, null, 2));
     } finally { stream.close(); }
   });
 

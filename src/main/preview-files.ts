@@ -34,7 +34,7 @@ export async function previewGrant(target: Extract<BrowserTarget, { kind: 'previ
         const type = TYPES[extname(asset).toLowerCase()];
         if (!within(root, asset) || !type || !(await stat(asset)).isFile()) return new Response(null, { status: 403 });
         return new Response(request.method === 'HEAD' ? null : await readFile(asset), { headers: {
-          'content-type': type, 'x-content-type-options': 'nosniff',
+          'content-type': type, 'x-content-type-options': 'nosniff', 'cache-control': 'no-store',
           'content-security-policy': "default-src 'self' data: blob: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'self' 'unsafe-inline' https: http:; object-src 'none'; base-uri 'self'",
         } });
       } catch { return new Response(null, { status: 404 }); }

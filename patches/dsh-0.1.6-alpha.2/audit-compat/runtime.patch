@@ -1,7 +1,7 @@
 --- a/@deepseek-ai/dsh-tool-cordis/lib/index.js
 +++ b/@deepseek-ai/dsh-tool-cordis/lib/index.js
-@@ -8831,6 +8831,33 @@
- 	if (exec.agent === void 0) throw new Error("Cordis dynamic tools require an Agent-backed session");
+@@ -9900,6 +9900,33 @@
+ 	if (exec.agent === void 0) throw new Error("Cordis inspection requires an Agent-backed session");
  	return exec.agent;
  }
 +// The inspect registry belongs to the Host. Presets own leases, so switching
@@ -31,10 +31,10 @@
 +		for (const dispose of shared.disposers.reverse()) dispose();
 +	};
 +}
- /** Register the Cordis tools and explicit `@pluginId` context injection. */
- function apply(ctx) {
- 	ctx.systemPrompt.section({
-@@ -8838,7 +8865,7 @@
+ /** Register read-only runtime inspection tools.
+ * @param ctx Agent-scoped registration context.
+ */
+@@ -9909,7 +9936,7 @@
  		order: ctx.systemPrompt.getSectionOrder("TOOL_CORDIS"),
  		text: CORDIS_SYSTEM_PROMPT
  	});
@@ -42,4 +42,4 @@
 +	ctx.effect(() => acquireHostInspectProviders(ctx), "tool-cordis: shared Host inspect providers");
  	ctx.tools.register(defineTool({
  		name: "cordis_inspect_list",
- 		description: "List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before creating or modifying a Package, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call.",
+ 		description: "List every Cordis Inspect Provider currently known to the Host, including local Host Providers and the latest manifests synchronized from the Client. Each entry includes its platform, purpose, read-only methods, and input/output schemas. Call this Tool before writing or configuring a plugin, then select the provider and method for cordis_inspect_query from its result. Do not guess names or treat an Inspect method as a business Service that Plugin code can call.",

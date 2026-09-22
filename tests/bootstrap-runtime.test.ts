@@ -10,14 +10,14 @@ test('runtime lock fixes every DSH subpackage and preserves the snapshot depende
   const manifest = JSON.parse(await readFile(new URL('../runtime/dsh/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(await readFile(new URL('../runtime/dsh/package-lock.json', import.meta.url), 'utf8'));
   const patch = JSON.parse(await readFile(new URL(`../patches/dsh-${pins.dsh}/manifest.json`, import.meta.url), 'utf8'));
-  assert.deepEqual(manifest.dependencies, { '@deepseek-ai/dsh': pins.dsh });
+  assert.deepEqual(manifest.dependencies, Object.fromEntries(['@deepseek-ai/dsh', '@deepseek-ai/dsh-browser-use', '@deepseek-ai/dsh-experimental-browser-use-playwright-mcp'].map(name => [name, pins.dsh])));
   assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
   const install = 'node_modules/@deepseek-ai/dsh';
   assert.equal(lock.packages[install].version, pins.dsh);
   const dshPackages = new Set<string>();
   for (const [path, value] of Object.entries(lock.packages) as [string, { version: string }][]) {
     if (!path || path === install) continue;
-    assert.ok(path.startsWith(`${install}/node_modules/`), `Snapshot would omit ${path}`);
+    assert.ok(path.startsWith(`node_modules/`), `Snapshot would omit ${path}`);
     const name = path.slice(path.lastIndexOf('node_modules/') + 'node_modules/'.length);
     if (name.startsWith('@deepseek-ai/dsh-')) {
       assert.equal(value.version, pins.dsh, path);
@@ -26,11 +26,11 @@ test('runtime lock fixes every DSH subpackage and preserves the snapshot depende
     }
   }
   assert.ok(dshPackages.size > 0);
-  assert.deepEqual([...dshPackages].sort(), Object.keys(manifest.overrides).filter(name => name.startsWith('@deepseek-ai/dsh-')).sort());
+  for (const name of dshPackages) assert.equal(manifest.overrides[name], pins.dsh);
   assert.equal(manifest.overrides['@earendil-works/pi-ai'], patch.piAi);
-  assert.equal(lock.packages[`${install}/node_modules/@earendil-works/pi-ai`].version, patch.piAi);
+  assert.equal(lock.packages[`node_modules/@earendil-works/pi-ai`].version, patch.piAi);
   assert.equal(manifest.overrides.zod, '4.6.1');
-  assert.equal(lock.packages[`${install}/node_modules/zod`].version, manifest.overrides.zod);
+  assert.equal(lock.packages[`node_modules/zod`].version, manifest.overrides.zod);
 });
 
 test('plugin dependency link is created once and remains unchanged on repeat setup', async () => {

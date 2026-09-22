@@ -4,8 +4,16 @@ import { isDesktopCommand, externalWebUrl } from '../shared/desktop-api.ts';
 import type { BrowserState } from '../shared/sidebar-browser.ts';
 import type { UpdateState } from '../shared/updates.ts';
 import type { ComputerState } from '../shared/computer-use.ts';
+import type { BrowserUseState } from '../shared/browser-use.ts';
 
 const api: DesktopAPI = {
+  getBrowserUseState: () => ipcRenderer.invoke('desktop:browser-use-state'),
+  setBrowserUseEnabled: enabled => ipcRenderer.invoke('desktop:browser-use-enabled', enabled),
+  onBrowserUseState: listener => {
+    const callback = (_event: unknown, state: BrowserUseState) => listener(state);
+    ipcRenderer.on('desktop:browser-use-state', callback);
+    return () => ipcRenderer.removeListener('desktop:browser-use-state', callback);
+  },
   getComputerState: () => ipcRenderer.invoke('desktop:computer-state'),
   setComputerEnabled: enabled => ipcRenderer.invoke('desktop:computer-enabled', enabled),
   stopComputerUse: () => ipcRenderer.invoke('desktop:computer-stop'),

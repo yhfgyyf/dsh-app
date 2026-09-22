@@ -15,6 +15,7 @@ import { createUpdateFetch } from './update-network.ts';
 import { installTextContextMenu } from './context-menu.ts';
 import { openLocal } from './local-open.ts';
 import { DesktopComputerUse } from './computer-use.ts';
+import { DesktopBrowserUse } from './browser-use.ts';
 import { CuaComputerDriver } from './computer-use-driver.ts';
 import { ComputerPreviewWindow } from './computer-preview.ts';
 import { resetDshComputerPermissions } from './macos-privacy.ts';
@@ -24,7 +25,11 @@ const customData = process.env.DSH_DESKTOP_DATA_DIR;
 if (customData && isAbsolute(customData)) app.setPath('userData', customData);
 else app.setPath('userData', join(app.getPath('appData'), 'DSH Desktop'));
 
-protocol.registerSchemesAsPrivileged(['dsh', 'dsh-preview'].map(scheme => ({ scheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } })));
+protocol.registerSchemesAsPrivileged([
+  ...['dsh', 'dsh-preview'].map(scheme => ({ scheme, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } })),
+  // Older Chromium otherwise parses DSH resource addresses without a hostname.
+  { scheme: 'dsh-resource', privileges: { standard: true } },
+]);
 
 const ownInstance = app.requestSingleInstanceLock();
 if (!ownInstance) app.quit();
@@ -36,6 +41,7 @@ else {
   let browser: SidebarBrowser | undefined;
   let updates: DesktopUpdates;
   let computer: DesktopComputerUse;
+  let browserUse: DesktopBrowserUse;
   let computerPreview: ComputerPreviewWindow | undefined;
   let computerSettingRevision = 0;
   let connected = false;
@@ -48,7 +54,7 @@ else {
   const stopComputer = () => { void computer?.stop().catch(() => console.error('电脑操作驱动停止失败。')); };
 
   function info(): DesktopInfo {
-    return { name: 'DSH Desktop', version: app.getVersion(), endpoint: preferences.endpoint, connected, connecting, error: connectionError, zoomFactor: preferences.zoomFactor, platform: process.platform };
+    return { name: 'DSH Desktop', version: app.getVersion(), endpoint: preferences.endpoint, connected, connecting, error: connectionError, zoomFactor: preferences.zoomFactor, platform: process.platform, arch: process.arch };
   }
 
   function isSetupDocument(value: string) {
@@ -167,6 +173,7 @@ else {
     try {
       const running = runtime.ready !== undefined;
       const ready = await runtime.start();
+      if (!running) await browserUse.setEnabled(preferences.browserUseEnabled);
       preferences.endpoint = ready.endpoint;
       const ses = session.fromPartition('persist:dsh');
       if (!running) {
@@ -229,6 +236,14 @@ else {
 
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
+    handle('desktop:browser-use-state', () => browserUse.state);
+    handle('desktop:browser-use-enabled', async value => {
+      if (typeof value !== 'boolean') throw new Error('浏览器操作开关值无效。');
+      const state = await browserUse.setEnabled(value);
+      preferences.browserUseEnabled = state.enabled;
+      await preferencesFile.save(preferences);
+      return state;
+    });
     handle('desktop:computer-state', () => computer.permissions());
     handle('desktop:computer-enabled', async value => {
       if (typeof value !== 'boolean') throw new Error('电脑操作开关值无效。');
@@ -311,7 +326,10 @@ else {
         const result = await dialog.showOpenDialog(window, { title: '选择工作区', buttonLabel: '选择工作区', properties: ['openDirectory', 'createDirectory'] });
         return result.canceled ? null : result.filePaths[0] ?? null;
       },
-      onExit: () => { connected = false; if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
+      onExit: () => { connected = false; browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
+    });
+    browserUse = new DesktopBrowserUse(config => runtime.configureBrowserUse(config), state => {
+      if (window && !window.isDestroyed()) window.webContents.send('desktop:browser-use-state', state);
     });
     await installProtocols();
     updates = new DesktopUpdates({

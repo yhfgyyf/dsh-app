@@ -1,0 +1,300 @@
+{
+  "dsh": "0.1.7-alpha.1",
+  "plugins": [
+    {
+      "name": "dsh-auto-preset-router",
+      "repository": "yhfgyyf/dsh-auto-preset-router",
+      "commit": "0a292c14405879d66f6bba5150db82510bd05955",
+      "version": "0.2.4",
+      "patchSha256": "8af04e72757b13375a0024aacf68cf9b840eec14a8ea76820ad67224651184cd",
+      "files": [
+        {
+          "path": "cordis.patch.yml",
+          "before": "b57bbe1a990c86387af0ded02f475f9d796892c61e0bf5e4c893b982784002b5",
+          "after": "fc6b701bce5f3805a5693aa4af7ba633534e6d1a25efc50b5870d043baa14830",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "index.js",
+          "before": "1063f2a7237251f9e9e97e458708e2396441af741d525ac3d454d999b2188697",
+          "after": "3f874a6bbdd58eec1beeea45b5551edf56f333915cddeb0fcf0c86e93a0ff2f1",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/config.js",
+          "before": "825bccbe9c494bf80e97cce3aa11f9080e7c64303624ff331538837190954444",
+          "after": "999c1dff96a24715dfd80ea5bf968cdc0f8d2ea85ccfa41b19bacfb570b7be42",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "package.json",
+          "before": "94d022c451041a7c9123b454ce1d6d8cbe84e8a0283b6ad2aa9be681697f0166",
+          "after": "726a95c901846effd05485874c910d20b3e67927d6d0bc5cde955c595aa5f1b0",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "presets/auto/router.js",
+          "before": "9240688b9d7a47cc593b4aae64e2878f9f8011e54dd3ed789defe7aa442e3a75",
+          "after": "3955a1dcd4146653d6a182999f60660fa07b1bfb9087de71a30fdc1db5d7a4da",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "scripts/check-package.mjs",
+          "before": "bfc69e6f7e3a29a0261da1af7077646c84cb43e736b4327436cf0a6c2d967e0e",
+          "after": "1e759d24c22095f17e1763e2dc9144e3891025b6c47027976e57e13f586ab29c",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/config.test.mjs",
+          "before": "621db67caa2b498c2470a779eed7af2d823ff19e1ea9e2f1b495c2f51d3b2e7f",
+          "after": "f606335ab3f760ea67138917003c5370e07f0ebfbe04975bb996acb1b74fd3c5",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        }
+      ]
+    },
+    {
+      "name": "dsh-audit-mode",
+      "repository": "yhfgyyf/dsh-audit-mode",
+      "commit": "2e22f39f1afe24a094568de29adb65f79fc74fde",
+      "version": "0.6.1",
+      "patchSha256": "81e1bb400686485671821c8c7262c1fb91e41834c1a13b706cebc3b1377f88f4",
+      "files": [
+        {
+          "path": "index.js",
+          "before": "e888fb6abc6766abd1077cf1433ffd17d2274d6a0f40e31c07e64dae371065a0",
+          "after": "c09e91c6944d27522b2cc02c1dd8daae005b2d0d627f3696d7feaeb507678b96",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/client.js",
+          "before": "28bcb89b8b9a8bd0198073c922784f302bc22ccc4b2a90b6c981a402b43770df",
+          "after": "80895aa50cf6b0f6cc12023f04e33bba053d4051652e7a1596c8a0359cb26fc9",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/roster.js",
+          "before": "3b5dd8f8d98bfefadf1f5d533b1e69e4915e710299c73114bbc5492556acb0be",
+          "after": "8c55e93e5bfc75d28e11885ee55345fbd15a64a3a4165cc746a4145498f68649",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/service.js",
+          "before": "36997bf65cec9b9945c032c06d46fefe78c8aa3bd597d31a5e0e8389d973bc2b",
+          "after": "ce78e626982057941c3e4b40f8a2322c8e43b334199f799081a262288a597bf4",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "package.json",
+          "before": "757fa5c835f698b76592ff60566ec7b13eb99bc4d5d2efa3db6722e044c00fd0",
+          "after": "5f06ea295b8c5bf6d43f8869b0b67e6fa4737ae92d2ecd1768a66b4fa0ec8a35",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "presets/audit/agent.cordis.yml",
+          "before": "bb0c7bc95c84fb835c0018189210f259a164921a20b2992c945dc2c93a4ee59b",
+          "after": "ce9ae777d647f3a0ba10a4debb91fdcbf52f5926e9ab65ecd4fd93c92cb78a6e",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "presets/audit/skills/cordis-plugin-development/SKILL.md",
+          "before": "fda1eb69a90869237378beaa963fb89dc1376d604c84a02c2a672973f8d270a1",
+          "after": "76633958367a767464293e2cc8dc1ca746cffabf0674ca06258f72c3acfe9f1e",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "presets/audit/skills/editing-cordis-compositions/SKILL.md",
+          "before": "055b1d9ae0636ae5dcd889dad74a158c9c1e9b7d63f13541306e2f37d138ac32",
+          "after": "e50c98adfd4e4ee2d2a88121c672db3f172cadba420230a5b641028e5f23c013",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "scripts/build-preset.mjs",
+          "before": "4931fbde539af63ed2fdccc9451ac974bec56e17e9a76ba55f7849a46e4e85c6",
+          "after": "91aa637d8c2a4b76706d0c75eea8391c0e9615a4509572e512e78ae9edb7b215",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "scripts/check-remediation-runtime.mjs",
+          "before": "8c53dce70e6b39c42b07f17f1a35460285fcc2659aba3a4848cc856625589761",
+          "after": "06e27791ce4148dcc8a13628aff620599ce23ed9f73355c65898e4d60acd2c13",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/client.test.mjs",
+          "before": "702f3b8fffca737eff11d66fdc4b4dbe8eb113f158d395e5788dc67272bbe4d7",
+          "after": "c7fad467991bde68e8bb19b3662f9d123750ebe9b88e10563c64a7219615596d",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/preset-build.test.mjs",
+          "before": null,
+          "after": "09f57c524553fc6fb285383e6c92b6ee796bd0e0e6d2f090241f705753078d79",
+          "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "test/roster.test.mjs",
+          "before": "520a786a20261f059cc40960fe131795674bb9106cea2abc458301f64c7f2c2e",
+          "after": "7642be55c950f28aa68853ce9cebba986875810e277daa20383c248e74c4b33c",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        }
+      ]
+    },
+    {
+      "name": "dsh-progressive-tools",
+      "repository": "yhfgyyf/dsh-progressive-tools",
+      "commit": "3df3e891d9b75dd3d5e3c70b0ba471857ad5166f",
+      "version": "0.3.2",
+      "patchSha256": "f6be18f35c3aa35eb6fa37515f47448a6dbed0cf85360f77240400502bbffa87",
+      "files": [
+        {
+          "path": "README.md",
+          "before": "3d3e5c5792bfb94ccc4a4d13f402e9f05a29db4a038d4dfbaa3248b72a3f394b",
+          "after": "9c9e1fecda7a4f9ad3104c0903728424cac81c2b5bf8b95a13dbdf631f0e21b1",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "README.zh.md",
+          "before": "a7b6e0ad176e007021635aa5d91d3734d17d9f7c7811b6406ab2c2d7d199b5f6",
+          "after": "376f41951092fea17bde2f1cdd7ed54a06e5e1c9c3784cd180177522f3ebdacc",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/index.d.ts",
+          "before": "c40fd41bc92324b85720c4152a4a70f321854896d2eb2ea78fb2affb84756647",
+          "after": "62796d48d6ffad2f80c611f9337b554c7458452f762e774a610c270c470276c3",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "lib/index.js",
+          "before": "b2078ceb216ba369e685081b74441e359ceb8a54762a0cf14dc6472da7a62436",
+          "after": "b703a4516206200c0a3123b630df3e33a0c24af7ec0f3cf36e0107587ea03787",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "package.json",
+          "before": "0a3c0e88b18fe4faf200459d80055c558efc795f3fbe540900a353aa32fc3e1c",
+          "after": "bff6621fe85e24009bdfce91366dd9eaf0288b89dde75e766c764f60f1e53bb6",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "pnpm-lock.yaml",
+          "before": "8bdcf6228e50a2976c3ae6eea15aded7b8e2f527786500bbc79a770c6686b397",
+          "after": "6b1fef2220c9d6bb40c7e7db44aa22cfb05c2fda6ef2f4573ae93cd8b745e77f",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "src/index.ts",
+          "before": "f5cfed60bb00bff84d24d80c5e598d9e0dc30816cbff2e2e2cf256fb819eecf3",
+          "after": "fd3f6e819e059c69331da7dc544ff476f5d8af4905bbb1ba5cda923327547810",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "src/invoke-result.ts",
+          "before": null,
+          "after": "73b461b3dea61aa99968768140d4b104e9636051cacbbab8e69f239ee7e76820",
+          "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "src/native-deferred.ts",
+          "before": "d3465c19726cc5bf747594ed70f4f8fe106f7c9feb053bf3e1ab81d5d52a20b4",
+          "after": "42c86592536e02d68a2989700cfff3a94214a6c2f4373f8a932dfddfa149c2b7",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "tests/agent-progressive-tools.spec.ts",
+          "before": "23dc162cdb033ab76fd6f418a5ee28f17da9c56278fad3116d6a914a0b849197",
+          "after": "d6aad54e2c04b4c8a4bd48d8e107458e1bdc9baf5cc8e9843437f5dd2d026ccb",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "tests/invoke-result.spec.ts",
+          "before": null,
+          "after": "830d1b3b209af72f20321384d6fb6f697fe17ffca457c69fe25e0f1d636a56de",
+          "beforeMode": null,
+          "afterMode": "100644"
+        },
+        {
+          "path": "tests/loader-composition.spec.ts",
+          "before": "d0d63767e263d7ad21cfbc4c03220158e99cb01229897a2a47e728d894b7c1be",
+          "after": "5b342fec6d5e125c0d784b134d56273efa84a09d6c4cf405fdc8bd1174cecb5f",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "tests/native-deferred.spec.ts",
+          "before": "be509b5ac86196076c1fa0f1532c6b9ba6b00d475ebd8effe27aa4aebad17a1b",
+          "after": "13bcb3a55b994b2e7e8e6301d3179ef5824e7b1047fa6078821421263603e0ad",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "tsdown.config.ts",
+          "before": "64cb57f4cae93b11010e8bc9728d10b0018abb9b6e0b8481c9a9920d5b83625f",
+          "after": "cc4ba32da8128fc01df0865108dbecbf045f98340cf0fdc67d2bddd69a90ab7d",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        }
+      ]
+    },
+    {
+      "name": "dsh-tui-app",
+      "repository": "yhfgyyf/dsh-tui-app",
+      "commit": "cb01f12bc36ca1664f157ff6b10c853d32ae7cf1",
+      "version": "0.2.0",
+      "patchSha256": "c7bf23d9a16cfaa2cdf03efb2455b943c86033e7b6101b181ad8dc447e704dc7",
+      "files": [
+        {
+          "path": "cordis.patch.yml",
+          "before": "423fec4c4ce717461ba3109ddbded4af06d1edb39a8b0ae06e9f597c6dc73c81",
+          "after": "26fb14e977989a589bb2a4fb81bdc524c7276008705fa60182088930fb29f992",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "package.json",
+          "before": "69c4488b4b261505c7a0331895d7c3b90d7658db4c395235476aaa552f73ea65",
+          "after": "ec3b2911f2fcf43acf563b94d6111d32511cdb306281777e6db345a86d44299f",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        },
+        {
+          "path": "scripts/check-package.mjs",
+          "before": "06326bc24b1cc34a91c7903bc238c84cf0054c7c837c92a601959f25b7d4c109",
+          "after": "42fa47d8e0b7c5a7a054fb0fab71ed6e514bc7088197f8a20abb10d880579344",
+          "beforeMode": "100644",
+          "afterMode": "100644"
+        }
+      ]
+    }
+  ]
+}

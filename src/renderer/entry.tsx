@@ -9,11 +9,11 @@ import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots';
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives';
 import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit';
 import { ArtifactMarkdown } from './artifact-markdown.tsx';
+import { createDesktopModuleFacade, DesktopSlotCore } from './univer-slot-compat.ts';
 import './updates.css';
-import { withDesktopPlugin } from '../shared/dsh-boot.ts';
+import { DESKTOP_PLUGIN_ID, withDesktopPlugin } from '../shared/dsh-boot.ts';
 import '../shared/desktop-api.ts';
 
-type Registration = { id: string; factory(require: (name: string) => unknown): any };
 const target = window as unknown as { __ModuleLoader__: any };
 const root = document.getElementById('root')!;
 const status = ReactDomClient.createRoot(root);
@@ -23,9 +23,10 @@ function Startup({ error }: { error?: string }) {
 status.render(<Startup />);
 let context: Cordis.Context | undefined;
 async function bootDesktop() {
-  const graph = withDesktopPlugin(await window.dshDesktop!.getBoot(), (await window.dshDesktop!.getInfo()).version);
-  const queue: Registration[] = [];
-  const facade = { mode: 'queue', pendingQueue: queue, load(registration: Registration) { queue.push(registration); } };
+  const hostGraph = await window.dshDesktop!.getBoot();
+  const graph = withDesktopPlugin(hostGraph, (await window.dshDesktop!.getInfo()).version);
+  const facade = createDesktopModuleFacade();
+  const queue = facade.pendingQueue;
   target.__ModuleLoader__ = facade;
   const loadScript = (url: string) => new Promise<void>((resolve, reject) => {
     const script = document.createElement('script');
@@ -40,17 +41,27 @@ async function bootDesktop() {
   const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: {
     react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient,
     '@deepseek-ai/cordis': Cordis, '@deepseek-ai/dsh-client-store': ClientStore,
-    '@deepseek-ai/dsh-client-ui-slots': UiSlots, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
+    '@deepseek-ai/dsh-client-ui-slots': { ...UiSlots, SlotCore: DesktopSlotCore }, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
     '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
   } });
   const ctx = context = new Cordis.Context();
   await ctx.plugin(Loader);
   ctx.loader.internal = modules;
   await Promise.all(modules.manifest.plugins.filter((row: { immediately?: boolean }) => row.immediately).map((row: { id: string }) => modules.prefetch(row.id)));
-  await Promise.all(modules.manifest.plugins.map((row: { id: string }) => ctx.loader.create({ name: row.id })));
+  // Host HMR owns the server roster. The page-local shell survives graph
+  // replacement and is disposed only with this Desktop window's Loader.
+  await ctx.loader.create({ name: DESKTOP_PLUGIN_ID });
+  await modules.entries.start(ctx.loader, exports.parseBootManifest(hostGraph));
   await ctx.loader.await();
   const failed = Array.from(ctx.loader.entries()).filter(entry => entry.fiber?.state !== 2);
-  if (failed.length) throw new Error(`DSH 模块未激活：${failed.map(entry => entry.options.name).join(', ')}`);
+  if (failed.length) {
+    const details = await Promise.all(failed.map(async entry => {
+      try { await entry.fiber?.await(); }
+      catch (error) { return `${entry.options.name}: ${error instanceof Error ? error.message : String(error)}`; }
+      return entry.options.name;
+    }));
+    throw new Error(`DSH 模块未激活：${details.join(', ')}`);
+  }
   status.unmount();
   await ctx.inject(['uiRenderer'], scope => {
     scope.effect(() => (scope.get('uiRenderer') as { mount(root: HTMLElement): () => void }).mount(root));

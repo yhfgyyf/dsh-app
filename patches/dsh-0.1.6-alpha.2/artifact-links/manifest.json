@@ -1,0 +1,29 @@
+{
+  "dsh": "0.1.6-alpha.2",
+  "files": [
+    {
+      "kind": "chat",
+      "package": "@deepseek-ai/dsh-client-ui-chat",
+      "path": "@deepseek-ai/dsh-client-ui-chat/lib/client.js",
+      "before": "e729e6b509189c255f030a332375ef381c23af91b22fc2b3c6f5af01620bf3ee",
+      "after": "ff24387424f0a67ca5191d8f45dff6acba9c713db521a30ea44cdae8e5c68473",
+      "patchSha256": "41b903cacf59d5321c4514a321293628ce567ba5b3f1cbaa21577f24dbb9b161"
+    },
+    {
+      "kind": "primitives",
+      "package": "@deepseek-ai/dsh-client-ui-primitives",
+      "path": "@deepseek-ai/dsh-client-ui-primitives/lib/index.js",
+      "before": "7d400a19a213124ed306caf9f845bda2208af8f8dadcc8caa313875b0a1b117b",
+      "after": "50c9067521a095791cbe88576e442603797f83be8995e84152678972fc78b613",
+      "patchSha256": "f35e59cdd66d855d2f46855356ccfc275f36abaaeadb319a73f074587937e011"
+    },
+    {
+      "kind": "documentpreview",
+      "package": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+      "path": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js",
+      "before": "ace3a851ed778772f277265a68e3f4819409c44a91fa52aedc3bf6b81936f5fa",
+      "after": "8b426274cea6e0f6119bcc0b8028477f9bb171920d18b93a467574393acd3b6e",
+      "patchSha256": "43039e8d7bf3be512c788498e4c57fc64bfed0aaa9749fdd728d512a393006ae"
+    }
+  ]
+}

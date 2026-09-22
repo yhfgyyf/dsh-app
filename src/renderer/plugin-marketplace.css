@@ -1,0 +1,21 @@
+.desktop-marketplace { display:flex; flex-direction:column; gap:18px; color:var(--dsw-alias-label-primary); }
+.desktop-marketplace-heading,.desktop-marketplace-card-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; }
+.desktop-marketplace h1 { margin:0; font-size:20px; line-height:28px; font-weight:500; }
+.desktop-marketplace h2 { margin:0 0 5px; font-size:14px; line-height:20px; overflow-wrap:anywhere; }
+.desktop-marketplace p { margin:6px 0 0; font-size:13px; line-height:20px; color:var(--dsw-alias-label-secondary); overflow-wrap:anywhere; }
+.desktop-marketplace button { flex:none; border:1px solid var(--dsw-alias-border-l3); border-radius:8px; background:var(--dsw-alias-bg-layer-2); color:inherit; padding:7px 12px; font:inherit; font-size:13px; cursor:pointer; }
+.desktop-marketplace button:hover:not(:disabled) { background:var(--dsw-alias-interactive-bg-hover); }
+.desktop-marketplace button:disabled { opacity:.5; cursor:default; }
+.desktop-marketplace button:focus-visible,.desktop-marketplace input:focus-visible { outline:2px solid var(--dsw-alias-brand-primary); outline-offset:2px; }
+.desktop-marketplace-search { display:flex; gap:8px; }
+.desktop-marketplace-search input { box-sizing:border-box; min-width:0; flex:1; height:36px; padding:0 12px; border:1px solid var(--dsw-alias-border-l3); border-radius:9px; color:inherit; background:var(--dsw-alias-bg-layer-2); font:inherit; font-size:13px; }
+.desktop-marketplace-results { display:flex; flex-direction:column; gap:12px; }
+.desktop-marketplace-card { border:1px solid var(--dsw-alias-border-l3); border-radius:12px; padding:16px; }
+.desktop-marketplace-card-heading>div { min-width:0; }
+.desktop-marketplace-version,.desktop-marketplace-meta,.desktop-marketplace .desktop-marketplace-note { font-size:12px; line-height:18px; color:var(--dsw-alias-label-tertiary); }
+.desktop-marketplace-meta { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:12px; }
+.desktop-marketplace .desktop-marketplace-downloads { margin-top:10px; font-size:12px; font-variant-numeric:tabular-nums; }
+.desktop-marketplace-downloads span { color:var(--dsw-alias-label-tertiary); }
+.desktop-marketplace button.desktop-marketplace-link { border:0; padding:0; background:none; color:var(--dsw-alias-label-secondary); font-size:12px; text-decoration:underline; text-underline-offset:3px; }
+.desktop-marketplace-pagination { display:flex; align-items:center; justify-content:center; gap:16px; font-size:13px; }
+.desktop-marketplace .desktop-marketplace-error { display:flex; align-items:center; gap:12px; color:var(--dsw-alias-state-error-primary); font-size:13px; }

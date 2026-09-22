@@ -13,7 +13,7 @@ const { HostConnectionService } = await load('@deepseek-ai/dsh-client-connection
 
 test('released system-prompt projection preserves the historical prefix only for a capable continuing route', async () => {
   const source = await readFile(requireRuntime.resolve('@deepseek-ai/dsh-agent-loop'), 'utf8');
-  const start = source.indexOf('const SOURCE = "@deepseek-ai/dsh-system-prompt";');
+  const start = source.indexOf('function textOf(message)');
   const end = source.indexOf('/** Tracks the last retained runtime-context snapshot', start);
   assert.ok(start >= 0 && end > start);
   // Run the released implementation against its actual Session store.
@@ -23,6 +23,8 @@ test('released system-prompt projection preserves the historical prefix only for
   try {
     const session = ctx.sessions.create(SessionId('upgrade-prompt-test'));
     const projection = new Projection(session);
+    // 0.1.7 retains empty system surface nodes to keep projection indices stable.
+    const effectiveMessages = () => session.deriveMessages().filter((m: any) => m.role !== 'system' || m.content.some((b: any) => b.type === 'text' && b.text));
     const continuing = { inHistory: true, startsSeries: false };
     const commit = (text: string, input = continuing) => {
       const operations = projection.project(text, input);
@@ -37,14 +39,14 @@ test('released system-prompt projection preserves the historical prefix only for
     assert.deepEqual(session.deriveMessages().map((m: { role: string }) => m.role), ['system', 'user', 'system']);
     assert.deepEqual(commit('new complete prompt'), []);
     commit('new complete prompt', { inHistory: true, startsSeries: true });
-    assert.deepEqual(session.deriveMessages().map((m: { role: string }) => m.role), ['system', 'user']);
+    assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['system', 'user']);
     assert.equal(session.deriveMessages()[0].content[0].text, 'new complete prompt');
     commit('next prompt');
     commit('leading only', { inHistory: false, startsSeries: false });
-    assert.deepEqual(session.deriveMessages().map((m: { role: string }) => m.role), ['system', 'user']);
+    assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['system', 'user']);
     assert.equal(session.deriveMessages()[0].content[0].text, 'leading only');
     commit('');
-    assert.deepEqual(session.deriveMessages().map((m: { role: string }) => m.role), ['user']);
+    assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['user']);
     assert.deepEqual(commit(''), []);
   } finally { await ctx.fiber.dispose(); }
 });

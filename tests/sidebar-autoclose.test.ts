@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 // Execute the shipped store and pure docking engine without loading React UI dependencies.
 const runtimeNodeModules = process.env.DSH_OVERLAY_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url));
@@ -11,7 +12,9 @@ const start = source.indexOf('//#region lib/types/client/stores.js');
 const end = source.indexOf('//#endregion', start);
 assert.ok(start > 0 && end > start);
 const storeSource = source.slice(start, end);
-const dockkitSource = await readFile(fileURLToPath(import.meta.resolve('@deepseek-ai/dsh-client-ui-dockkit')), 'utf8');
+const clientNodeModules = process.env.DSH_OVERLAY_TEST_CLIENT ?? fileURLToPath(new URL('../node_modules', import.meta.url));
+const requireClient = createRequire(join(clientNodeModules, '../package.json'));
+const dockkitSource = await readFile(requireClient.resolve('@deepseek-ai/dsh-client-ui-dockkit'), 'utf8');
 const engineStart = dockkitSource.indexOf('//#region lib/types/engine/tree.js');
 const engineEnd = dockkitSource.indexOf('//#region lib/types/components/measure.js', engineStart);
 assert.ok(engineStart > 0 && engineEnd > engineStart);
@@ -38,7 +41,7 @@ function harness() {
   return { spec, state, action, layout, open };
 }
 
-test('rc.1 starts empty and closes its last docked document; undo and redo include visibility', () => {
+test('alpha.2 starts empty and closes its last docked document; undo and redo include visibility', () => {
   const { state, action, layout, open } = harness();
   assert.equal(layout().expanded, false);
   assert.equal(Object.keys(layout().tabs).length, 0);
@@ -47,7 +50,7 @@ test('rc.1 starts empty and closes its last docked document; undo and redo inclu
   const entries = state.bySession.one.history.entries.length;
   action('closeTab', id);
   assert.equal(layout().expanded, false);
-  assert.equal(Object.keys(layout().tabs).length, 0, 'Collapsed rc.1 surfaces do not reseed');
+  assert.equal(Object.keys(layout().tabs).length, 0, 'Collapsed alpha.2 surfaces do not reseed');
   assert.equal(layout().mode, 'push');
   assert.equal(state.bySession.one.history.entries.length, entries + 1);
   action('undo');
@@ -83,7 +86,7 @@ test('floating content survives collapse of the final docked document', () => {
   assert.equal(Object.keys(layout().tabs).length, 0);
 });
 
-test('rc.1 preserves an explicit guide and protects it when it is the sole docked tab', () => {
+test('alpha.2 preserves an explicit guide and protects it when it is the sole docked tab', () => {
   const { action, layout, open } = harness();
   action('setExpanded', true);
   const guide = Object.keys(layout().tabs)[0];
@@ -113,10 +116,10 @@ test('replacing a guide then closing collapses without reseeding; duplicate clos
   action('closeTab', id);
   assert.equal(layout(), reopened);
   action('closeTab', Object.keys(layout().tabs)[0]);
-  assert.equal(layout().expanded, true, 'The sole reseeded guide cannot be closed in rc.1');
+  assert.equal(layout().expanded, true, 'The sole reseeded guide cannot be closed in alpha.2');
 });
 
-test('rc.1 sidebar installer verifies the upstream implementation without rewriting it', async () => {
+test('alpha.2 sidebar installer verifies the upstream implementation without rewriting it', async () => {
   const { applySidebarAutoclose } = await import(new URL('../scripts/install-sidebar-autoclose.mjs', import.meta.url).href);
   assert.deepEqual(await applySidebarAutoclose({ runtimeNodeModules, mode: 'check' }), { pending: 0 });
   assert.deepEqual(await applySidebarAutoclose({ runtimeNodeModules, mode: 'verify' }), { changed: 0, verified: true, upstream: true });

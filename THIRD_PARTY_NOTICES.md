@@ -13,12 +13,23 @@ pi-ai components. Their original licenses remain applicable. Exact runtime and
 plugin revisions are listed in `runtime/dependencies.json`; installer checksums
 are provided with each GitHub Release.
 
+Browser Use includes the official DSH Browser Use registry and Playwright MCP
+provider (MIT), with Playwright and Playwright MCP (Apache-2.0). Their versions
+and integrity hashes are pinned in `runtime/dsh/package-lock.json`, and their
+licenses remain in the bundled runtime. Chrome and Edge are detected from the
+user's machine and are not redistributed in the installer.
+
 Offline document previews bundle docx-preview 0.4.0, SheetJS CE 0.20.3,
 and @aiden0z/pptx-renderer 1.2.4 (Apache-2.0), together with Apache ECharts,
 ZRender, JSZip (under its MIT option), and their dependencies. Their license
 texts and notices are included under `dist/renderer/licenses` in the app.
 Spreadsheet code pages are distributed with SheetJS. Exact dependency versions
 and integrity hashes are pinned in `package-lock.json`.
+
+Plugin installation includes pnpm 11.7.0 (MIT), isolated under
+`runtime/package-manager/node_modules/pnpm` in the application resources. Its
+license and bundled dependency notices accompany the package. The exact package
+and integrity hash are pinned in `runtime/pnpm/package-lock.json`.
 
 Computer use includes Cua Driver and its Node SDK 0.25.0 (MIT), pinned to
 `trycua/cua` commit `45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f`.

@@ -1,0 +1,26 @@
+--- a/lib/service.js
++++ b/lib/service.js
+@@ -18,11 +18,7 @@
+ const CORDIS_TOOL_NAMES = Object.freeze([
+   'cordis_inspect_list',
+   'cordis_inspect_query',
+-  'cordis_inspect_self',
+-  'cordis_define',
+-  'cordis_run',
+-  'cordis_stop',
+-  'cordis_undefine'
++  'plugin_manager'
+ ])
+ const REMEDIATION_SKILLS = Object.freeze([
+   {
+@@ -54,8 +50,9 @@
+     'Load the `editing-cordis-compositions` skill through the stable `skill` tool before changing DSH.',
+     'Load `cordis-plugin-development` only when the accepted remediation changes a plugin or model-facing tool.',
+     `Available remediation skills: ${skills.map(skill => `\`${skill.name}\``).join(', ')}.`,
+-    `Temporarily authorized Cordis tools: ${CORDIS_TOOL_NAMES.map(name => `\`${name}\``).join(', ')}.`,
++    `Temporarily authorized plugin development tools: ${CORDIS_TOOL_NAMES.map(name => `\`${name}\``).join(', ')}.`,
+     'Use search_tools and describe_tools when they are available; otherwise use the exact tools declared by the current DSH presentation.',
++    'Plugin Manager changes persist across every session in the current profile. Use only changes within the accepted remediation scope; do not treat this lease as permission for unrelated profile changes.',
+     'All calls remain subject to DSH permission, approval, safety, scheduling, and audit policy.',
+     '</audit-capability-lease>'
+   ].join('\n')

@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { connectFixture } from '../tests/fixture-client.ts';
 import { withDesktopPlugin } from '../src/shared/dsh-boot.ts';
 import { pngFixture } from '../tests/png-fixture.ts';
+import { createRequire } from 'node:module';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const client = await connectFixture();
@@ -34,7 +35,7 @@ try {
     assert.equal(graph.entries.some((entry: any) => entry.id.includes('ui-schedule')), false);
     const bytes: { entries: string[]; sha256: string; bytes: number }[] = [];
     for (const batch of graph.batches) {
-      const response = await fetch(client.endpoint + batch.url, { headers: client.headers });
+      const response = await fetch(new URL(batch.url, client.endpoint + '/'), { headers: client.headers });
       assert.equal(response.status, 200);
       const data = Buffer.from(await response.arrayBuffer());
       bytes.push({ entries: batch.entries, sha256: createHash('sha256').update(data).digest('hex'), bytes: data.length });
@@ -138,7 +139,7 @@ try {
     const settings = await rpc('settings/describe');
     await writeFile(join(root, '.test-data/settings-description.json'), JSON.stringify(settings, null, 2));
     assert.ok(JSON.stringify(settings).includes('llm-deepseek'));
-    for (const ns of ['ui-theme', 'locale', 'ui-conversation', 'ui-chat', 'permission', 'agent-presets', 'agent-loop']) assert.ok(settings.namespaces.some((entry: any) => entry.ns === ns));
+    for (const ns of ['ui-theme', 'locale', 'ui-conversation', 'ui-chat', 'permission', 'agent-preset-registry', 'agent-loop']) assert.ok(settings.namespaces.some((entry: any) => entry.ns === ns));
     return { namespaces: settings.namespaces.map((entry: any) => entry.ns) };
   });
   await check('theme, font size and composer settings persist with revision checks', async () => {
@@ -155,13 +156,24 @@ try {
     assert.equal(edited.value.busyEnter, 'steer');
     await rpc('settings/update', { ns: 'ui-conversation', patch: composer.value, expectedRevision: edited.revision });
   });
-  await check('preset copying, composition reading and deletion affect only a disposable preset', async () => {
+  await check('preset declarations can be copied and removed through the official profile configuration', async () => {
     const id = 'desktop-test-' + randomUUID().slice(0, 8);
-    await rpc('agentPresets/copy', { from: 'standard', id, name: '桌面测试预设' });
-    const document = await rpc('agentPresets/read', { agentPreset: id });
-    assert.ok(JSON.stringify(document).includes(id));
-    await rpc('agentPresets/deletePreset', { id });
-    assert.equal((await rpc('agentPresets/list')).presets.some((entry: any) => entry.id === id), false);
+    const yaml = createRequire(new URL('../.runtime/package.json', import.meta.url))('yaml');
+    const file = join(root, '.test-data/fixture-owned/profiles/desktop/cordis.patch.yml');
+    const original = await readFile(file, 'utf8');
+    const declaration = yaml.parse(await readFile(join(root, '.runtime/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml'), 'utf8'))[0].insert[0];
+    declaration.id = id; declaration.config.id = id; declaration.config.name = '桌面测试预设';
+    const waitFor = async (present: boolean) => {
+      for (let i = 0; i < 100; i++) {
+        const row = (await rpc('agentPresets/list')).presets.find((entry: any) => entry.id === id);
+        if (Boolean(row) === present) { if (row) assert.equal(row.broken, undefined); return; }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      assert.fail('Preset declaration did not reload');
+    };
+    try { await writeFile(file, original + '\n' + yaml.stringify([{ insert: [declaration] }])); await waitFor(true); }
+    finally { await writeFile(file, original); }
+    await waitFor(false);
   });
   await check('message feedback create, negative update, reload and removal', async () => {
     const event = session.frames.find(frame => frame.type === 'event' && frame.event.type === 'assistant/message');
@@ -193,11 +205,11 @@ try {
     const requestId = randomUUID();
     const controlBefore = control.frames.length;
     await rpc('session/prompt', { request: { sessionId, requestId, mode: 'queue', content: [{ type: 'text', text: '待编辑队列消息' }] } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'queue' && frame.items.some((item: any) => item.rpcId === requestId)));
-    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'queue' && frame.items.some((item: any) => item.rpcId === requestId));
-    const itemId = queueFrame.items.find((item: any) => item.rpcId === requestId).id;
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId)));
+    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId));
+    const itemId = queueFrame.value['next-turn'].find((item: any) => item.source?.rpcId === requestId).id;
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'edit', content: [{ type: 'text', text: '已编辑队列消息' }] } } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'queue' && JSON.stringify(frame.items).includes('已编辑队列消息')));
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && JSON.stringify(frame.value['next-turn']).includes('已编辑队列消息')));
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'remove' } } });
     await rpc('session/cancel', { request: { sessionId } });
     await session.wait(frames => frames.slice(before).some(frame => frame.type === 'event' && frame.event.type === 'turn/end'));
@@ -206,7 +218,7 @@ try {
     const before = session.frames.length;
     const png = pngFixture().toString('base64');
     await writeFile(join(root, '.test-data/desktop-fixture.png'), pngFixture());
-    const model = catalog.groups.flatMap((group: any) => group.models).find((model: any) => model.id.includes('vision'));
+    const model = catalog.groups.flatMap((group: any) => group.models).find((model: any) => model.id === 'deepseek-flash');
     assert.ok(model);
     await rpc('session/selectModel', { request: { sessionId, provider: 'deepseek-official', model: model.id, reasoningEffort: 'high' } });
     await rpc('session/prompt', { request: { sessionId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: '附件测试图片。' }, { type: 'image', mediaType: 'image/png', data: png, name: 'desktop-fixture.png' }] } });

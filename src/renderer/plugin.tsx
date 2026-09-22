@@ -5,19 +5,25 @@ import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
 import { installLocalOpen } from './local-open.tsx';
 import { ComputerControl, ComputerSettings } from './computer-use.tsx';
+import { BrowserUseSettings } from './browser-use.tsx';
 import { installDocumentPreviews } from './document-preview.tsx';
 import type { DocumentContext } from './document-preview.tsx';
+import { installPluginMarketplace } from './plugin-marketplace.tsx';
+import type { MarketplaceConnection } from './plugin-marketplace.tsx';
+import { installPluginSecurityReview } from './plugin-security.tsx';
+import { installSessionDelete } from './session-delete.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
-type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string };
+type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string | undefined };
 
 // The narrow, verified public faces consumed from the installed DSH runtime.
 interface DesktopContext extends BrowserContext, DocumentContext {
   effect(factory: () => Disposer, label?: string): void;
   on(event: 'theme/change', listener: (snapshot: ThemeSnapshot) => void): Disposer;
   get(name: 'uiWorkspace'): { startSession(): void };
-  get(name: 'connection'): { state: StateSource; reconnect(): void };
+  get(name: 'sessions'): { delete(sessionId: string): Promise<void> };
+  get(name: 'connection'): MarketplaceConnection & { state: StateSource; reconnect(): void };
   layout: { toggleSidebar(): void };
   theme: {
     getTheme(): ThemeSnapshot;
@@ -26,7 +32,7 @@ interface DesktopContext extends BrowserContext, DocumentContext {
 }
 
 export const name = 'dsh-desktop-shell';
-export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews'];
+export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews', 'sessions'];
 
 const palette: Record<string, [string, string]> = {
   '--dsw-alias-bg-base': ['#ffffff', '#181818'],
@@ -89,7 +95,7 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /></div>;
+  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
 }
 
 /** Settings/search have no public controller; target their version-pinned UI controls. */
@@ -103,10 +109,14 @@ export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
   }
 }
 
-export function apply(ctx: DesktopContext) {
+export async function apply(ctx: DesktopContext) {
+  const info = await window.dshDesktop?.getInfo();
   installSidebarBrowser(ctx);
-  installDocumentPreviews(ctx);
+  installDocumentPreviews(ctx, info?.platform === 'linux' && info.arch === 'loong64');
   installLocalOpen(ctx);
+  installPluginMarketplace(ctx);
+  installPluginSecurityReview(ctx);
+  installSessionDelete(ctx);
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };

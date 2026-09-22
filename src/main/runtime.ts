@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { assertBootGraph, type BootGraph } from '../shared/dsh-boot.ts';
 import { isComputerRequest, type ComputerRequest, type ComputerResult } from '../shared/computer-use.ts';
+import type { BrowserUseConfig } from '../shared/browser-use.ts';
 
 export type RuntimeReady = { type: 'ready'; endpoint: string; launchUrl: string; graph: BootGraph; hostPlugins: string[] };
 type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
@@ -22,6 +23,23 @@ export class DesktopRuntime {
   private stopping = false;
   private options: RuntimeOptions;
   constructor(options: RuntimeOptions) { this.options = options; }
+  async configureBrowserUse(config: BrowserUseConfig): Promise<void> {
+    const child = this.child;
+    if (!this.ready || !child?.connected) throw new Error('DSH 核心尚未就绪。');
+    await new Promise<void>((resolve, reject) => {
+      const id = randomUUID();
+      const cleanup = () => { clearTimeout(timer); child.off('message', receive); child.off('exit', failed); };
+      const failed = () => { cleanup(); reject(new Error('DSH 核心不可用，浏览器操作状态未确认。')); };
+      const receive = (message: any) => {
+        if (message?.type !== 'browser-use-result' || message.id !== id) return;
+        cleanup();
+        message.error ? reject(new Error(message.error)) : resolve();
+      };
+      const timer = setTimeout(failed, 30000);
+      child.on('message', receive); child.once('exit', failed);
+      child.send({ type: 'browser-use-configure', id, config });
+    });
+  }
   async graph(): Promise<BootGraph> {
     const child = this.child;
     if (!this.ready || !child?.connected) throw new Error('DSH 核心尚未就绪。');
