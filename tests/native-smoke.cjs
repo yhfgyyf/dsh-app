@@ -43,6 +43,7 @@ ipcMain.handle = (channel, listener) => {
   return handle(channel, async (...args) => {
     const result = await listener(...args);
     if (channel === 'desktop:ready') {
+      testingDisconnect = false;
       readyCount++;
       if (readyCount > 1) {
         try {
@@ -57,6 +58,7 @@ ipcMain.handle = (channel, listener) => {
                 const fresh = { sender: event.sender, senderFrame: event.sender.mainFrame };
                 setTimeout(() => handlers.get('desktop:reconnect')(fresh).catch(error => { report.failures.push(clean(error)); finish(); }), 250);
               });
+              testingDisconnect = true;
               process.kill(report.corePid, 'SIGTERM');
             }, 250);
           } else {
@@ -126,11 +128,15 @@ app.on('web-contents-created', (_event, contents) => {
     if (details.level !== 'error') return;
     const text = clean(details.message);
     // The deliberate disconnect can cancel an in-flight RPC or dispose its context.
-    if (testingDisconnect && [
+    // Releasing an opening sidebar reference also rejects its ready promise.
+    // Only accept this cancellation while the fixture is unloading a page;
+    // desktop:ready ends that window before the next page's normal operation.
+    const releasedSidebar = /^Sidebar Session opening failed: Error: Session reference "session-[a-f0-9-]+" is released$/.test(text);
+    if (testingDisconnect && ([
       '[cordis-client-runner] syncing inspect providers failed: Error: client api: dynamicCordisRunner/syncInspectManifest has no active Connection',
       '[cordis-client-runner] syncing inspect providers failed: Error: gateway/cancelled: client api: Remote invocation "dynamicCordisRunner/syncInspectManifest" was aborted',
       '[cordis-client-runner] syncing inspect providers failed: Error: cannot get required service "remote" in inactive context',
-    ].includes(text)) report.expectedDisconnectMessages.push(text);
+    ].includes(text) || releasedSidebar)) report.expectedDisconnectMessages.push(text);
     else { report.failures.push(text); console.log('RENDERER ERROR', text, details.sourceId, details.lineNumber); }
   });
   contents.on('did-fail-load', (_event, code, description, url, mainFrame) => { if (mainFrame && code !== -3) report.failures.push(`${code}: ${description} (${clean(url)})`); });
