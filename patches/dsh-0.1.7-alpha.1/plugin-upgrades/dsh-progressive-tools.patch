@@ -126,6 +126,7 @@ diff --git a/lib/index.d.ts b/lib/index.d.ts
  }
  /** Validated Loader schema for Config. */
 diff --git a/lib/index.js b/lib/index.js
+index cb496ef..183e7af 100644
 --- a/lib/index.js
 +++ b/lib/index.js
 @@ -1,6 +1,8 @@
@@ -137,7 +138,7 @@ diff --git a/lib/index.js b/lib/index.js
  //#region src/native-deferred.ts
  /**
  * Plugin-owned bridge from durable describe_tools results to pi-ai's native
-@@ -34,24 +36,48 @@
+@@ -34,24 +36,48 @@ function isToolSchema(value) {
  	const record = value;
  	return typeof record["name"] === "string" && record["name"].length > 0 && typeof record["description"] === "string" && typeof record["parameters"] === "object" && record["parameters"] !== null && !Array.isArray(record["parameters"]);
  }
@@ -192,7 +193,7 @@ diff --git a/lib/index.js b/lib/index.js
  				loads.set(callId, tools.map((tool) => ({
  					name: tool.name,
  					description: tool.description,
-@@ -62,19 +88,40 @@
+@@ -62,19 +88,40 @@ function disclosureFrame(options, describeToolName, progressiveNames) {
  	}
  	return {
  		loads,
@@ -238,7 +239,7 @@ diff --git a/lib/index.js b/lib/index.js
  			addedToolNames: disclosed.map((tool) => tool.name)
  		};
  	});
-@@ -106,7 +153,7 @@
+@@ -106,7 +153,7 @@ function withinFrame(storage, frame, source, beforeNext) {
  	} };
  }
  /** Install the reversible pi-ai bridge through DSH's read-only stream hook. */
@@ -247,7 +248,7 @@ diff --git a/lib/index.js b/lib/index.js
  	const storage = new AsyncLocalStorage();
  	const patched = /* @__PURE__ */ new Set();
  	const seen = /* @__PURE__ */ new WeakSet();
-@@ -142,7 +189,7 @@
+@@ -142,7 +189,7 @@ function installNativeDeferredBridge(ctx, names) {
  		return true;
  	};
  	ctx.on("llm/stream", (options, next) => {
@@ -256,7 +257,7 @@ diff --git a/lib/index.js b/lib/index.js
  		if (!frame.progressiveSurface || !patchProvider(options.provider)) return next();
  		return withinFrame(storage, frame, next, () => {
  			patchProvider(options.provider);
-@@ -160,7 +207,45 @@
+@@ -160,7 +207,45 @@ function installNativeDeferredBridge(ctx, names) {
  	}, "dsh-progressive-tools native deferred bridge");
  }
  //#endregion
@@ -302,7 +303,7 @@ diff --git a/lib/index.js b/lib/index.js
  /** Stable model-facing name of the catalog search tool. */
  const SEARCH_TOOLS_NAME = "search_tools";
  /** Stable model-facing name of the exact-schema lookup tool. */
-@@ -324,8 +409,8 @@
+@@ -324,8 +409,8 @@ function sdkSchema(definition) {
  }
  /** Render the runtime's language while retaining the registry-owned SDK contract. */
  function renderSdk(ctx, schemas) {
@@ -313,7 +314,7 @@ diff --git a/lib/index.js b/lib/index.js
  	switch (runtime.language) {
  		case "typescript": return {
  			language: runtime.language,
-@@ -339,21 +424,31 @@
+@@ -339,21 +424,31 @@ function renderSdk(ctx, schemas) {
  	}
  }
  const DISCOVERY_SECTION = "tools:progressive-disclosure";
@@ -352,7 +353,7 @@ diff --git a/lib/index.js b/lib/index.js
  	const sdkIndex = assembly.sections.findIndex((section) => section.name === "tools:sdk" && section.text.trim().length > 0);
  	const hasSdk = sdkIndex !== -1;
  	const hasRunCode = assembly.tools.some((tool) => tool.name === RUN_CODE_NAME);
-@@ -383,7 +478,7 @@
+@@ -383,7 +478,7 @@ function compactAssembly(ctx, assembly, scope, eagerTools, optionalEagerTools, d
  	if (mode === "native") directNames.add(INVOKE_TOOL_NAME);
  	if (mode !== "native") directNames.add(RUN_CODE_NAME);
  	const tools = assembly.tools.filter((tool) => directNames.has(tool.name));
@@ -361,7 +362,7 @@ diff --git a/lib/index.js b/lib/index.js
  	let sections = assembly.sections.filter((section) => section.name !== DISCOVERY_SECTION);
  	if (mode === "native") sections = [...sections, {
  		name: DISCOVERY_SECTION,
-@@ -412,17 +507,37 @@
+@@ -412,17 +507,37 @@ function apply(ctx, config) {
  	]);
  	const presentationModes = /* @__PURE__ */ new WeakMap();
  	const modeFor = (agent, nested) => agent === void 0 ? nested ? "code" : "native" : presentationModes.get(agent) ?? (nested ? "code" : "native");
@@ -402,19 +403,19 @@ diff --git a/lib/index.js b/lib/index.js
  			}
  		},
  		output: {
-@@ -436,6 +551,11 @@
- 					},
- 					truncated: {
+@@ -438,6 +553,11 @@ function apply(ctx, config) {
  						type: "boolean",
-+						required: true
-+					},
+ 						required: true
+ 					},
 +					next_cursor: { type: "string" },
 +					instructions: {
 +						type: "string",
- 						required: true
- 					},
++						required: true
++					},
  					matches: {
-@@ -468,23 +588,36 @@
+ 						type: "array",
+ 						required: true,
+@@ -468,23 +588,36 @@ function apply(ctx, config) {
  			const query = queryText(args.query, resolved.maxQueryChars);
  			if (args.limit !== void 0 && (!Number.isSafeInteger(args.limit) || args.limit < 1)) throw new Error("search_tools limit must be a positive safe integer");
  			const tools = catalog(ctx, exec.agent, omitted);
@@ -464,7 +465,7 @@ diff --git a/lib/index.js b/lib/index.js
  		},
  		presentCall: (args) => ({
  			card: "generic",
-@@ -495,12 +628,12 @@
+@@ -495,12 +628,12 @@ function apply(ctx, config) {
  	});
  	const describeTool = defineTool({
  		name: DESCRIBE_TOOLS_NAME,
@@ -479,7 +480,7 @@ diff --git a/lib/index.js b/lib/index.js
  		} },
  		output: {
  			schema: {
-@@ -545,7 +678,7 @@
+@@ -545,7 +678,7 @@ function apply(ctx, config) {
  		isConcurrencySafe: () => true,
  		execute(args, exec) {
  			if (args.names.length === 0) throw new Error("describe_tools names must not be empty");
@@ -488,7 +489,7 @@ diff --git a/lib/index.js b/lib/index.js
  			for (const toolName of args.names) {
  				if (toolName.length === 0) throw new Error("describe_tools names cannot contain an empty name");
  				if (graphemes(toolName).length > resolved.maxToolNameChars) throw new Error(`describe_tools tool names cannot exceed ${String(resolved.maxToolNameChars)} characters`);
-@@ -577,31 +710,31 @@
+@@ -577,31 +710,32 @@ function apply(ctx, config) {
  			rawInput: String(args.names.length) + " requested name(s)"
  		})
  	});
@@ -505,7 +506,9 @@ diff --git a/lib/index.js b/lib/index.js
 +				description: "Exact deferred business-tool name; discovery/control tools cannot be forwarded."
  			},
  			arguments: {
- 				type: "json",
+-				type: "json",
++				type: "object",
++				additionalProperties: true,
  				required: true,
 -				description: "Arguments matching that tool's exact input schema."
 +				description: "Arguments matching the target tool's exact input schema, including every required field. Do not infer parameter names from a search summary."
@@ -517,9 +520,8 @@ diff --git a/lib/index.js b/lib/index.js
 -				type: "text",
 -				text: JSON.stringify(value, null, 2)
 -			}]
--		},
 +			render: invokeResults.render
-+		},
+ 		},
 +		finalizeContent: invokeResults.finalizeContent,
  		async execute(args, exec) {
  			if (args.name.length === 0) throw new Error("invoke_tool name must not be empty");
@@ -528,7 +530,7 @@ diff --git a/lib/index.js b/lib/index.js
  			if (!new Set(catalog(ctx, exec.agent, omitted).map((tool) => tool.name)).has(args.name)) throw new Error(`invoke_tool received unknown or unavailable tool ${JSON.stringify(args.name)}`);
  			const result = await ctx.tools.execute({
  				callId: `${String(exec.callId)}:invoke`,
-@@ -613,9 +746,12 @@
+@@ -613,9 +747,12 @@ function apply(ctx, config) {
  				signal: exec.signal
  			});
  			for (const context of result.additionalContexts ?? []) exec.deferContext(context);
@@ -543,7 +545,7 @@ diff --git a/lib/index.js b/lib/index.js
  		},
  		presentCall: (args) => ({
  			card: "generic",
-@@ -636,11 +772,15 @@
+@@ -636,11 +773,15 @@ function apply(ctx, config) {
  			DESCRIBE_TOOLS_NAME,
  			INVOKE_TOOL_NAME
  		])
@@ -1288,6 +1290,7 @@ diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
 +
 +  zod@4.6.5: {}
 diff --git a/src/index.ts b/src/index.ts
+index cc41685..af82870 100644
 --- a/src/index.ts
 +++ b/src/index.ts
 @@ -4,9 +4,10 @@
@@ -1302,7 +1305,7 @@ diff --git a/src/index.ts b/src/index.ts
  import type { ScopeKey } from '@deepseek-ai/dsh-scope'
  import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
  import {
-@@ -15,9 +16,11 @@
+@@ -15,9 +16,11 @@ import {
    renderToolsSdk,
    renderToolsSdkPy,
  } from '@deepseek-ai/dsh-tools'
@@ -1315,7 +1318,7 @@ diff --git a/src/index.ts b/src/index.ts
  
  /** Stable model-facing name of the catalog search tool. */
  export const SEARCH_TOOLS_NAME = 'search_tools'
-@@ -34,7 +37,7 @@
+@@ -34,7 +37,7 @@ export interface Config {
    eagerTools?: string[]
    /** Eager tools declared only in scopes where they already exist at assembly time. */
    optionalEagerTools?: string[]
@@ -1324,7 +1327,7 @@ diff --git a/src/index.ts b/src/index.ts
    maxSearchResults?: number
    /** Maximum exact tool definitions one describe call may return. */
    maxDescribeTools?: number
-@@ -44,7 +47,7 @@
+@@ -44,7 +47,7 @@ export interface Config {
    maxQueryChars?: number
    /** Maximum characters accepted in one exact tool name. */
    maxToolNameChars?: number
@@ -1333,7 +1336,7 @@ diff --git a/src/index.ts b/src/index.ts
    maxResultBytes?: number
  }
  
-@@ -251,9 +254,9 @@
+@@ -251,9 +254,9 @@ function sdkSchema(definition: ToolDefinition): CatalogTool {
  
  /** Render the runtime's language while retaining the registry-owned SDK contract. */
  function renderSdk(ctx: Context, schemas: CatalogTool[]): { language: string; sdk: string } {
@@ -1345,14 +1348,13 @@ diff --git a/src/index.ts b/src/index.ts
    }
    switch (runtime.language) {
      case 'typescript': return { language: runtime.language, sdk: renderToolsSdk(schemas) }
-@@ -266,22 +269,37 @@
+@@ -266,22 +269,37 @@ function renderSdk(ctx: Context, schemas: CatalogTool[]): { language: string; sd
  }
  
  const DISCOVERY_SECTION = 'tools:progressive-disclosure'
--
--function discoveryInstructions(mode: PresentationMode): string {
 +const SCHEMA_RECOVERY = 'After context compaction, a missing disclosure result, or a schema/scope change, describe the needed tool again if its current native declaration is missing.'
-+
+ 
+-function discoveryInstructions(mode: PresentationMode): string {
 +function discoveryRoute(mode: PresentationMode): string {
 +  return mode === 'code'
 +    ? 'Use tools.search_tools and tools.describe_tools inside run_code; print or return their results before using the schema in a later run_code.'
@@ -1392,7 +1394,7 @@ diff --git a/src/index.ts b/src/index.ts
      'Discovery changes presentation only: permission, approval, guards, scheduling, and auditing remain authoritative at execution time.',
    ].join('\n')
  }
-@@ -295,6 +313,7 @@
+@@ -295,6 +313,7 @@ function compactAssembly(
    optionalEagerTools: readonly string[],
    discoveryDefinitions: readonly ToolDefinition[],
    invokeDefinition: ToolDefinition,
@@ -1400,7 +1402,7 @@ diff --git a/src/index.ts b/src/index.ts
    recordMode: (scope: ScopeKey | undefined, mode: PresentationMode) => void,
  ): PromptAssembly {
    const sdkIndex = assembly.sections.findIndex(section => section.name === 'tools:sdk' && section.text.trim().length > 0)
-@@ -347,7 +366,7 @@
+@@ -347,7 +366,7 @@ function compactAssembly(
    if (mode !== 'native') directNames.add(RUN_CODE_NAME)
    const tools = assembly.tools.filter(tool => directNames.has(tool.name))
  
@@ -1409,7 +1411,7 @@ diff --git a/src/index.ts b/src/index.ts
    let sections = assembly.sections.filter(section => section.name !== DISCOVERY_SECTION)
    if (mode === 'native') {
      sections = [...sections, { name: DISCOVERY_SECTION, text: instructions }]
-@@ -368,12 +387,27 @@
+@@ -368,12 +387,27 @@ export function apply(ctx: Context, config: Config): void {
    const modeFor = (agent: object | undefined, nested: boolean): PresentationMode =>
      agent === undefined ? nested ? 'code' : 'native' : presentationModes.get(agent) ?? (nested ? 'code' : 'native')
  
@@ -1440,7 +1442,7 @@ diff --git a/src/index.ts b/src/index.ts
      },
      output: {
        schema: {
-@@ -382,6 +416,8 @@
+@@ -382,6 +416,8 @@ export function apply(ctx: Context, config: Config): void {
          properties: {
            total: { type: 'integer', required: true },
            truncated: { type: 'boolean', required: true },
@@ -1449,7 +1451,7 @@ diff --git a/src/index.ts b/src/index.ts
            matches: {
              type: 'array',
              required: true,
-@@ -405,12 +441,7 @@
+@@ -405,12 +441,7 @@ export function apply(ctx: Context, config: Config): void {
          throw new Error('search_tools limit must be a positive safe integer')
        }
        const tools = catalog(ctx, exec.agent, omitted)
@@ -1463,7 +1465,7 @@ diff --git a/src/index.ts b/src/index.ts
          .map(tool => ({
            name: tool.name,
            description: summarize(tool.description, resolved.maxSummaryChars),
-@@ -418,24 +449,47 @@
+@@ -418,24 +449,47 @@ export function apply(ctx: Context, config: Config): void {
          }))
          .filter(match => match.score > 0)
          .sort((left, right) => right.score - left.score || left.name.localeCompare(right.name, 'en'))
@@ -1522,7 +1524,7 @@ diff --git a/src/index.ts b/src/index.ts
      },
      output: {
        schema: {
-@@ -466,7 +520,7 @@
+@@ -466,7 +520,7 @@ export function apply(ctx: Context, config: Config): void {
      execute(args, exec) {
        if (args.names.length === 0) throw new Error('describe_tools names must not be empty')
        if (args.names.length > resolved.maxDescribeTools) {
@@ -1531,7 +1533,7 @@ diff --git a/src/index.ts b/src/index.ts
        }
        for (const toolName of args.names) {
          if (toolName.length === 0) throw new Error('describe_tools names cannot contain an empty name')
-@@ -509,21 +563,26 @@
+@@ -509,22 +563,27 @@ export function apply(ctx: Context, config: Config): void {
      }),
    })
  
@@ -1544,26 +1546,26 @@ diff --git a/src/index.ts b/src/index.ts
 -      name: { type: 'string', required: true, description: 'Exact tool name returned by describe_tools.' },
 -      arguments: { type: 'json', required: true, description: 'Arguments matching that tool\'s exact input schema.' },
 +      name: { type: 'string', required: true, description: 'Exact deferred business-tool name; discovery/control tools cannot be forwarded.' },
-+      arguments: { type: 'json', required: true, description: 'Arguments matching the target tool\'s exact input schema, including every required field. Do not infer parameter names from a search summary.' },
++      arguments: { type: 'object', additionalProperties: true, required: true, description: 'Arguments matching the target tool\'s exact input schema, including every required field. Do not infer parameter names from a search summary.' },
      },
      output: {
        schema: { type: 'json' },
 -      render: (_args, value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }],
--    },
 +      render: invokeResults.render,
-+    },
+     },
 +    finalizeContent: invokeResults.finalizeContent,
      async execute(args, exec) {
        if (args.name.length === 0) throw new Error('invoke_tool name must not be empty')
        if (graphemes(args.name).length > resolved.maxToolNameChars) {
          throw new Error(`invoke_tool name exceeds the configured ${String(resolved.maxToolNameChars)}-character limit`)
-+      }
+       }
 +      if (DISCOVERY_NAMES.has(args.name)) {
 +        throw new Error(`invoke_tool cannot wrap reserved tool ${JSON.stringify(args.name)}. Call it directly through its declared interface. ${discoveryRoute(modeFor(exec.agent, exec.parent !== undefined))}`)
-       }
++      }
        const available = new Set(catalog(ctx, exec.agent, omitted).map(tool => tool.name))
        if (!available.has(args.name)) {
-@@ -539,9 +598,14 @@
+         throw new Error(`invoke_tool received unknown or unavailable tool ${JSON.stringify(args.name)}`)
+@@ -539,9 +598,14 @@ export function apply(ctx: Context, config: Config): void {
          signal: exec.signal,
        })
        for (const context of result.additionalContexts ?? []) exec.deferContext(context)
@@ -1580,7 +1582,7 @@ diff --git a/src/index.ts b/src/index.ts
      },
      presentCall: args => ({ card: 'generic', title: `Invoke ${args.name}`, kind: 'execute', rawInput: args.name }),
    })
-@@ -554,6 +618,11 @@
+@@ -554,6 +618,11 @@ export function apply(ctx: Context, config: Config): void {
      describe: DESCRIBE_TOOLS_NAME,
      invoke: INVOKE_TOOL_NAME,
      progressive: new Set([SEARCH_TOOLS_NAME, DESCRIBE_TOOLS_NAME, INVOKE_TOOL_NAME]),
@@ -1592,7 +1594,7 @@ diff --git a/src/index.ts b/src/index.ts
    })
    // Prepend makes this listener the outer wrapper for listeners already present;
    // transforming after next() preserves every cooperative inner rewrite.
-@@ -562,7 +631,7 @@
+@@ -562,7 +631,7 @@ export function apply(ctx: Context, config: Config): void {
      // A host-plane bundle mount sees agentless administrative assemblies too.
      // They have no presentation mode or execution scope to project.
      if (context.scope === undefined) return assembly
@@ -1810,6 +1812,7 @@ diff --git a/src/native-deferred.ts b/src/native-deferred.ts
      return withinFrame(storage, frame, next, () => { patchProvider(options.provider) })
    })
 diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-tools.spec.ts
+index 97ea483..ce29e42 100644
 --- a/tests/agent-progressive-tools.spec.ts
 +++ b/tests/agent-progressive-tools.spec.ts
 @@ -6,13 +6,13 @@
@@ -1829,7 +1832,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
  import ToolRuntime, { RUN_CODE_NAME, defineTool } from '@deepseek-ai/dsh-tools'
  import type { Agent } from '@deepseek-ai/dsh-agent'
  import { Session, SessionId } from '@deepseek-ai/dsh-session'
-@@ -29,17 +29,21 @@
+@@ -29,17 +29,21 @@ import {
  const signal = new AbortController().signal
  
  /** Scriptable runtime whose bridge functions are real ToolRuntime bindings. */
@@ -1854,7 +1857,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      return this.behavior(request)
    }
  }
-@@ -53,7 +57,7 @@
+@@ -53,7 +57,7 @@ interface Mounted {
  }
  
  /** Build one host catalog and mount the plugin inside an agent scope. */
@@ -1863,7 +1866,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
    const ctx = new Context()
    await ctx.plugin(LlmRuntime)
    await ctx.plugin(SystemPrompt, {})
-@@ -93,10 +97,10 @@
+@@ -93,10 +97,10 @@ async function mount(config: Config = {}, options: { language?: string; mode?: '
    let scope!: Scope
    await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
      { inject: ['tools', 'systemPrompt'] }))
@@ -1876,7 +1879,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
  }
  
  /** Execute one discovery tool as a nested Code Mode call. */
-@@ -146,7 +150,7 @@
+@@ -146,7 +150,7 @@ describe('dsh-progressive-tools', () => {
      const ctx = new Context()
      await ctx.plugin(LlmRuntime)
      await ctx.plugin(SystemPrompt, {})
@@ -1885,7 +1888,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      await ctx.plugin(FakeRuntime)
      expect(() => { apply(ctx, { maxSearchResults: Number.NaN }) }).toThrow(/positive safe integer/)
      expect(() => { apply(ctx, { maxDescribeTools: 1.5 }) }).toThrow(/positive safe integer/)
-@@ -176,7 +180,7 @@
+@@ -176,7 +180,7 @@ describe('dsh-progressive-tools', () => {
      expect(assembly.tools.map(tool => tool.name).sort()).toEqual([DESCRIBE_TOOLS_NAME, INVOKE_TOOL_NAME, SEARCH_TOOLS_NAME].sort())
      expect(assembly.sections.find(section => section.name === 'tools:progressive-disclosure')?.text)
        .toContain('ordinary tool call')
@@ -1894,7 +1897,59 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
  
      const search = directValue(await direct(mounted, SEARCH_TOOLS_NAME, { query: 'web' })) as {
        matches: { name: string; description: string }[]
-@@ -221,8 +225,8 @@
+@@ -198,6 +202,51 @@ describe('dsh-progressive-tools', () => {
+     }))).toEqual(['fallback'])
+   })
+ 
++  it('declares invoke arguments as an open object and preserves nested JSON types without coercion', async () => {
++    const mounted = await mount({}, { mode: 'native', runtime: false })
++    let executions = 0
++    mounted.ctx.tools.register(defineTool({
++      name: 'structured_probe',
++      description: 'Echo structured parameters without side effects.',
++      parameters: {
++        queries: { type: 'array', items: { type: 'string' }, required: true },
++        limit: { type: 'integer', required: true },
++        options: { type: 'object', additionalProperties: true, required: true },
++        files: { type: 'array', items: { type: 'object', additionalProperties: true }, required: true },
++      },
++      output: { schema: { type: 'json' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
++      execute: args => { executions += 1; return Promise.resolve(args) },
++    }))
++    try {
++      const assembly = await mounted.ctx.systemPrompt.assemble({ scope: mounted.agent })
++      const invoke = assembly.tools.find(tool => tool.name === INVOKE_TOOL_NAME)
++      expect(invoke?.parameters).toMatchObject({
++        type: 'object',
++        properties: { arguments: { type: 'object', additionalProperties: true } },
++        required: ['name', 'arguments'],
++      })
++      const args = {
++        queries: ['border', 'horizontal alignment', 'cell style'],
++        limit: 10,
++        options: { enabled: true, optional: null, literal: '["keep this a string"]' },
++        files: [{ path: 'D:\\yhfgy\\OneDrive\\桌面\\小学生成绩表.xlsx' }],
++      }
++      expect(directValue(await direct(mounted, INVOKE_TOOL_NAME, { name: 'structured_probe', arguments: args })))
++        .toEqual(args)
++      expect(executions).toBe(1)
++
++      for (const invalid of [JSON.stringify(args), [], null, true, 10]) {
++        const result = await direct(mounted, INVOKE_TOOL_NAME, { name: 'structured_probe', arguments: invalid })
++        expect(result.isError).toBe(true)
++        if (!result.isError) throw new Error('invoke arguments must be an object')
++        expect(result.error.message).toContain('"arguments" must be an object')
++      }
++      expect(executions).toBe(1)
++    } finally {
++      await mounted.ctx.fiber.dispose()
++    }
++  })
++
+   it('stabilizes Both wire tools while keeping direct and Code invocation available', async () => {
+     const mounted = await mount({}, { mode: 'both' })
+     const assembly = await mounted.ctx.systemPrompt.assemble({ scope: mounted.agent })
+@@ -221,8 +270,8 @@ describe('dsh-progressive-tools', () => {
        total: number
        matches: { name: string }[]
      }
@@ -1905,7 +1960,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
  
      const dispose = mounted.ctx.tools.register(defineTool({
        name: 'win_terminal_probe',
-@@ -249,7 +253,7 @@
+@@ -249,7 +298,7 @@ describe('dsh-progressive-tools', () => {
      expect(unavailable).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
    })
    it('keeps Code and Both request prefixes stable across hidden catalog changes', async () => {
@@ -1914,7 +1969,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
        const mounted = await mount({}, { mode })
        const before = await mounted.ctx.systemPrompt.assemble({ scope: mounted.agent })
        const prefix = JSON.stringify({ sections: before.sections, tools: before.tools })
-@@ -288,11 +292,11 @@
+@@ -288,11 +337,11 @@ describe('dsh-progressive-tools', () => {
      expect(plain.tools.map(tool => tool.name)).toEqual(['read_file', 'web_search', 'write_file'])
    })
  
@@ -1929,7 +1984,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
    })
  
    it('renders the compact SDK in the active runtime language', async () => {
-@@ -311,7 +315,7 @@
+@@ -311,7 +360,7 @@ describe('dsh-progressive-tools', () => {
        truncated: boolean
        matches: { name: string; description: string }[]
      }
@@ -1938,7 +1993,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
        total: 3,
        truncated: true,
        matches: [{ name: 'read_file', description: 'Read one UTF…' }],
-@@ -323,7 +327,7 @@
+@@ -323,7 +372,7 @@ describe('dsh-progressive-tools', () => {
      expect(exact.matches.map(match => match.name)).toEqual(['web_search'])
    })
  
@@ -1947,7 +2002,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      const mounted = await mount({ maxSearchResults: 1 })
      mounted.ctx.tools.register(defineTool({
        name: 'pwsh',
-@@ -339,8 +343,8 @@
+@@ -339,8 +388,8 @@ describe('dsh-progressive-tools', () => {
        matches: { name: string; description: string }[]
      }
      expect(catalog.total).toBe(4)
@@ -1958,7 +2013,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      expect(catalog.matches.every(match => Object.keys(match).join(',') === 'name,description')).toBe(true)
  
      const verbose = valueOf(await nested(mounted, SEARCH_TOOLS_NAME, {
-@@ -351,9 +355,104 @@
+@@ -351,9 +400,104 @@ describe('dsh-progressive-tools', () => {
  
      const fallback = valueOf(await nested(mounted, SEARCH_TOOLS_NAME, {
        query: 'quantum-entanglement capability that does not exist',
@@ -2066,12 +2121,10 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
    })
  
    it('describes exact schemas and the active runtime SDK excerpt', async () => {
-@@ -369,6 +468,140 @@
-     expect(result.language).toBe('typescript')
-     expect(result.sdk).toContain('web_search')
+@@ -371,6 +515,140 @@ describe('dsh-progressive-tools', () => {
      expect(result.sdk).not.toContain('async def web_search')
-+  })
-+
+   })
+ 
 +  it('publishes the configured describe batch limit and gives a recoverable over-limit error', async () => {
 +    const mounted = await mount({ maxDescribeTools: 2 }, { mode: 'native', runtime: false })
 +    const assembly = await mounted.ctx.systemPrompt.assemble({ scope: mounted.agent })
@@ -2204,10 +2257,12 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
 +    expect(result.error.message).toContain('fixture operation failed after execution')
 +    expect(result.error.message).not.toContain(DESCRIBE_TOOLS_NAME)
 +    expect(executions).toBe(1)
-   })
- 
++  })
++
    it('fails closed for invalid queries, unknown tools, configured counts, and complete result bytes', async () => {
-@@ -379,7 +612,7 @@
+     const mounted = await mount({ maxDescribeTools: 1, maxQueryChars: 3, maxToolNameChars: 4 })
+     expect((await nested(mounted, SEARCH_TOOLS_NAME, { query: 'long' })).isError).toBe(true)
+@@ -379,7 +657,7 @@ describe('dsh-progressive-tools', () => {
      expect((await nested(mounted, DESCRIBE_TOOLS_NAME, { names: ['read_file', 'read_file'] })).isError).toBe(true)
      expect((await nested(mounted, DESCRIBE_TOOLS_NAME, { names: ['read_file', 'web_search'] })).isError).toBe(true)
      const byteBounded = await mount({ maxResultBytes: 10 })
@@ -2216,7 +2271,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      expect((await nested(byteBounded, DESCRIBE_TOOLS_NAME, { names: ['read_file'] })).isError).toBe(true)
    })
  
-@@ -389,7 +622,7 @@
+@@ -389,7 +667,7 @@ describe('dsh-progressive-tools', () => {
      const directDenied = await direct(mounted, 'web_search', { query: 'direct-code' })
      expect(directDenied).toMatchObject({ isError: true, error: { info: { code: 'UNKNOWN_TOOL' } } })
      const seen: string[] = []
@@ -2225,7 +2280,7 @@ diff --git a/tests/agent-progressive-tools.spec.ts b/tests/agent-progressive-too
      mounted.scope.ctx.on('tools/pre-execute', async (exec, next) => {
        seen.push(exec.name)
        return next()
-@@ -408,7 +641,7 @@
+@@ -408,7 +686,7 @@ describe('dsh-progressive-tools', () => {
      })
      expect(valueOf(result)).toEqual(['fresh'])
      expect(seen).toEqual([RUN_CODE_NAME, 'web_search'])

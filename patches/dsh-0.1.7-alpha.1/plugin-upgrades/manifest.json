@@ -185,7 +185,7 @@
       "repository": "yhfgyyf/dsh-progressive-tools",
       "commit": "3df3e891d9b75dd3d5e3c70b0ba471857ad5166f",
       "version": "0.3.2",
-      "patchSha256": "f6be18f35c3aa35eb6fa37515f47448a6dbed0cf85360f77240400502bbffa87",
+      "patchSha256": "eb95ef25df479f01386143b97a9c60232e1bd71bce8ee15b3be131eb31c5d5b1",
       "files": [
         {
           "path": "README.md",
@@ -211,7 +211,7 @@
         {
           "path": "lib/index.js",
           "before": "b2078ceb216ba369e685081b74441e359ceb8a54762a0cf14dc6472da7a62436",
-          "after": "b703a4516206200c0a3123b630df3e33a0c24af7ec0f3cf36e0107587ea03787",
+          "after": "4fb63f08b0556b92ea2d87c40df9cc6ad65d187e2401e41e3da5713a26bb5611",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -232,7 +232,7 @@
         {
           "path": "src/index.ts",
           "before": "f5cfed60bb00bff84d24d80c5e598d9e0dc30816cbff2e2e2cf256fb819eecf3",
-          "after": "fd3f6e819e059c69331da7dc544ff476f5d8af4905bbb1ba5cda923327547810",
+          "after": "f2ed04491b78452cbafba376b932e197d5216d7de4e6788756ad3d8d1ddc3301",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
@@ -253,7 +253,7 @@
         {
           "path": "tests/agent-progressive-tools.spec.ts",
           "before": "23dc162cdb033ab76fd6f418a5ee28f17da9c56278fad3116d6a914a0b849197",
-          "after": "d6aad54e2c04b4c8a4bd48d8e107458e1bdc9baf5cc8e9843437f5dd2d026ccb",
+          "after": "f41db6478ff5188e8d19343b8d187c5152e450dc5d30a4df6c6e8713e9b927fb",
           "beforeMode": "100644",
           "afterMode": "100644"
         },
