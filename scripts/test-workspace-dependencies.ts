@@ -41,8 +41,8 @@ try {
   client = await connectFixture(connection);
   for (const mode of modes) {
     const sessionId = (await client.rpc('session/create', { request: { cwd: data, agentPreset: mode } })).sessionId;
-    const catalog = await client.rpc('catalog', { sessionId }, false, '/workspace-dependency-test');
-    const calls = catalog.includes('run_code') ? [
+    const catalog: string[] = await client.rpc('catalog', { sessionId }, false, '/workspace-dependency-test');
+    const calls: readonly (readonly [string, Record<string, unknown>])[] = catalog.includes('run_code') ? [
       ['run_code', { code: 'return await tools.describe_tools({names:["load_workspace_dependencies"]});', description: 'Inspect bundled workspace runtime tool schema' }],
       ['run_code', { code: 'return await tools.load_workspace_dependencies({});', description: 'Read bundled Python and Node runtime paths' }],
     ] as const : [
