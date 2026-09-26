@@ -18,6 +18,8 @@ const marketplaceInstaller = await import(new URL('install-plugin-marketplace.mj
 await marketplaceInstaller.applyPluginMarketplace();
 const progressiveImageInstaller = await import(new URL('install-progressive-images.mjs', import.meta.url).href);
 await progressiveImageInstaller.applyProgressiveImages();
+const workspaceInstaller = await import(new URL('install-workspace-dependencies.mjs', import.meta.url).href);
+await workspaceInstaller.applyWorkspaceDependencies();
 
 for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });

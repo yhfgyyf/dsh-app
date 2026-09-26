@@ -16,6 +16,10 @@
   config:
     mode: !!js process.env.DSH_TOOLS_MODE
 - insert:
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      config:
+        source: !!js process.env.DSH_DESKTOP_RUNTIME_ROOT
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
     - id: message-feedback

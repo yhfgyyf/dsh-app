@@ -22,6 +22,15 @@ jobs:
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
         run: npm run check
+      - name: Bundled runtime discovery, libraries and virtual environment
+        timeout-minutes: 3
+        run: npm run test:workspace-dependencies
+      - name: Preset restoration and Auto/Audit conversations
+        run: |
+          npm run test:audit-switch
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:auto-conversation
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install pinned Inno Setup with long-path support
         shell: pwsh
         run: |
@@ -34,6 +43,13 @@ jobs:
           "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Create Windows installer
         run: node scripts/package-windows.ts
+      - name: Verify packaged Python and bundled libraries
+        shell: pwsh
+        run: |
+          $artifact = Get-Content release/latest-windows.json | ConvertFrom-Json
+          $env:DSH_TEST_DESKTOP_RUNTIME = Join-Path $artifact.app 'resources/runtime'
+          npm run test:workspace-dependencies
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install, launch, update, close and uninstall
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
@@ -45,14 +61,17 @@ jobs:
           Copy-Item $artifact.installer $output
           Copy-Item (Join-Path (Split-Path $artifact.installer) 'runtime-manifest.json') (Join-Path $output 'runtime-manifest-windows-x64.json')
           Copy-Item .test-data/windows-installer-report.json $output
+          Copy-Item .test-data/workspace-dependencies-latest.json (Join-Path $output 'windows-workspace-dependencies-report.json')
+          Copy-Item examples/office-smoke.py $output
+          Copy-Item examples/README.md (Join-Path $output 'Office-library-test-README.md')
           $artifact.PSObject.Properties.Remove('app')
           $artifact.installer = Split-Path $artifact.installer -Leaf
           $artifact | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $output 'windows-artifact.json') -Encoding utf8
           ($artifact.sha256 + '  ' + $artifact.installer) | Set-Content (Join-Path $output 'SHA256SUMS-windows.txt') -Encoding utf8
           @{
             purpose = 'Manual user testing; not a full UI acceptance pass'
-            checks = @('typecheck', 'unit tests', 'production build', 'runtime hashes', 'installer lifecycle')
-            fullUiSuite = 'not passed: token input focus assertion failed in the restored 900x600 Settings window'
+            checks = @('typecheck', 'unit tests', 'production build', 'runtime hashes', 'installer lifecycle', 'packaged Python/Office round trips', 'venv and pip', 'six-mode runtime tool discovery', 'preset restoration', 'Auto/Audit conversations')
+            fullUiSuite = 'not rerun: this build reuses the previous installer self-test workflow; targeted new runtime and preset checks are required'
             fullUiRun = 'https://github.com/yhfgyyf/dsh-app/actions/runs/36007061516'
             sourceCommit = $env:GITHUB_SHA
           } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $output 'validation-scope.json') -Encoding utf8

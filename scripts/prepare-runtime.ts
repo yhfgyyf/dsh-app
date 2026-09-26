@@ -36,6 +36,8 @@ await cp(process.execPath, join(destination, 'bin', nodeName));
 if (process.platform !== 'win32') await chmod(join(destination, 'bin', nodeName), 0o755);
 const packageManagerInstaller = await import(new URL('prepare-package-manager.ts', import.meta.url).href);
 await packageManagerInstaller.preparePackageManager();
+const pythonInstaller = await import(new URL('prepare-python.ts', import.meta.url).href);
+await pythonInstaller.preparePython();
 // The official Plugin Manager resolves packages from this complete install anchor.
 const runtimePackage = JSON.parse(await readFile(join(root, 'runtime/dsh/package.json'), 'utf8'));
 const dependencies = { ...pkg.dependencies, ...runtimePackage.dependencies, 'dsh-desktop-surface': 'file:./app' };

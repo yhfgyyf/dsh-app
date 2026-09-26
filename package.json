@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.25",
+  "version": "0.1.26",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
@@ -13,6 +13,8 @@
     "prepare:runtime": "node scripts/prepare-runtime.ts",
     "setup:computer-use": "node scripts/prepare-computer-use.ts",
     "setup:package-manager": "node scripts/prepare-package-manager.ts",
+    "setup:python": "node scripts/prepare-python.ts",
+    "test:workspace-dependencies": "node scripts/test-workspace-dependencies.ts",
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.ts",
     "start": "npm run build && electron .",
