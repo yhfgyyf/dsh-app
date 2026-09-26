@@ -40,7 +40,10 @@ export async function preparePython() {
   const staging = await mkdtemp(join(cache, 'staging-'));
   const archive = await download(pin.archive, join(cache, 'archives'));
   await run('tar', ['-xzf', archive, '-C', staging], { windowsHide: true });
-  const payload = join(staging, 'python');
+  // Runtime manifests and both packagers require ordinary files. Materialize
+  // upstream aliases now so the tested tree is byte-identical to the package.
+  const payload = join(staging, 'portable-python');
+  await cp(join(staging, 'python'), payload, { recursive: true, dereference: true });
   const executable = (base: string) => join(base, ...(process.platform === 'win32' ? ['python.exe'] : ['bin', 'python3']));
   const python = executable(payload);
   const cleanEnv = { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONNOUSERSITE: '1' };
