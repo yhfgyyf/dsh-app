@@ -22,15 +22,36 @@ jobs:
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
         run: npm run check
+      - name: Plugin marketplace review and explicit installation consent
+        timeout-minutes: 4
+        run: npm run test:plugin-marketplace
+      - name: Bundled Python, Office round trips and workspace virtual environment
+        timeout-minutes: 3
+        run: npm run test:workspace-dependencies
       - name: Shared model settings
         run: npm run test:model-settings
+      - name: Preset switching and cold session restoration
+        timeout-minutes: 2
+        run: npm run test:audit-switch
+      - name: Auto first turns, Audit remediation and saved conversations
+        timeout-minutes: 2
+        run: npm run test:auto-conversation
       - name: Web, TUI and App ownership
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
-      - name: Plugin marketplace review and explicit installation consent
+      - name: Microphone capture and permission isolation
+        timeout-minutes: 2
+        run: npm run test:voice-input
+      - name: Browser Use tools, isolation and settings persistence
         timeout-minutes: 4
-        run: npm run test:plugin-marketplace
+        run: |
+          npm run test:browser-use
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:browser-use-settings
+      - name: Published Univer client startup and legacy turn preview
+        timeout-minutes: 3
+        run: npm run test:univer-client
       - name: Computer use approval and image transport
         timeout-minutes: 4
         run: npm run test:computer-tools
@@ -68,6 +89,13 @@ jobs:
           "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Create Windows installer
         run: node scripts/package-windows.ts
+      - name: Verify the packaged Python payload
+        shell: pwsh
+        run: |
+          $artifact = Get-Content release/latest-windows.json | ConvertFrom-Json
+          $env:DSH_TEST_DESKTOP_RUNTIME = Join-Path $artifact.app 'resources/runtime'
+          npm run test:workspace-dependencies
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install, launch, close and uninstall
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
@@ -92,6 +120,9 @@ jobs:
             .test-data/computer-*-latest.json
             .test-data/computer-tools-*/**
             .test-data/plugin-marketplace-native/**
+            .test-data/univer-client/report.json
+            .test-data/univer-client/*.png
+            .test-data/workspace-dependencies-latest.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

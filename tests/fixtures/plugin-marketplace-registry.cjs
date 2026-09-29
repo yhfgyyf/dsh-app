@@ -63,7 +63,9 @@ exports.startRegistry = async function startRegistry(data) {
       shasum: createHash('sha1').update(tarball).digest('hex'),
     } };
     response.setHeader('Content-Type', 'application/json');
-    if (url.pathname === '/downloads/point/last-month/' + name) {
+    if (url.pathname === '/-/ping' && request.method === 'GET') {
+      response.end('{}');
+    } else if (url.pathname === '/downloads/point/last-month/' + name) {
       response.end(JSON.stringify(downloads));
     } else if (url.pathname === '/-/v1/search') {
       response.end(JSON.stringify({ objects: [{ package: {
@@ -101,6 +103,15 @@ const spawn = cp.spawn;
 cp.spawn = function(command, args, options) {
   if (Array.isArray(args) && args.some(arg => typeof arg === 'string' && require('node:path').basename(arg) === 'pnpm.mjs')) {
     require('node:fs').appendFileSync(${JSON.stringify(packageCommands)}, JSON.stringify({command, args}) + '\\n');
+    // The production source is public npm; redirect only this test's pnpm HTTP
+    // lookup to the same inert server as the fetch wrapper above.
+    if (args.includes('view')) {
+      args = [...args];
+      const index = args.indexOf('--registry');
+      if (index >= 0) args.splice(index, 2);
+      args.push('--registry', ${JSON.stringify(origin)});
+      return spawn.call(this, command, args, options);
+    }
   }
   return spawn.apply(this, arguments);
 };

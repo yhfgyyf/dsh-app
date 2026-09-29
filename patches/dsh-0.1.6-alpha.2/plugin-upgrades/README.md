@@ -23,10 +23,20 @@ directories. Modes are `check`, `apply`, and `verify`; the CLI uses the normal
 `.build-runtime/plugins` directory. Verification requires the original pinned
 Git checkout, not a published runtime snapshot stripped of its Git metadata.
 
-The frozen snapshot was verified by cloning all four fixed commits into an
+The original alpha.2 snapshot was verified by cloning all four fixed commits into an
 independent directory and applying this installer. All 98 source/runtime files
 matched the adapted snapshots byte for byte and by executable mode. The patches
-change 23 paths: router 2, audit 10, progressive tools 8, and TUI 3. Checks also
+originally changed 23 paths: router 2, audit 10, progressive tools 8, and TUI 3. Checks also
 verified backup hashes, missing-upgrade rejection, partial-upgrade rejection,
 unknown changes in the fourth plugin preventing writes to the first, and
 repeated application preserving file modification times.
+
+The preset resolution fix adds six paths (29 total: router 5, audit 13,
+progressive tools 8, TUI 3). Auto and Audit discovery now use the host's
+`pluginPackages.packageOf` lookup, matching the official roster. This preserves
+both installed profile plugins and bundled runtime dependencies when the root
+configuration lives in the desktop profile. Without this lookup, healthy presets
+were incorrectly marked broken and existing Auto sessions could not resume.
+The added tests retain missing-dependency errors and cover the lookup handoff.
+`node scripts/test-audit-switch.mjs` exercises all six modes, shared inspection,
+and Auto/Audit session restoration after a cold restart without model calls.

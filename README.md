@@ -4,9 +4,18 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon** 和 **Windows x64**。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前桌面版 **0.1.28** 支持 **DSH 0.2.0-rc.1**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.28 更新：DSH 0.2.0-rc.1 与全平台语音输入
+
+- **DSH 0.2.0-rc.1**：适配新版核心，保留标准、PTC、极简、创造、自动和审计预设及本地插件兼容修复。
+- **全平台语音输入**：macOS、Windows、银河麒麟均支持在 DSH 对话输入框录音并转为文字。修复系统已授权、App 仍拒绝麦克风请求的问题。
+- **Mac / Windows**：使用 Electron **44.4.5**，macOS 最低要求 **13**；支持 Browser Use 和 Computer Use。
+- **银河麒麟龙芯**：保留 Electron 31.7.7 和 Node 22.16.0 的旧 ABI 环境，新增不依赖 SIMD 的离线语音识别库，随包附带 SenseVoiceSmall INT8 和 Silero VAD 模型。
+
+本次 [v0.1.28 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) 发布 Windows 和麒麟安装包及校验信息；macOS 可从当前源码构建。麒麟新版已通过构建主机测试和安装包校验，**尚待龙芯实机验证**；Browser Use、Computer Use 目前仅在 macOS / Windows 提供，麒麟可使用独立的侧边栏网页预览。
 
 ## v0.1.12 预览版更新
 
@@ -42,8 +51,9 @@ Office 文件在本机解析。Word/PowerPoint 的预览禁用联网资源和外
 
 | 平台 | 安装包 | 安装方式 |
 | --- | --- | --- |
-| macOS Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | 解压，将 `DSH Desktop.app` 放入应用程序目录 |
+| macOS 13+ Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | 解压，将 `DSH Desktop.app` 放入应用程序目录 |
 | Windows 10/11 x64 | `DSH-Desktop-*-Windows-x64-Setup.exe` | 运行安装程序，默认按当前用户安装，无需管理员权限 |
+| 银河麒麟 V10 SP1 龙芯（旧 ABI、glibc 2.28） | `DSH-Desktop-*-Kylin-V10-loongarch64.deb` | 按 Release 附带的麒麟安装说明手动安装；不提供应用内自动更新 |
 
 打开应用，在“设置 → 模型”配置提供方与密钥，选择工作区并创建会话。已有 DSH 用户直接沿用 `~/.dsh` 中的配置；Windows 默认对应 `%USERPROFILE%\.dsh`。安装包内已包含运行所需的 Node 和 DSH，无需另外安装。
 
@@ -51,7 +61,7 @@ Office 文件在本机解析。Word/PowerPoint 的预览禁用联网资源和外
 
 Windows 安装包尚未代码签名，系统可能要求确认来源。Windows 卸载会移除程序，保留 DSH 会话和用户配置。
 
-从 v0.1.2 起，App 自动检测本仓库已发布的 GitHub Release（包含预览版）。发现新版后，标题栏出现小更新图标，点击即开始下载；校验完成后再次点击图标重启安装。安装前请等待当前任务完成；会话、配置和旧版 App 备份会保留。设置中的“桌面应用”可选择“每次打开 App 检查一次”（默认）或“每日定时检查一次”，每日模式在 App 运行时按本地时间执行。v0.1.1 及更早版本需要手动安装一次新版。
+从 v0.1.2 起，macOS / Windows App 自动检测本仓库已发布的 GitHub Release（包含预览版）。发现新版后，标题栏出现小更新图标，点击即开始下载；校验完成后再次点击图标重启安装。安装前请等待当前任务完成；会话、配置和旧版 App 备份会保留。设置中的“桌面应用”可选择“每次打开 App 检查一次”（默认）或“每日定时检查一次”，每日模式在 App 运行时按本地时间执行。v0.1.1 及更早版本需要手动安装一次新版。
 
 更新下载使用系统代理。安装失败后可直接重试安装，复用已校验的下载包。macOS 若从只读临时目录运行，更新器会在用户的 `~/Applications` 中保留旧版副本并安装新版；原位置的 App 保留。
 
@@ -59,6 +69,8 @@ Windows 从 v0.1.6 起将旧安装目录整体保留在相邻备份目录，再�
 
 ## 能力
 
+- macOS、Windows、银河麒麟三平台语音输入，支持录音转文字；各平台准备和验证范围见下文。
+- macOS / Windows 提供 Browser Use 与 Computer Use，开关位于设置中。
 - 工作区与会话列表、历史、重命名、分支、删除、搜索、日志导出。
 - 流式文本、推理、Markdown、代码、工具详情、图片与 MP4 附件。
 - 模型提供方配置、权限审批、计划、目标、问答、工作流与子代理。
@@ -69,21 +81,47 @@ Windows 从 v0.1.6 起将旧安装目录整体保留在相邻备份目录，再�
 - 聊天与右侧栏支持选中文字后右键复制，输入框提供剪切、粘贴、撤销与全选。
 - “在本地打开”使用系统默认应用打开右侧当前文件；菜单可选择其他应用、在文件夹中显示、选择文件或文件夹。没有当前文件时弹出文件选择器，工作区文件夹作为单独菜单项保留。
 
-内置 DSH `0.1.5-rc.1`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
+Desktop `0.1.28` 内置 DSH `0.2.0-rc.1`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`，包含这些插件针对新核心的兼容补丁。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
 
 部分能力依赖所选模型或外部工具：MP4 需要提供方支持 `video_url`；Audit 的 Codex / Claude Code 后端需要对应 CLI，也可配置 DSH 模型后端。安装包不包含模型账号、密钥或这些外部 CLI。
 
 ## 与 Web / TUI 共享
 
-App、Web 和 TUI 可共用同一个 `DSH_HOME`，默认 `~/.dsh`。会话、附件、工作区和模型配置在这里保存。App 自己的窗口与端口状态位于系统 Application Support / AppData 下的 `DSH Desktop` 目录。
+App、Web 和 TUI 可共用同一个 `DSH_HOME`，默认 `~/.dsh`。会话、附件、工作区和 API 凭据在这里保存。DSH 0.1.7 的模型与界面设置改为按 profile 保存；App 首次启动会导入旧设置并保留原件，此后各 profile 的设置独立。App 自己的 profile、窗口与端口状态位于系统 Application Support / AppData 下的 `DSH Desktop` 目录。
 
 Codex 登录通过 DSH 自己的授权服务保存到共享凭据文件，过期令牌由现有提供方自动刷新。Web/TUI 的安装步骤见[构建说明](docs/BUILDING.md)。TUI 使用 `/login openai-codex`，远程终端可加 `--device`；`/auth` 查看状态，`/logout openai-codex` 退出。授权输入不会作为聊天提交或进入输入历史。
 
 使用官方会话生命周期锁：同一会话同时只有一个进程可以写入。其他端尝试恢复、修改或删除占用中的会话会收到占用错误；持有端退出后可以接手。切换页面不保证释放会话，跨进程实时跟随活动流也不属于当前功能。
 
-本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.1.5-rc.1)。
+本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.2.0-rc.1)。
+
+升级到核心 0.2 时，App 会备份并迁移 profile 中显式引用的旧 DeepSeek 插件名，保留模型与密钥配置。第三方插件须通过新版兼容性检查；不会自动豁免不兼容插件。旧会话读取可能生成新的 V4 日志文件，原日志保留，因此降级时应使用升级前备份。
+
+## 全平台语音输入
+
+macOS、Windows 和银河麒麟均提供 **DSH App 内的语音输入**：点击对话输入框的录音按钮，授予系统麦克风权限，录音结束后点击“停止并识别”，检查并编辑转写文字后再发送。
+
+| 平台 | 本地识别方式 | 模型准备与验证范围 |
+| --- | --- | --- |
+| macOS Apple Silicon | 官方 SenseVoice 本地识别 | 首次按界面提示准备模型；本机实际录音和合成语音识别已验证 |
+| Windows x64 | 官方 SenseVoice 本地识别 | 首次按界面提示准备模型；模拟设备录音、权限隔离及安装测试通过，真实麦克风需在用户电脑验证 |
+| 银河麒麟 V10 SP1 龙芯 | SenseVoice INT8 + Silero VAD，标量 WebAssembly 单线程识别 | 模型随包提供，首次使用也无需外网；缺失或损坏时明确报错。构建主机验证通过，龙芯实机的录音、识别和性能待验证 |
+
+DSH 仅允许当前 App 主文档请求麦克风，不授予摄像头、嵌入网页或其他窗口媒体权限。若无法录音，检查系统麦克风权限、输入设备与 App 版本，并在更改权限后重启 DSH。麒麟的离线验收命令、KYSEC 安装步骤及回退方式见 [安装说明](https://github.com/yhfgyyf/dsh-app/releases/download/v0.1.28/DSH-Desktop-0.1.28-Kylin-README.md)。
+
+## 浏览器操作（Browser Use）
+
+macOS 和 Windows 在“设置 → 通用设置”中提供 Browser Use 开关，位于“电脑操作”下方，默认关闭。后端继续使用 Playwright MCP，通过 [Microsoft 官方 Playwright 扩展](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm) 接入本机 Chrome（没有 Chrome 时使用 Edge），沿用该浏览器已有的登录状态，无需另装 Python 服务。默认在首次操作时由用户在扩展页面授权并选择标签页；不同会话使用各自的标签页组。关闭 Browser Use 会断开 DSH 连接，原浏览器登录状态保留。开关状态随 App 重启保留。
+
+首次使用前，请在所选浏览器中安装并启用扩展。每次调用都会检查扩展是否已安装，缺少时立即提示安装地址；安装后可直接重试。若旧版已经因缺少扩展进入连接超时，请在安装扩展后完全退出并重开 DSH，清除尚未完成的连接。
+
+需要跳过连接确认页时，点击同一行的“自动连接”，粘贴扩展提供的 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`（也支持完整的环境变量行），保存后重启 App。保存令牌代表允许 DSH 自动连接浏览器并使用已有登录会话。令牌通过系统加密存储单独保存在本机，不写入普通偏好设置，也不会回传给设置页面或进入对话；没有可用的系统加密时拒绝保存。清除令牌后重启 App，即恢复手动确认。更改在重启后生效，以免中断正在运行的会话。
+
+开启后新建或重新打开会话，AI 可导航网页、填写表单、点击和截图。关闭开关会卸载浏览器工具并关闭其浏览器连接。右侧网页预览可继续单独使用。
 
 ## 电脑操作
+
+目前在 macOS 和 Windows 提供，银河麒麟尚未适配。
 
 先打开设置或标题栏显示器图标中的“电脑操作”开关；App 自动检查并申请系统权限，权限齐全且功能启动成功后开关才显示开启。
 手动开启开关即允许电脑操作，后续任务不再逐次弹窗确认；此开关独立于文件／命令审批模式。关闭开关会立即停止操作，模型不能自行开启。
@@ -103,6 +141,8 @@ macOS 首次使用需为 DSH Desktop 授予辅助功能和屏幕录制权限。
 Windows 需要已登录的交互桌面；锁屏和 UAC 安全桌面不能操作。整屏截图目前对应主显示器，其他显示器上的应用可按窗口观察。
 
 ## 从源码构建
+
+当前 `main` 源码为 Desktop `0.1.28`，内置 DSH `0.2.0-rc.1`，包含三平台语音适配与兼容补丁。下面的标准构建命令用于 macOS / Windows；麒麟使用独立的旧 ABI 环境，离线语音构建与固定来源见 [麒麟语音适配](patches/loongarch-speech/README.md)，安装使用 Release 的 `.deb` 及随包说明。
 
 需要 Git、Node.js **24.15.0** 与 npm：
 

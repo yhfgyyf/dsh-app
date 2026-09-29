@@ -139,10 +139,15 @@ async function run(event) {
     await until(() => { const view = window.contentView.children.find(view => view.webContents === contents); return view?.getVisible() && !contents.isLoading(); }, 'Sidebar preview invisible: ' + marker);
     return contents;
   };
-  const svgPage = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
+  await js(`document.querySelector('.hWmORq_body img[alt="Inline SVG"]').closest('button').click()`);
+  await until(() => js(`document.querySelector('[role="dialog"] img[alt="Inline SVG"]')?.naturalWidth > 0`), 'Official inline image preview did not load');
+  await js(`document.querySelector('[role="dialog"] img[alt="Inline SVG"]').closest('[role="dialog"]').querySelector('button').click()`);
+  await until(() => js(`!document.querySelector('[role="dialog"] img[alt="Inline SVG"]')`), 'Inline image preview did not close');
+  report.checks.push('Authored inline SVG opens and closes the official full-image preview');
+  const svgPage = await opened('.hWmORq_body code button[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await svgPage.executeJavaScript(`document.documentElement.localName`), 'svg');
   assert.equal(await svgPage.executeJavaScript(`document.querySelector('animate').getAttribute('dur')`), '2s');
-  report.checks.push('Clicking the actual inline SVG opens its animated document in the native right sidebar');
+  report.checks.push('Clicking the SVG file link opens its animated document in the native right sidebar');
   const svgVisible = () => window.contentView.children.find(view => view.webContents === svgPage)?.getVisible();
   await js(`document.querySelector('.desktop-computer summary').click()`);
   await sleep(250);
@@ -181,7 +186,7 @@ async function run(event) {
   await until(() => svgPage.isDestroyed() && pngPage.isDestroyed() && canvasPage.isDestroyed(), 'Closed sidebar retained native previews');
   await interactions.verifyNoActiveFile(host, workspace, until);
   report.checks.push('With no active file, local open uses the file picker rather than silently opening the workspace');
-  const reopened = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
+  const reopened = await opened('.hWmORq_body code button[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
   assert.equal(await js(`document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab]').length`), 1, 'Reopening the empty sidebar should contain only the preview');
   await js(`document.querySelector('[data-sidebar-right-open] [data-dockkit-tab-close]').click()`);

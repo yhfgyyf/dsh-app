@@ -1,5 +1,17 @@
 # Third-party components
 
+Desktop 0.1.26 bundles CPython 3.12.14 and pip from Astral's
+python-build-standalone release 20260924 on macOS/Windows. Runtime archives
+and Office/PDF wheels are pinned by URL, version, size and SHA-256 in
+`runtime/python-lock.json`; the shipped copy is `runtime/python-provenance.json`.
+Python's license is under `runtime/dependencies/python/lib/python3.12/LICENSE.txt`
+(Windows: `Lib/LICENSE.txt`). Package license texts are retained in their
+`site-packages/*.dist-info` directories. Included libraries are openpyxl,
+python-docx, python-pptx, Pillow, lxml, XlsxWriter, pypdf and ReportLab, plus
+et_xmlfile, typing_extensions and charset-normalizer. NumPy/Pandas are not bundled.
+Python's bundled native dependency notices are preserved under
+`runtime/licenses/python-build-standalone`, with their source URLs and hashes.
+
 DSH Desktop is an independent application and is not an official DeepSeek or OpenAI product.
 
 The distribution includes Electron and DeepSeek Harness (MIT), React (MIT),
@@ -12,6 +24,12 @@ The version-pinned modifications under `patches/` adapt the MIT-licensed DSH and
 pi-ai components. Their original licenses remain applicable. Exact runtime and
 plugin revisions are listed in `runtime/dependencies.json`; installer checksums
 are provided with each GitHub Release.
+
+Browser Use includes the official DSH Browser Use registry and Playwright MCP
+provider (MIT), with Playwright and Playwright MCP (Apache-2.0). Their versions
+and integrity hashes are pinned in `runtime/dsh/package-lock.json`, and their
+licenses remain in the bundled runtime. Chrome and Edge are detected from the
+user's machine and are not redistributed in the installer.
 
 Offline document previews bundle docx-preview 0.4.0, SheetJS CE 0.20.3,
 and @aiden0z/pptx-renderer 1.2.4 (Apache-2.0), together with Apache ECharts,

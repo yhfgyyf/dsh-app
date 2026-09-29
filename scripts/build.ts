@@ -18,6 +18,8 @@ const marketplaceInstaller = await import(new URL('install-plugin-marketplace.mj
 await marketplaceInstaller.applyPluginMarketplace();
 const progressiveImageInstaller = await import(new URL('install-progressive-images.mjs', import.meta.url).href);
 await progressiveImageInstaller.applyProgressiveImages();
+const workspaceInstaller = await import(new URL('install-workspace-dependencies.mjs', import.meta.url).href);
+await workspaceInstaller.applyWorkspaceDependencies();
 
 for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
@@ -44,7 +46,7 @@ const pluginBuild = await build({
     emptyOutDir: true,
     lib: { entry: resolve(root, 'src/renderer/plugin.tsx'), formats: ['cjs'], fileName: () => 'plugin.js' },
     rolldownOptions: {
-      external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives'],
+      external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'],
       output: {
         banner: 'window.__ModuleLoader__.load({id:"dsh-desktop-shell",factory:(require)=>{const module={exports:{}};const exports=module.exports;',
         footer: 'return module.exports;}});',
@@ -80,7 +82,12 @@ await build({
 await build({ configFile: false, root: resolve(root, 'src/renderer/computer-preview'), base: './', build: { outDir: resolve(root, 'dist/renderer/computer-preview'), target: 'chrome148', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+// Reuse the official preset declarations without mounting the Web App surface.
+const desktopPatchPath = resolve(root, 'dist/runtime/desktop.patch.yml');
+let desktopPatch = await readFile(desktopPatchPath, 'utf8');
+for (const preset of ['standard', 'ptc', 'minimal', 'cordis']) desktopPatch += '\n' + await readFile(resolve(root, '.runtime/node_modules/@deepseek-ai/dsh-web-app/presets', `${preset}.patch.yml`), 'utf8');
+await writeFile(desktopPatchPath, desktopPatch);
 await build({ configFile: false, plugins: [{
   name: 'desktop-browser-loader',
   transform(code, id) {
@@ -99,7 +106,7 @@ await cp(resolve(root, 'dist/runtime'), resolve(root, '.runtime/app'), { recursi
 const surfaceRoot = resolve(root, '.runtime/node_modules/dsh-desktop-surface');
 await cp(resolve(root, 'dist/runtime'), surfaceRoot, { recursive: true });
 // Node cannot strip TypeScript inside node_modules; compile the host entries.
-for (const name of ['directory-picker', 'computer-use', 'plugin-marketplace', 'plugin-security-host', 'plugin-security', 'plugin-audit-package']) {
+for (const name of ['directory-picker', 'computer-use', 'browser-use', 'legacy-settings', 'plugin-marketplace', 'plugin-security-host', 'plugin-security', 'plugin-audit-package']) {
   const source = await readFile(resolve(root, 'src/runtime', `${name}.ts`), 'utf8');
   const compiled = stripTypeScriptTypes(source).replaceAll("'./plugin-audit-package.ts'", "'./plugin-audit-package.js'").replaceAll("'./plugin-security.ts'", "'./plugin-security.js'");
   await writeFile(resolve(surfaceRoot, `${name}.js`), compiled);

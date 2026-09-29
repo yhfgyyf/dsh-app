@@ -4,9 +4,24 @@
 
 [简体中文](README.md) | English
 
-An independent DeepSeek Harness desktop application for **macOS Apple Silicon** and **Windows x64**.
+An independent DeepSeek Harness desktop application for **macOS Apple Silicon**, **Windows x64**, and **Kylin V10 SP1 on LoongArch64**.
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
+
+## v0.1.28 preview updates
+
+Desktop **0.1.28** supports and bundles **DSH `0.2.0-rc.1`**, with compatibility updates for the local Auto, Audit, and Progressive Tools plugins.
+
+- **Voice input in DSH on all three platforms:** record from the chat composer on macOS, Windows, and Kylin. Microphone access is restricted to the current DSH main page; camera access and recording from embedded pages remain denied.
+- **macOS and Windows:** Electron `44.4.5`; macOS requires version 13 or later. Real microphone recording and synthetic-speech transcription have been verified on macOS. Windows microphone capture and permission isolation passed with simulated audio devices; its physical microphone and system privacy settings still need on-device checks.
+- **LoongArch Kylin:** retain Electron `31.7.7` for Kylin V10 SP1 2403, old ABI (`ELF flags 0x3`), and glibc `2.28`. This compatibility build does not include the newer Chromium security updates in Electron 44.
+- **Offline Kylin speech:** bundled SenseVoiceSmall INT8 and Silero VAD models use scalar WebAssembly, without SIMD or an online transcription API. The default INT8 configuration uses the included local files without a first-run model download. Keep the default INT8 option; FP32 is not bundled.
+
+On macOS and Windows, prepare or download the speech models before using offline transcription; these packages do not include the Kylin model payload. Kylin's speech worker and offline failure cases passed tests on macOS with the matching Node version, and the Debian package passed static/ABI checks. **The new Kylin app, real microphone capture, transcription speed, and KYSEC behavior have not been verified on the target machine.**
+
+Browser Use and Computer Use are available on macOS and Windows. They are not enabled in the Kylin build; its sidebar browser and file previews remain available.
+
+The `main` branch contains Desktop `0.1.28` source, including the three-platform speech adaptations and compatibility patches. The [v0.1.28 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) publishes Windows and Kylin installers; macOS can be built from the current source.
 
 ## v0.1.12 preview updates
 
@@ -42,8 +57,9 @@ Download the package for your platform from [GitHub Releases](https://github.com
 
 | Platform | Package | Installation |
 | --- | --- | --- |
-| macOS Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | Extract the ZIP and move `DSH Desktop.app` to your Applications folder |
+| macOS 13+ Apple Silicon (v0.1.28) | `DSH-Desktop-*-macOS-arm64.zip` | Extract the ZIP and move `DSH Desktop.app` to your Applications folder |
 | Windows 10/11 x64 | `DSH-Desktop-*-Windows-x64-Setup.exe` | Run the installer; it installs for the current user by default, without administrator privileges |
+| Kylin V10 SP1 2403 / LoongArch64 old ABI | `DSH-Desktop-0.1.28-Kylin-V10-loongarch64.deb` | Install manually using `DSH-Desktop-0.1.28-Kylin-README.md` from the release, including its KYSEC steps when applicable |
 
 Open the app, configure your provider and API key in **Settings → Models**, select a workspace, and create a session. Existing DSH users can reuse their configuration in `~/.dsh`, or `%USERPROFILE%\.dsh` on Windows. Node.js and DSH are included in the package and do not require a separate installation.
 
@@ -51,7 +67,7 @@ Each release includes `SHA256SUMS.txt`. Starting with v0.1.1, the macOS package 
 
 The Windows installer is not code-signed, so Windows may ask you to confirm its source. Uninstalling removes the program while preserving DSH sessions and user configuration.
 
-Starting with v0.1.2, the app automatically checks published GitHub Releases, including previews. A small title-bar icon appears when an update is available: click to download, then click again after verification to restart and install. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. In Settings, the Desktop application section offers checks once at each startup (the default) or daily at a chosen local time while the app runs. Versions v0.1.1 and earlier require a one-time manual upgrade.
+On macOS and Windows, starting with v0.1.2, the app automatically checks published GitHub Releases, including previews. Kylin does not support in-app updates; install its new `.deb` manually. A small title-bar icon appears when an update is available: click to download, then click again after verification to restart and install. Wait for running tasks to finish first; sessions, configuration, and a backup of the previous app are preserved. In Settings, the Desktop application section offers checks once at each startup (the default) or daily at a chosen local time while the app runs. Versions v0.1.1 and earlier require a one-time manual upgrade.
 
 Starting with v0.1.6, Windows updates retain the entire old installation in an adjacent backup directory before installing and launching the new version, avoiding overwrite failures while old DLLs remain loaded. Failed installations restore and reopen the old app. If an older updater fails to restart, install the new release manually once.
 
@@ -64,26 +80,28 @@ Update downloads use the system proxy. Failed installations can be retried using
 - Model provider configuration, permission approvals, plans, goals, questions, workflows, and subagents.
 - Standard, PTC, Minimal, Creative, Auto, and Audit presets; model reasoning effort is configured separately.
 - Native menus, file and directory pickers, download saving, zoom, window state, and recovery from core failures.
+- Voice input in the chat composer on macOS, Windows, and Kylin, with the model preparation and validation limits described above.
+- Browser Use and Computer Use on macOS and Windows; sidebar web previews also remain available on Kylin.
 - Conversation links open in right-sidebar browser tabs; file previews include Office documents, spreadsheets, text, code, Markdown, HTML/Canvas, SVG, images, PDF and common audio/video formats.
 - Existing file paths in replies open directly, images have thumbnails, and the right sidebar collapses when its last file or browser tab closes.
 - Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
 - Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.
 
-The app bundles DSH `0.1.5-rc.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
+Desktop `0.1.28` bundles DSH `0.2.0-rc.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 
 Some features depend on your model or external tools. MP4 attachments require a provider that supports `video_url`. Audit's Codex and Claude Code backends require their respective CLIs; a DSH model backend can also be configured. The installer does not include model accounts, API keys, or these external CLIs.
 
 ## Sharing with Web and TUI
 
-The app, Web, and TUI can share the same `DSH_HOME`, which defaults to `~/.dsh`. Sessions, attachments, workspaces, and model configuration are stored there. The app's own window and port state is stored in the `DSH Desktop` directory under the system's Application Support or AppData folder.
+The app, Web, and TUI can share the same `DSH_HOME`, which defaults to `~/.dsh`. Sessions, attachments, workspaces, and API credentials are stored there. Since DSH 0.1.7, model and UI settings are stored separately for each profile. Desktop imports legacy settings on first launch and preserves the original files; subsequent profile settings remain independent. The app's own profile, window and port state is stored in the `DSH Desktop` directory under the system's Application Support or AppData folder.
 
 Codex sign-in uses DSH's authorization service and shared credential store. The existing provider refreshes expired tokens. See [build instructions](docs/BUILDING.md) to enable it in Web/TUI. In TUI, use `/login openai-codex` (`--device` for remote terminals), `/auth` for status, and `/logout openai-codex` to sign out. Authorization input is excluded from chat and input history.
 
 The official session lifecycle lock allows only one process to write to a session at a time. Other interfaces receive an ownership error when they try to resume, modify, or delete a session that is in use. They can take over after the owning process exits. Switching pages does not guarantee that a session is released, and following an active stream live across separate processes is not currently supported.
 
-Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests are in [patches](patches/dsh-0.1.5-rc.1).
+Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests for Desktop 0.1.28 are in [patches](patches/dsh-0.2.0-rc.1).
 
-## Computer use
+## Computer use (macOS and Windows)
 
 Enable Computer use in Settings or through the title-bar monitor icon. The app checks and requests system permissions; the switch shows on only after permissions are available and startup succeeds. Enabling it authorizes computer use without a separate prompt for each task. This switch is independent of file and command approvals. Turning it off stops input immediately; the model cannot enable it.
 
@@ -102,6 +120,8 @@ Distribution with stable permission identity across updates requires Developer I
 Screenshots require an image-capable model, such as `deepseek-v4-flash-vision-exp`; text-only models can use window accessibility trees. Tools support finding applications and windows, screenshots, clicks, typing, keyboard shortcuts, scrolling, and dragging. One session owns the desktop at a time, with release on completion, cancellation, screen lock, or App exit. Windows requires an interactive logged-in desktop; the lock screen and UAC secure desktop are unavailable. Full-desktop capture currently targets the primary display; other displays can be observed through individual application windows.
 
 ## Build from source
+
+The current `main` source is Desktop `0.1.28` with DSH `0.2.0-rc.1`. The standard commands below build the macOS/Windows app. Kylin requires a separate old-ABI environment; see the [Kylin speech overlay](patches/loongarch-speech/README.md) for its offline speech build and pinned sources, and use the release installation guide for the `.deb`.
 
 Install Git, Node.js **24.15.0**, and npm, then run:
 

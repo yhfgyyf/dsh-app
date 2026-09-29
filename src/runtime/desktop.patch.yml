@@ -1,8 +1,5 @@
 # Desktop-owned composition; DSH shared core and reusable feature packages.
 
-- id: settings
-  config:
-    dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
 - id: credentials
   config:
     dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
@@ -19,6 +16,10 @@
   config:
     mode: !!js process.env.DSH_TOOLS_MODE
 - insert:
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      config:
+        source: !!js process.env.DSH_DESKTOP_RUNTIME_ROOT
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
     - id: message-feedback
@@ -61,8 +62,12 @@
       name: '@deepseek-ai/dsh-api-workspace-files'
     - id: terminal-controller
       name: '@deepseek-ai/dsh-api-terminal-controller'
+    - id: job-controller
+      name: '@deepseek-ai/dsh-api-job-controller'
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
+    - id: cordis-inspect-providers
+      name: '@deepseek-ai/dsh-tool-cordis/host'
     - id: webserver
       name: '@deepseek-ai/dsh-host-webserver'
       config:
@@ -86,6 +91,10 @@
       name: '@deepseek-ai/dsh-client-ui-theme'
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
+    - id: shortcuts
+      name: '@deepseek-ai/dsh-client-shortcuts'
+    - id: ui-shortcuts
+      name: '@deepseek-ai/dsh-client-ui-shortcuts'
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
     - id: ui-renderer
@@ -112,12 +121,24 @@
       name: '@deepseek-ai/dsh-client-ui-settings-general'
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
+    - id: ui-settings-account
+      name: '@deepseek-ai/dsh-client-ui-settings-account'
+    - id: account-controller
+      name: '@deepseek-ai/dsh-api-account-controller'
+    - id: ui-settings-session-log
+      name: '@deepseek-ai/dsh-client-ui-settings-session-log'
+    - id: ui-settings-shell
+      name: '@deepseek-ai/dsh-client-ui-settings-shell'
+    - id: ui-settings-agent-loop
+      name: '@deepseek-ai/dsh-client-ui-settings-agent-loop'
+    - id: ui-settings-subagent
+      name: '@deepseek-ai/dsh-client-ui-settings-subagent'
+    - id: ui-settings-web-search
+      name: '@deepseek-ai/dsh-client-ui-settings-web-search'
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
-    - id: ui-settings-unarchive-sessions
-      name: '@deepseek-ai/dsh-client-ui-settings-unarchive-sessions'
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
     - id: ui-approval
@@ -222,8 +243,8 @@
 - id: tool-web
   disabled: true
 - insert:
-    - id: agent-presets
-      name: '@deepseek-ai/dsh-agent-presets'
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
 - id: session-telemetry-otel

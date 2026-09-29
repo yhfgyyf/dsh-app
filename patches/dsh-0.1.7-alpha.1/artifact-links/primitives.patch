@@ -1,0 +1,63 @@
+--- a/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
++++ b/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
+@@ -10414,7 +10414,7 @@
+ 		case "link": return renderAnchor(node.url, renderChildren(node.children, {
+ 			...context,
+ 			inLink: true
+-		}), key, !anchorWrapsOnlyImages(node.children), context.streaming);
++		}), key, !anchorWrapsOnlyImages(node.children), context.streaming, context);
+ 		case "linkReference": return renderLinkReference(node, key, context);
+ 		case "image": return renderImage(node.url, node.alt ?? "", key, context);
+ 		case "imageReference": return renderImageReference(node, key, context);
+@@ -10550,12 +10550,23 @@
+ 	});
+ }
+ /** Local destinations use the scoped file delegate after settlement. */
+-function renderAnchor(url, children, key, glyph = true, streaming = false) {
++function localDestinationMention(url, context, kind) {
++	let decoded;
++	try { decoded = decodeURIComponent(url); } catch { decoded = url; }
++	return context?.fileMentions?.resolve(decoded, kind);
++}
++function renderAnchor(url, children, key, glyph = true, streaming = false, context) {
+ 	const file = streaming ? void 0 : parseFileLink(url);
++	// Collect previews while the official delegate retains file and line navigation.
++	const mention = streaming ? void 0 : localDestinationMention(file?.path ?? url, context);
+ 	if (file !== void 0) return jsx(MarkdownFileLink, {
+ 		file,
+ 		glyph,
+ 		children
++	}, key);
++	if (mention) return jsx("button", {
++		type: "button", className: markdownCss.fileMention, title: mention.title,
++		"aria-label": mention.label, onClick: mention.open, children
+ 	}, key);
+ 	return renderSafeLink(normalizeUri(url), children, key, glyph);
+ }
+@@ -10594,11 +10605,16 @@
+ 		className: markdownCss.imageAlt,
+ 		children: alt
+ 	}, key);
+-	return jsx(MarkdownImage, {
++	const mention = localDestinationMention(url, context, "image");
++	const picture = jsx(MarkdownImage, {
+ 		src: imageSrc,
+ 		alt,
+ 		destination: url
+ 	}, `${key}:${imageSrc}`);
++	return mention && !context.inLink ? jsx("button", {
++		type: "button", className: "desktop-file-image", title: mention.title,
++		"aria-label": mention.label, onClick: mention.open, children: picture
++	}, key) : picture;
+ }
+ /** Failed loads retain the authored alt or destination; a new source remounts the image. */
+ function MarkdownImage({ src, alt, destination }) {
+@@ -10636,7 +10652,7 @@
+ 		...context,
+ 		inLink: true
+ 	});
+-	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming);
++	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming, context);
+ }
+ function renderImageReference(node, key, context) {
+ 	const definition = context.targets.definitions.get(node.identifier.toUpperCase());

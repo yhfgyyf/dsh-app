@@ -1,0 +1,16 @@
+{
+  "target": "linux-loong64",
+  "package": "@deepseek-ai/dsh-experimental-speech-to-text-sensevoice",
+  "version": "0.2.0-rc.1",
+  "patchSha256": "0198638c5be3e9de42a79ceb685b9507007eed4bb8ec6655314817a381eed17c",
+  "files": {
+    "lib/index.js": {
+      "before": "0a318edfe654c0d3de2159fd6414a3ae0604fc105ec015b004c58fb1ade4dc11",
+      "after": "65a578334c166682962d465108a2443a9f623bd570abc7699425b2011eb85df8"
+    },
+    "lib/worker.js": {
+      "before": "8281388dbd4f1e8c5316ffb5e709d502a012132f3285b37f17155ac16ba002de",
+      "after": "8ab411e680fb6d7aea1b659ba6e8f49e1b50df89fc795c07055c1480f8591f02"
+    }
+  }
+}

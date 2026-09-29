@@ -1,0 +1,259 @@
+{
+  "format": 1,
+  "target": "linux-loong64",
+  "backend": {
+    "sherpa": "1.13.8",
+    "onnxruntime": "1.28.2",
+    "emscripten": "4.0.23",
+    "simd": false,
+    "relaxedSimd": false,
+    "threads": false,
+    "tts": false,
+    "initialMemoryBytes": 536870912
+  },
+  "files": [
+    {
+      "path": "build/build-ort-scalar.sh",
+      "bytes": 1088,
+      "sha256": "07d9d94df8142613da810e9a5353cf2dc61ca90446ef2d337ba82760a2d445da"
+    },
+    {
+      "path": "build/build-sherpa-scalar.sh",
+      "bytes": 1635,
+      "sha256": "1b898b50df869cbe09eedb6c3f1e01d1c279740e8d5b82734be105b34b41b2e3"
+    },
+    {
+      "path": "build/ort-build-driver.patch",
+      "bytes": 844,
+      "sha256": "5cfecec81a4f8cdb6ec6b74afb2d565d5390791cf2dcc1221a936b5f96236696"
+    },
+    {
+      "path": "build/sherpa-scalar.patch",
+      "bytes": 2859,
+      "sha256": "627f63f4723035fa5a3a3ad31fdcad129824feabf4c5b2f090e2c076614d6418"
+    },
+    {
+      "path": "licenses/Emscripten-LICENSE",
+      "bytes": 5093,
+      "sha256": "620a78084fc7ca97c0b5dea9abf891f3ffcadfdbf305276f099c9c4e12fc1d86"
+    },
+    {
+      "path": "licenses/SenseVoice-MODEL_LICENSE",
+      "bytes": 5306,
+      "sha256": "7dba975a2069691db4992b0592d70828b330d2f8a30a71450f4e152a554e84f8"
+    },
+    {
+      "path": "licenses/SenseVoice-model-card.md",
+      "bytes": 11952,
+      "sha256": "6add90487ea3d685b6604ad0932b565fc5cf7e9daaf8aebc674de49da4560958"
+    },
+    {
+      "path": "licenses/Silero-VAD-LICENSE",
+      "bytes": 1075,
+      "sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b"
+    },
+    {
+      "path": "licenses/compiler-rt-LICENSE.TXT",
+      "bytes": 16708,
+      "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d"
+    },
+    {
+      "path": "licenses/eigen-COPYING.APACHE",
+      "bytes": 11362,
+      "sha256": "03379001a7b12a2ec997a25554247d985270b353c10d5bafee9ac8d6519820b7"
+    },
+    {
+      "path": "licenses/eigen-COPYING.BSD",
+      "bytes": 1517,
+      "sha256": "51928dce36213c5333ba3172e847d735d4c6e9b7ff2722a326c49067155b82eb"
+    },
+    {
+      "path": "licenses/eigen-COPYING.MINPACK",
+      "bytes": 2193,
+      "sha256": "c87b7f8ee88f6195e91743820c00354833583aef091b72e2d4a49c8e28e798a0"
+    },
+    {
+      "path": "licenses/eigen-COPYING.MPL2",
+      "bytes": 16727,
+      "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172"
+    },
+    {
+      "path": "licenses/eigen-COPYING.README",
+      "bytes": 264,
+      "sha256": "db640ff2bd90c6abd6a4d3fbb351e0ee4d555417cf840492054d1cbb2ea85644"
+    },
+    {
+      "path": "licenses/hclust_cpp-LICENSE",
+      "bytes": 1483,
+      "sha256": "e361d842da1d290351860ad6dcce2673a1e42e4f873a3ae1ff4eb92c6adaa882"
+    },
+    {
+      "path": "licenses/json-LICENSE.MIT",
+      "bytes": 1076,
+      "sha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603"
+    },
+    {
+      "path": "licenses/kaldi_decoder-LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "licenses/kaldi_native_fbank-LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "licenses/kaldifst-LICENSE",
+      "bytes": 11728,
+      "sha256": "a682d6efd1ee5dee08a8e405c233c2c198ea70ae0718129daa83ab58cfe31c5d"
+    },
+    {
+      "path": "licenses/kissfft-BSD-3-Clause",
+      "bytes": 1830,
+      "sha256": "4d6bcab46f27d6d0c878e8305d4bdcfe040d52bf6656b9771f04c9fb9902c0ed"
+    },
+    {
+      "path": "licenses/kissfft-COPYING",
+      "bytes": 246,
+      "sha256": "a2840585f8411be8e6826a31ef15ae65c950bd74a2437a73b013398a934ad0c6"
+    },
+    {
+      "path": "licenses/libcxx-LICENSE.TXT",
+      "bytes": 16703,
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+    },
+    {
+      "path": "licenses/libcxxabi-LICENSE.TXT",
+      "bytes": 16706,
+      "sha256": "e2b35be49f7284a45b7baca8fc7b3ab7440e7902392b2528a457816b5bb2a15c"
+    },
+    {
+      "path": "licenses/libunwind-LICENSE.TXT",
+      "bytes": 16706,
+      "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d"
+    },
+    {
+      "path": "licenses/musl-COPYRIGHT",
+      "bytes": 6204,
+      "sha256": "f9bc4423732350eb0b3f7ed7e91d530298476f8fec0c6c427a1c04ade22655af"
+    },
+    {
+      "path": "licenses/onnxruntime-LICENSE",
+      "bytes": 1073,
+      "sha256": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c"
+    },
+    {
+      "path": "licenses/onnxruntime-ThirdPartyNotices.txt",
+      "bytes": 325054,
+      "sha256": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+    },
+    {
+      "path": "licenses/openfst-COPYING",
+      "bytes": 559,
+      "sha256": "4300529197035fd3452350718a0b8cee984e9412c9932d7f35fcde849fc97a4b"
+    },
+    {
+      "path": "licenses/sherpa-onnx-LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "licenses/simple-sentencepiece-LICENSE",
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "path": "sherpa-onnx/LICENSE",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "path": "sherpa-onnx/index.js",
+      "bytes": 3771,
+      "sha256": "4026ae1122eaab063b19c4c331af33eb96af7536d5e7c2b6a2726661843177d9"
+    },
+    {
+      "path": "sherpa-onnx/package.json",
+      "bytes": 1060,
+      "sha256": "3a6ffd6a35aea1b0195c1f518645d29c90284c48bf8b8606c73ba90a91d41307"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-asr.js",
+      "bytes": 53867,
+      "sha256": "d51ae8e8b756ee5e53423ffada0c9702973f154f561aca7984fe0b12f4060178"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-kws.js",
+      "bytes": 9925,
+      "sha256": "03b44e372795fd907e84eecd29419e1d052dc6704ac06935c9bf9fe19b3e3434"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-punctuation.js",
+      "bytes": 5108,
+      "sha256": "6d9721e5e11809e248a8cd64a9a50de43b047a9f059cfb35bea88a5e7265f49a"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-speaker-diarization.js",
+      "bytes": 7794,
+      "sha256": "e266f54a4fc2c12a045ed7eeb7d9e26f539624095e7d438cd20f2b892c0a57ff"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-speech-enhancement.js",
+      "bytes": 7935,
+      "sha256": "f4bdf7affe3e99d1f6879e02b7c9541cb2d88ec992302b4c1828e8e445c845eb"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-tts.js",
+      "bytes": 33227,
+      "sha256": "b9cb4782010b22d64be31298a3e407170d2b8f5def471ea6011c42a921577e8f"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-vad.js",
+      "bytes": 7772,
+      "sha256": "893f01168d529add8318c0a6055cf725e788585fda9b81722564a8c3c3f60e34"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-wasm-nodejs.js",
+      "bytes": 101980,
+      "sha256": "ec702fab65a12eaa7ce34ad5abcb53b8b00a6d6a7e46e62e417db037c4908db2"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-wasm-nodejs.wasm",
+      "bytes": 15448842,
+      "sha256": "83bc18b2c474296d582ac0076a8b9763bdf9b3e20d0fb03e25fd82182f7b328b"
+    },
+    {
+      "path": "sherpa-onnx/sherpa-onnx-wave.js",
+      "bytes": 2451,
+      "sha256": "bb40258584a8eea84d9e9c09e9642ce5e67e4db68fc1522d8610297420052230"
+    },
+    {
+      "path": "speech-provenance.json",
+      "bytes": 6806,
+      "sha256": "e602a0ebbd7a3116f0e3740232809c655413dd28c4060e7e3854568a1192268a"
+    }
+  ],
+  "models": [
+    {
+      "source": "sensevoice-onnx/model.int8.onnx",
+      "path": "models/sensevoice-onnx/model.int8.onnx",
+      "bytes": 239233841,
+      "sha256": "c71f0ce00bec95b07744e116345e33d8cbbe08cef896382cf907bf4b51a2cd51",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/model.int8.onnx"
+    },
+    {
+      "source": "sensevoice-onnx/tokens.txt",
+      "path": "models/sensevoice-onnx/tokens.txt",
+      "bytes": 315894,
+      "sha256": "f449eb28dc567533d7fa59be34e2abca8784f771850c78a47fb731a31429a1dc",
+      "url": "https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/tokens.txt"
+    },
+    {
+      "source": "silero/silero_vad.onnx",
+      "path": "models/silero/silero_vad.onnx",
+      "bytes": 1807522,
+      "sha256": "a35ebf52fd3ce5f1469b2a36158dba761bc47b973ea3382b3186ca15b1f5af28",
+      "url": "https://huggingface.co/csukuangfj/vad/resolve/fba88cd2e921609e7675c3aaf51e0b9b295da4bc/silero_vad.onnx"
+    }
+  ]
+}

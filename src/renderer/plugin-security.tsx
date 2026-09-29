@@ -5,6 +5,7 @@ import './plugin-security.css';
 
 interface ReviewProps {
   phase: 'reviewing' | 'preparing' | 'review';
+  direct: boolean;
   spec: string;
   report: PluginSecurityReport | null;
   error: string | null;
@@ -12,11 +13,12 @@ interface ReviewProps {
   onAcknowledge(value: boolean): void;
   onContinue(): void;
   onRetry(): void;
+  onSkip(): void;
   onCancel(): void;
 }
 const riskLabels = { low: '较低风险', medium: '中等风险', high: '较高风险', unknown: '风险未知', critical: '严重风险' };
 
-function PluginSecurityReview({ phase, spec, report, error, acknowledged, onAcknowledge, onContinue, onRetry, onCancel }: ReviewProps) {
+function PluginSecurityReview({ phase, direct, spec, report, error, acknowledged, onAcknowledge, onContinue, onRetry, onSkip, onCancel }: ReviewProps) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     setNow(Date.now());
@@ -29,7 +31,7 @@ function PluginSecurityReview({ phase, spec, report, error, acknowledged, onAckn
   const canContinue = phase === 'review' && report !== null && !failure && !expired && report.spec === spec;
   return <section className="desktop-plugin-security" data-plugin-security-review data-install-phase={phase} aria-busy={phase !== 'review'}>
     <p className="desktop-plugin-security-spec">{spec}</p>
-    {phase !== 'review' ? <p role="status">{phase === 'preparing' ? '正在确认安装包与检查报告一致…' : 'DSH 正在检查插件材料，请稍候。此过程不会安装或执行插件。'}</p> : <>
+    {phase !== 'review' ? <p role="status">{phase === 'preparing' ? direct ? '正在下载安装包…' : '正在确认安装包与检查报告一致…' : 'DSH 正在检查插件材料，请稍候。此过程不会安装或执行插件。'}</p> : <>
       {failure && <p className="desktop-plugin-security-error" role="alert">{failure}</p>}
       {report && <>
         <div className="desktop-plugin-security-summary"><strong data-plugin-security-risk={report.risk}>{riskLabels[report.risk]}</strong><span>{report.status === 'complete' ? '检查报告' : '检查不完整'}</span></div>
@@ -46,7 +48,7 @@ function PluginSecurityReview({ phase, spec, report, error, acknowledged, onAckn
       </>}
       {canContinue && <label className="desktop-plugin-security-consent"><input type="checkbox" aria-label="我已阅读报告并接受相关风险" checked={acknowledged} onChange={event => onAcknowledge(event.currentTarget.checked)} /><span>我已阅读报告并接受相关风险</span></label>}
     </>}
-    <div className="desktop-plugin-security-actions"><button onClick={onCancel}>取消安装</button>{phase === 'review' && <button onClick={onRetry}>重新检查</button>}{canContinue && <button data-plugin-security-continue disabled={!acknowledged} onClick={onContinue}>继续安装</button>}</div>
+    <div className="desktop-plugin-security-actions"><button onClick={onCancel}>取消安装</button>{phase === 'review' && <button onClick={onRetry}>重新检查</button>}{phase !== 'preparing' && <button data-plugin-security-skip onClick={onSkip}>直接安装</button>}{canContinue && <button data-plugin-security-continue disabled={!acknowledged} onClick={onContinue}>继续安装</button>}</div>
   </section>;
 }
 

@@ -1,0 +1,103 @@
+{
+  "format": 1,
+  "verifiedBuildHost": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "python": "3.12.14",
+    "node": "22.16.0"
+  },
+  "sources": {
+    "ort-scalar-source": {
+      "url": "https://github.com/microsoft/onnxruntime",
+      "tag": "v1.28.2",
+      "commit": "33ca9628233dc8f002435e868d4c2e9f82766ca1"
+    },
+    "sherpa-onnx": {
+      "url": "https://github.com/k2-fsa/sherpa-onnx",
+      "tag": "v1.13.8",
+      "commit": "11afbd009a7f8c08f4bcf2fc1b265d0df4670fbf"
+    },
+    "onnx-source": {
+      "url": "https://github.com/onnx/onnx",
+      "tag": null,
+      "commit": "2bb50465112feca9003e1ed654d77f01ff1415ca"
+    },
+    "emsdk": {
+      "url": "https://github.com/emscripten-core/emsdk",
+      "tag": "4.0.23",
+      "commit": "c0bb220cb6e6f4e0fabb6f6db9efd53390ef5e56"
+    }
+  },
+  "sourcePatches": [
+    {
+      "directory": "ort-scalar-source",
+      "patch": {
+        "recipeFile": "ort-build-driver.patch",
+        "sha256": "5cfecec81a4f8cdb6ec6b74afb2d565d5390791cf2dcc1221a936b5f96236696"
+      },
+      "files": [
+        {
+          "path": "tools/ci_build/build.py",
+          "before": "3149b53ef733ee7d104b2d6d633fd9424d8baa291e474d76f8f4fe15c8ce3653",
+          "after": "681f91bd9c6960d7cc93f3a3c134c3ac7a2218c1bc34a60289a9dbc0e3c18089"
+        }
+      ]
+    },
+    {
+      "directory": "sherpa-onnx",
+      "patch": {
+        "recipeFile": "sherpa-scalar.patch",
+        "sha256": "627f63f4723035fa5a3a3ad31fdcad129824feabf4c5b2f090e2c076614d6418"
+      },
+      "files": [
+        {
+          "path": "cmake/onnxruntime-wasm-simd.cmake",
+          "before": "56986d0da275ef018478b38d989773f0c1bbe18fdff54c4c9ef260edb3e311d9",
+          "after": "2831c34ec913be8138addb942ced8f618ab744069360dd4185a7011a141c990e"
+        }
+      ]
+    },
+    {
+      "directory": "onnx-source",
+      "patch": {
+        "sourceDirectory": "ort-scalar-source",
+        "path": "cmake/patches/onnx/onnx.patch",
+        "sha256": "1470c713e0399e690e8c057e7e1a05456f66e010bd3c9804b7a989eaded70935"
+      },
+      "files": [
+        {
+          "path": "CMakeLists.txt",
+          "before": "d2bb3f7350b96532abb767b156a68d5945cb14a54b25bf33131facc3faa988e7",
+          "after": "95bcf7616b631613213cabc322700f5d9fe5e907f3d4edcf93a3f6fcacad0b30"
+        },
+        {
+          "path": "onnx/defs/nn/old.cc",
+          "before": "2dc04a892f3a4013299904f52a8b61c16d341aa922a4949c960a79771d89cbb8",
+          "after": "f9c4cc09b39a589251560e4ab6ec83795a63de91362ad46d3e1abcf59e48ad62"
+        }
+      ]
+    }
+  ],
+  "toolchain": {
+    "version": "4.0.23",
+    "release": "aaa43392544d695232b70eda706d751f18980c2a",
+    "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/mac/aaa43392544d695232b70eda706d751f18980c2a/wasm-binaries-arm64.tar.xz",
+    "sha256": "54234e108d6612eca5dc9280d1779ccec3d49ad4d8c8562a6b2046b0a5a8d5d4",
+    "bytes": 298446660
+  },
+  "pythonPackages": {
+    "cmake": "4.0.3",
+    "flatbuffers": "25.12.19",
+    "mpmath": "1.3.0",
+    "ninja": "1.11.1.4",
+    "numpy": "2.5.3",
+    "packaging": "26.3",
+    "pip": "25.0.1",
+    "sympy": "1.14.0"
+  },
+  "shippedWasm": {
+    "bytes": 15448842,
+    "sha256": "83bc18b2c474296d582ac0076a8b9763bdf9b3e20d0fb03e25fd82182f7b328b",
+    "warning": "A rebuild is not claimed byte-identical: build paths and toolchain metadata may change output. Never update the shipping manifest before fresh scalar and worker verification."
+  }
+}

@@ -29,7 +29,7 @@ await writeFile(join(bundle, 'probe.mjs'), 'export function apply(ctx) { ctx.pro
 await writeFile(join(bundle, 'cordis.patch.yml'), '- insert:\n    - id: package-management-fixture\n      name: ./probe.mjs\n');
 process.env.DSH_HOME = home;
 process.env.DSH_TELEMETRY_DISABLED = '1';
-const { boot, initProfile, loadProfileDirectory, readProfilePatches, createProfileResolutionGeneration, PluginPackages } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-app-boot')).href);
+const { boot, initProfile, loadProfileDirectory, readProfilePatches, createRuntimeResolution, PluginPackages } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-app-boot')).href);
 initProfile(profileDir, ['@deepseek-ai/dsh-base']);
 await writeFile(join(profileDir, 'pnpm-workspace.yaml'), JSON.stringify({ packages: [], offline: true, ignoreScripts: true, storeDir: join(data, 'pnpm-store'), cacheDir: join(data, 'pnpm-cache'), managePackageManagerVersions: false, updateNotifier: false }));
 await writeFile(join(data, 'empty-npmrc'), '');
@@ -46,7 +46,7 @@ const profileContext = {
   startedBundles: profile.layers.map((layer: any) => layer.packageName), cwd: data, home,
   overlays: [], telemetryDisabledEnv: '1', packageManager,
 };
-const resolution = await createProfileResolutionGeneration({ installAnchor, profile });
+const resolution = await createRuntimeResolution({ installAnchor, profile });
 let ready = false;
 const readyListeners = new Set<() => void>();
 let context: any;
@@ -63,7 +63,7 @@ try {
   context = await boot('package-management-test', rootFile, readProfilePatches('package-management-test', profileContext, profile), async (host: any) => {
     host.provide('profileContext', profileContext);
     host.provide('appReady', { onReady(listener: () => void) { if (ready) { listener(); return () => {}; } readyListeners.add(listener); return () => { readyListeners.delete(listener); }; } });
-    await host.plugin(PluginPackages, { generation: resolution });
+    await host.plugin(PluginPackages, { resolution });
   }, pathToFileURL(installAnchor).href);
   ready = true;
   for (const listener of readyListeners) listener();

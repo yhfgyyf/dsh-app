@@ -1,0 +1,16 @@
+diff --git a/tools/ci_build/build.py b/tools/ci_build/build.py
+index 3d501c1..91dba4a 100644
+--- a/tools/ci_build/build.py
++++ b/tools/ci_build/build.py
+@@ -2572,9 +2572,9 @@ def main():
+             emsdk_file = os.path.join(emsdk_dir, "emsdk.bat") if is_windows() else os.path.join(emsdk_dir, "emsdk")
+ 
+             log.info("Installing emsdk...")
+-            run_subprocess([emsdk_file, "install", emsdk_version], cwd=emsdk_dir)
++            log.info("Using isolated, verified Emscripten 4.0.23 compiler already installed")
+             log.info("Activating emsdk...")
+-            run_subprocess([emsdk_file, "activate", emsdk_version], cwd=emsdk_dir)
++            log.info("Using explicit EM_CONFIG; no global SDK activation")
+ 
+         if not args.skip_pip_install and args.enable_pybind and is_windows():
+             run_subprocess(

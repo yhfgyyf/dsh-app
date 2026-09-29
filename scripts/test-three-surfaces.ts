@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { DesktopRuntime } from '../src/main/runtime.ts';
@@ -14,7 +14,7 @@ await mkdir(join(root,'.test-data'),{recursive:true});
 await mkdir(join(root,'docs/evidence'),{recursive:true});
 const data=await mkdtemp(join(root,'.test-data/three-surfaces-'));
 const home=join(data,'shared-home'); await mkdir(home);
-const nm=join(upgrade.globalPackage,'node_modules');
+const nm=dirname(dirname(upgrade.globalPackage));
 for(const name of ['web','tui']) {
  const dir=join(home,'profiles',name);await mkdir(join(dir,'node_modules'),{recursive:true});
  const plugins=['dsh-auto-preset-router','dsh-audit-mode','dsh-progressive-tools',...(name==='tui'?['dsh-tui-app']:[])];

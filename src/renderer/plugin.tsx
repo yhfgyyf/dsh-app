@@ -1,27 +1,36 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { modalSelector } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
 import { installSidebarBrowser } from './sidebar-browser.tsx';
 import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
 import { installLocalOpen } from './local-open.tsx';
 import { ComputerControl, ComputerSettings } from './computer-use.tsx';
+import { BrowserUseSettings } from './browser-use.tsx';
 import { installDocumentPreviews } from './document-preview.tsx';
 import type { DocumentContext } from './document-preview.tsx';
 import { installPluginMarketplace } from './plugin-marketplace.tsx';
 import type { MarketplaceConnection } from './plugin-marketplace.tsx';
 import { installPluginSecurityReview } from './plugin-security.tsx';
+import { installSessionDelete } from './session-delete.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
 type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): string | undefined };
 
-// The narrow, verified public faces consumed from the installed DSH runtime.
+// The narrow, verified faces consumed from the installed DSH runtime.
 interface DesktopContext extends BrowserContext, DocumentContext {
   effect(factory: () => Disposer, label?: string): void;
   on(event: 'theme/change', listener: (snapshot: ThemeSnapshot) => void): Disposer;
   get(name: 'uiWorkspace'): { startSession(): void };
+  get(name: 'sessions'): { delete(sessionId: string): Promise<void> };
   get(name: 'connection'): MarketplaceConnection & { state: StateSource; reconnect(): void };
   layout: { toggleSidebar(): void };
+  shortcuts: {
+    // DSH 0.2.0-rc.1 has no public invoke method; its native menu adapter uses
+    // this registry entry point so command ownership and modal guards apply.
+    registry: { invoke(id: string, context: { target: Element | null; region: 'page' | 'editable' | 'terminal'; modal: string | null }): void };
+  };
   theme: {
     getTheme(): ThemeSnapshot;
     overrideTokens(source: string, values: Record<string, { light: string; dark: string }>): Disposer;
@@ -29,7 +38,7 @@ interface DesktopContext extends BrowserContext, DocumentContext {
 }
 
 export const name = 'dsh-desktop-shell';
-export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews'];
+export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews', 'sessions', 'shortcuts'];
 
 const palette: Record<string, [string, string]> = {
   '--dsw-alias-bg-base': ['#ffffff', '#181818'],
@@ -92,26 +101,35 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /></div>;
+  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
 }
 
-/** Settings/search have no public controller; target their version-pinned UI controls. */
+/** Route menu actions to their owners; search still uses a version-pinned UI control. */
 export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
   switch (command) {
     case 'new-session': ctx.get('uiWorkspace').startSession(); break;
     case 'sidebar': ctx.layout.toggleSidebar(); break;
     case 'details': if (!ctx.sidebarRight.isExpanded()) ctx.sidebarRight.toggleExpanded(); break;
-    case 'settings': document.querySelector<HTMLButtonElement>('button.VOzbGW_trigger')?.click(); break;
+    case 'settings': {
+      let target = document.activeElement;
+      while (target?.shadowRoot?.activeElement != null && !target.matches('webview[data-sidebar-browser-frame]')) target = target.shadowRoot.activeElement;
+      const top = [...document.querySelectorAll<HTMLElement>(modalSelector)].at(-1);
+      const region = target?.closest('.xterm') ? 'terminal' : target?.matches('input, textarea, select, [contenteditable="true"], [contenteditable=""]') ? 'editable' : 'page';
+      ctx.shortcuts.registry.invoke('settings.open', { target, region, modal: top?.dataset.shortcutModal ?? (top === undefined ? null : 'other') });
+      break;
+    }
     case 'search': document.querySelector<HTMLButtonElement>('button.bhn1Oq_searchButton')?.click(); break;
   }
 }
 
-export function apply(ctx: DesktopContext) {
+export async function apply(ctx: DesktopContext) {
+  const info = await window.dshDesktop?.getInfo();
   installSidebarBrowser(ctx);
-  installDocumentPreviews(ctx);
+  installDocumentPreviews(ctx, info?.platform === 'linux' && info.arch === 'loong64');
   installLocalOpen(ctx);
   installPluginMarketplace(ctx);
   installPluginSecurityReview(ctx);
+  installSessionDelete(ctx);
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };

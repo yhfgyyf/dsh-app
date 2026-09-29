@@ -82,7 +82,7 @@ function MediaDocument({ resourceAddress, content }: DocumentProps) {
   </section>;
 }
 
-export function installDocumentPreviews(ctx: DocumentContext): void {
+export function installDocumentPreviews(ctx: DocumentContext, preferLocalOffice = false): void {
   for (const [id, title, extensions, wrap, component] of [
     ['desktop-text', '文本（编码兼容）', TEXT_EXTENSIONS, true, TextDocument],
     ['desktop-media', '图片 / 音视频', Object.keys(MEDIA_TYPES), false, MediaDocument],
@@ -90,9 +90,9 @@ export function installDocumentPreviews(ctx: DocumentContext): void {
     ['desktop-slides', 'PowerPoint 演示', ['pptx', 'pptm', 'ppsx', 'ppsm', 'potx'], false, SlidesDocument],
     ['desktop-spreadsheet', '电子表格', ['xlsx', 'xls', 'xlsm', 'xlsb', 'xltx', 'xltm', 'ods', 'csv', 'tsv'], true, SpreadsheetDocument],
   ] as const) {
-    // The official Office renderer registers first; keep local Word/Slides
-    // selectable without shadowing its broader DOC/PPT conversion support.
-    const priority = id === 'desktop-word' || id === 'desktop-slides' ? 'builtin' : 'extension';
+    // LoongArch has no bundled native Office converter; use the existing local
+    // Word/Slides renderers there. Other platforms keep the official default.
+    const priority = !preferLocalOffice && (id === 'desktop-word' || id === 'desktop-slides') ? 'builtin' : 'extension';
     ctx.effect(() => ctx.documentPreviews.register({ id, title: () => title, extensions: [...extensions], priority, loading: 'bytes-complete', wrap }), `${id}: metadata`);
     ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({ name: 'sidebar.right.tab.document', key: id }, component)), `${id}: body`);
   }

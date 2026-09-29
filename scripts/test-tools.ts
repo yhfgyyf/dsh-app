@@ -64,12 +64,12 @@ try {
     await writeFile(new URL(`../.test-data/${mode}-events.json`, import.meta.url), JSON.stringify(frames, null, 2));
     const data = JSON.stringify(frames);
     assert.ok(data.includes('Hello, DSH Desktop'), 'parent must finish with the fixture reply');
-    const result = frames.filter(frame => frame.event?.type === 'tool/result').flatMap(frame => frame.event.data.message.content).at(-1);
+    const result = frames.filter(frame => frame.event?.type === 'tool/result').map(frame => frame.event.data.message).at(-1);
     assert.equal(result?.isError, false, JSON.stringify(result));
     const output = result.content.map((block: any) => block.text ?? '').join('');
-    if (mode === 'workflow') { const run = JSON.parse(output); assert.equal(run.agentsStarted, 1); assert.equal(run.result.verified, true); assert.ok(run.result.result.includes('Hello, DSH Desktop')); }
-    if (mode === 'subagent') { const run = JSON.parse(output); assert.equal(run.kind, 'foreground'); assert.ok(run.runId); assert.ok(JSON.stringify(run.output).includes('Hello, DSH Desktop')); }
-    if (mode === 'jobs') assert.ok(/jobId|job_id/.test(output), output);
+    if (mode === 'workflow') { assert.match(output, /completed \(1 agent\)/); assert.match(output, /"verified": true/); assert.ok(output.includes('Hello, DSH Desktop')); }
+    if (mode === 'subagent') assert.ok(output.includes('Hello, DSH Desktop'));
+    if (mode === 'jobs') assert.match(output, /started background job \S+/);
   });
   await check('Creator lists the live Host API and current tool schemas without changing plugins', async () => {
     const created = await client.rpc('session/create', { request: { cwd: new URL('../.test-data/workspace', import.meta.url).pathname, agentPreset: 'cordis' } });
@@ -79,7 +79,8 @@ try {
       await stream.wait(frames => frames.some(frame => frame.type === 'snapshot'));
       await client.rpc('session/prompt', { request: { sessionId: agentId, requestId: randomUUID(), mode: 'queue', content: [{ type: 'text', text: '[desktop-cordis] 验证只读 Host API 与当前工具目录。' }] } });
       await stream.wait(frames => frames.some(frame => frame.event?.type === 'turn/end'), 20000);
-      const results = stream.frames.filter(frame => frame.event?.type === 'tool/result').flatMap(frame => frame.event.data.message.content);
+      await writeFile(new URL('../.test-data/cordis-events.json', import.meta.url), JSON.stringify(stream.frames, null, 2));
+      const results = stream.frames.filter(frame => frame.event?.type === 'tool/result').map(frame => frame.event.data.message);
       const result = results.at(-1);
       assert.equal(result?.isError, false, JSON.stringify(result));
       const output = result.content.map((block: any) => block.text ?? '').join('');

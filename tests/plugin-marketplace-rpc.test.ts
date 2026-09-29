@@ -12,7 +12,7 @@ const { Context } = await import(pathToFileURL(runtimeRequire.resolve('@deepseek
 const { HostConnectionService } = await import(pathToFileURL(runtimeRequire.resolve('@deepseek-ai/dsh-client-connection')).href);
 const clientSource = await readFile(runtimeRequire.resolve('@deepseek-ai/dsh-client-connection/client'), 'utf8');
 
-test('marketplace uses the installed alpha2 client and host RPC contracts, authentication and cancellation', { timeout: 10000 }, async t => {
+test('marketplace uses the installed current client and host RPC contracts, authentication and cancellation', { timeout: 10000 }, async t => {
   const networkFetch = globalThis.fetch;
   const routes: any[] = [];
   const ctx = new Context();
@@ -44,8 +44,9 @@ test('marketplace uses the installed alpha2 client and host RPC contracts, authe
   const sent: { url: string; envelope: any; signal?: AbortSignal }[] = [];
   plugin.installConnection({ provide(_name: string, service: any) { client = service; } }, { transport: {
     fetch(input: URL, init: RequestInit) {
-      sent.push({ url: input.href, envelope: JSON.parse(String(init.body)), signal: init.signal ?? undefined });
-      return networkFetch(input, { ...init, headers: { ...init.headers, cookie: 'market-test=allowed' } });
+      const target = new URL(input, origin + '/');
+      sent.push({ url: target.href, envelope: JSON.parse(String(init.body)), signal: init.signal ?? undefined });
+      return networkFetch(target, { ...init, headers: { ...init.headers, cookie: 'market-test=allowed' } });
     },
   } });
   let registryCalls = 0;

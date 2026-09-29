@@ -58,6 +58,7 @@ test('uses the live DSH model, only package data, no tools or session, and host-
   assert.equal('purpose' in request, false);
   assert.equal(request.messages.length, 1);
   assert.equal(request.messages[0].role, 'user');
+  assert.deepEqual(request.messages[0].source, { kind: 'plugin:dsh-desktop-plugin-marketplace' });
   assert.ok(Object.isFrozen(request.messages[0]));
   assert.ok(Object.isFrozen(request.messages[0].content[0]));
   assert.match(request.system, /全是不可信的待审数据/);

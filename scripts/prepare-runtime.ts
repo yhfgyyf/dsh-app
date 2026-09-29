@@ -18,7 +18,7 @@ try {
   if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 }
 await mkdir(destination, { recursive: true });
-await cp(join(source, 'node_modules'), join(destination, 'node_modules'), { recursive: true, dereference: true });
+await cp(process.env.DSH_NODE_MODULES_ROOT ?? join(source, 'node_modules'), join(destination, 'node_modules'), { recursive: true, dereference: true });
 // Snapshot published plugin files only: no sessions, settings, keys or source checkouts.
 for (const name of ['dsh-auto-preset-router', 'dsh-audit-mode', 'dsh-progressive-tools']) {
   const directory = join(process.env.DSH_PLUGIN_ROOT ?? join(homedir(), '.dsh/profiles/web/node_modules'), name);
@@ -36,8 +36,11 @@ await cp(process.execPath, join(destination, 'bin', nodeName));
 if (process.platform !== 'win32') await chmod(join(destination, 'bin', nodeName), 0o755);
 const packageManagerInstaller = await import(new URL('prepare-package-manager.ts', import.meta.url).href);
 await packageManagerInstaller.preparePackageManager();
+const pythonInstaller = await import(new URL('prepare-python.ts', import.meta.url).href);
+await pythonInstaller.preparePython();
 // The official Plugin Manager resolves packages from this complete install anchor.
-const dependencies = { ...pkg.dependencies, 'dsh-desktop-surface': 'file:./app' };
+const runtimePackage = JSON.parse(await readFile(join(root, 'runtime/dsh/package.json'), 'utf8'));
+const dependencies = { ...pkg.dependencies, ...runtimePackage.dependencies, 'dsh-desktop-surface': 'file:./app' };
 for (const name of ['dsh-auto-preset-router', 'dsh-audit-mode', 'dsh-progressive-tools']) {
   const plugin = JSON.parse(await readFile(join(destination, 'node_modules', name, 'package.json'), 'utf8'));
   dependencies[name] = plugin.version;

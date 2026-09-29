@@ -10,7 +10,8 @@ const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
 /** Reuse the official controller and installer in a separately registered Settings page. */
 export async function applyPluginMarketplace({ runtimeNodeModules = join(root, '.runtime/node_modules'), backupHome = join(root, '.build-runtime'), mode = 'apply' } = {}) {
-  const directory = join(root, 'patches/dsh-0.1.6-alpha.2/plugin-marketplace');
+  const { version } = JSON.parse(await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-ui-plugin-manager/package.json'), 'utf8'));
+  const directory = join(root, 'patches', `dsh-${version}`, 'plugin-marketplace');
   const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8'));
   const pending = [];
   for (const file of manifest.files) {

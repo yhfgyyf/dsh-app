@@ -1,0 +1,197 @@
+const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const assert = require('node:assert/strict');
+const { join } = require('node:path');
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const root = join(__dirname, '..');
+const data = process.env.DSH_BROWSER_SETTINGS_TEST_DATA;
+assert.ok(data, 'Run through scripts/test-browser-use-settings.ts');
+mkdirSync(data, { recursive: true });
+process.env.DSH_DESKTOP_DATA_DIR = data;
+process.env.DSH_DESKTOP_CONFIG_HOME = join(data, 'core');
+const restore = process.env.DSH_BROWSER_SETTINGS_RESTORE === '1';
+const report = { restore, checks: [], errors: [] };
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function until(check, message) {
+  for (let i = 0; i < 240; i++) { if (await check()) return; await sleep(100); }
+  throw new Error(message);
+}
+let finished = false, started = false;
+const timer = setTimeout(() => finish(new Error('Browser settings UI timeout')), 60000);
+function finish(error) {
+  if (finished) return;
+  finished = true; clearTimeout(timer);
+  if (error) report.errors.push(String(error.stack ?? error).replace(/token=[^\s&"']+/g, 'token=[redacted]'));
+  writeFileSync(join(data, `report-${restore ? 'restore' : 'enable'}.json`), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report)); app.quit();
+}
+app.on('quit', () => { if (report.errors.length) process.exit(1); });
+app.on('web-contents-created', (_, contents) => contents.on('console-message', details => {
+  if (details.level === 'error') { report.errors.push(details.message.replace(/token=[^\s&"']+/g, 'token=[redacted]')); console.error(report.errors.at(-1)); }
+}));
+const handle = ipcMain.handle.bind(ipcMain);
+const handlers = new Map();
+ipcMain.handle = (channel, listener) => {
+  handlers.set(channel, listener);
+  return handle(channel, async (...args) => {
+    const result = await listener(...args);
+    if (channel === 'desktop:ready' && !started) {
+      started = true;
+      setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
+        report.ui = await args[0].sender.executeJavaScript(`({
+          rootInert: document.getElementById('root')?.inert,
+          settingsTransitions: window.__browserSettingsTransitions,
+          text: document.body.innerText.slice(0, 2500),
+          buttons: Array.from(document.querySelectorAll('button')).map(b => ({
+            label: b.getAttribute('aria-label'), text: b.textContent, className: b.className,
+          })).slice(0, 40),
+        })`).catch(() => null);
+        finish(error);
+      }), 100);
+    }
+    return result;
+  });
+};
+async function run(event) {
+  const host = event.sender;
+  if (restore) BrowserWindow.fromWebContents(host).setContentSize(900, 600);
+  const js = code => host.executeJavaScript(code, true);
+  const finishOnboarding = () => until(() => js(`(() => {
+    const button = Array.from(document.querySelectorAll('button')).find(b =>
+      ['继续', 'Continue', '稍后配置', 'Configure later'].includes(b.textContent));
+    if (button) {
+      if (!button.disabled) button.click();
+      return false;
+    }
+    return document.getElementById('root')?.inert === false
+      && document.querySelector('[data-conversation-content][data-conversation-session]:not([data-conversation-session=""]) [contenteditable="true"][data-phase="plain"]') !== null
+      && document.querySelector('button.VOzbGW_trigger, button[aria-label="账号菜单"], button[aria-label="Account menu"]') !== null;
+  })()`), 'Onboarding did not release the Settings controls');
+  // DSH 0.2 skips the web welcome notice when the native dshDesktop bridge is
+  // present. Wait for usable Settings instead, still dismissing any optional
+  // credential onboarding that the provider contributes.
+  await finishOnboarding();
+  // The account menu mounts before the initial session. Its later blank-session
+  // onboarding transition can close Settings even when native onboarding renders
+  // nothing. Wait for the live composer above and let that React commit finish.
+  await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  const openedDirectly = await js(`(() => {
+    const trigger = document.querySelector('button.VOzbGW_trigger');
+    if (trigger) { trigger.click(); return true; }
+    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
+    return false;
+  })()`);
+  if (!openedDirectly) await until(() => js(`(() => {
+    const settings = Array.from(document.querySelectorAll('button[role="menuitem"]')).find(button =>
+      Array.from(button.querySelectorAll('span')).some(span => ['设置', 'Settings'].includes(span.textContent)));
+    if (!settings) return false;
+    settings.click(); return true;
+  })()`), 'Settings entry missing from the account menu');
+  const selector = '.desktop-browser-use-settings [role="switch"]';
+  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
+  await until(() => js(`Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
+    .at(-1)?.dataset.shortcutModal === 'settings'`), 'Settings did not become the foreground dialog');
+  await js(`(() => {
+    window.__browserSettingsTransitions = [];
+    const record = () => {
+      const state = JSON.stringify({ inert: document.getElementById('root')?.inert,
+        viewport: { width: innerWidth, height: innerHeight },
+        sidebarCollapsed: document.querySelector('[data-sidebar-collapsed]')?.dataset.sidebarCollapsed,
+        modals: Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
+          .map(el => ({ role: el.getAttribute('role'), scope: el.dataset.shortcutModal ?? null })) });
+      if (window.__browserSettingsTransitions.at(-1) !== state) window.__browserSettingsTransitions.push(state);
+    };
+    record();
+    window.__browserSettingsObserver = new MutationObserver(record);
+    window.__browserSettingsObserver.observe(document.body, { subtree: true, childList: true, attributes: true });
+  })()`);
+  host.send('desktop:command', 'settings');
+  // A contributed row can unmount before its dialog or an account menu. The
+  // native command correctly yields to those modal owners, so wait for the shell.
+  await until(() => js(`document.getElementById('root')?.inert === false
+    && !document.querySelector('[role="dialog"][aria-modal="true"], [role="menu"]')`), 'The native Settings command did not close Settings');
+  host.send('desktop:command', 'settings');
+  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'The native Settings command did not reopen Settings');
+  report.settingsTransitions = await js('window.__browserSettingsObserver.disconnect(); window.__browserSettingsTransitions');
+  report.checks.push('The account menu opens Settings and the native Settings command closes and reopens the official Settings dialog');
+  await js(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
+  const state = () => js(`(() => { const b=document.querySelector(${JSON.stringify(selector)});return {enabled:b.getAttribute('aria-checked'),busy:b.disabled}; })()`);
+  await until(async () => !(await state()).busy, 'Browser switch did not settle');
+  assert.equal((await state()).enabled, restore ? 'true' : 'false');
+  assert.equal(await js(`document.querySelector(${JSON.stringify(selector)}).closest('[role="dialog"]') !== null`), true);
+  assert.equal(await js("document.querySelector('.desktop-titlebar [aria-label=\"浏览器操作\"]') === null"), true);
+  assert.equal(await js(`document.querySelector(${JSON.stringify(selector)}).className`), 'desktop-computer-switch');
+  report.checks.push(restore ? 'A new app/core process restores the enabled preference' : 'Settings contains Browser Use with the Computer Use switch style and defaults off');
+  for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'https://untrusted.invalid/' } }]) {
+    await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-enabled')(invalid, true)));
+    await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-token')(invalid, 'fixture-rejected-extension-token')));
+  }
+  await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-enabled')(event, 'true')));
+  await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:browser-use-token')(event, {})));
+  await js(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  await until(async () => !(await state()).busy && (await state()).enabled === (restore ? 'false' : 'true'), 'Browser toggle failed');
+  assert.equal(JSON.parse(readFileSync(join(data, 'desktop.json'), 'utf8')).browserUseEnabled, !restore);
+  const live = await handlers.get('desktop:browser-use-state')(event);
+  assert.equal(live.enabled, !restore);
+  assert.equal(live.phase, restore ? 'disabled' : 'ready');
+  assert.equal(Boolean(live.extensionTokenConfigured), restore);
+  assert.equal(Boolean(live.restartRequired), false);
+  const window = BrowserWindow.fromWebContents(host);
+  window.show(); window.focus(); host.focus();
+  await until(() => js('document.hasFocus()'), 'Settings window could not receive keyboard focus');
+  // The optional credential step can appear after its provider readiness request finishes.
+  await finishOnboarding();
+  await js("document.querySelector('.desktop-browser-use-connect').click()");
+  await until(() => js("!!document.querySelector('#desktop-browser-use-token')"), 'Credential form missing');
+  await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  const visibility = await js(`new Promise(resolve => {
+    const input = document.querySelector('#desktop-browser-use-token');
+    const save = document.querySelector('.desktop-browser-use-credentials button[type=submit]');
+    const visible = new Map();
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) visible.set(entry.target, entry.isIntersecting && entry.intersectionRatio >= 0.99);
+      if (visible.size !== 2) return;
+      observer.disconnect();
+      const rect = input.getBoundingClientRect();
+      resolve({ input: visible.get(input), save: visible.get(save), focused: document.activeElement === input,
+        rootInert: document.getElementById('root').inert,
+        documentFocused: document.hasFocus(), activeElement: { tag: document.activeElement?.tagName, id: document.activeElement?.id },
+        inputTop: rect.top, inputBottom: rect.bottom, viewport: { width: innerWidth, height: innerHeight } });
+    }, { threshold: 1 });
+    observer.observe(input); observer.observe(save);
+  })`);
+  report.credentialVisibility = visibility;
+  writeFileSync(join(data, `credentials-expanded-${restore ? 'restore' : 'enable'}.png`), (await host.capturePage()).toPNG());
+  assert.equal(visibility.rootInert, false, 'Onboarding must finish before interacting with Settings');
+  assert.equal(visibility.input, true, 'Opening automatic connection must show the token input inside the scrollable Settings panel');
+  assert.equal(visibility.save, true, 'The credential save button must be visible without extra scrolling');
+  assert.equal(visibility.focused, true, 'The token input must accept typing immediately after opening');
+  report.checks.push('Opening automatic connection brings the token input and save button into view and focuses the input');
+  assert.equal(await js("document.querySelector('#desktop-browser-use-token').type"), 'password');
+  assert.equal(await js("document.querySelector('#desktop-browser-use-token').value"), '');
+  const credentialsPath = join(data, 'browser-use-credentials.json');
+  const fixtureToken = 'fixture-browser-auto-connect-token';
+  if (!restore) {
+    await js(`(() => { const input=document.querySelector('#desktop-browser-use-token');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify('PLAYWRIGHT_MCP_EXTENSION_TOKEN=' + fixtureToken)});input.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    await until(() => js("!document.querySelector('.desktop-browser-use-credentials button[type=submit]').disabled"), 'Save did not become available');
+    await js("document.querySelector('.desktop-browser-use-credentials').requestSubmit()");
+    await until(async () => (await handlers.get('desktop:browser-use-state')(event)).extensionTokenConfigured, 'Credential save failed');
+    const stored = readFileSync(credentialsPath, 'utf8');
+    assert.ok(!stored.includes(fixtureToken));
+    assert.equal(safeStorage.decryptString(Buffer.from(JSON.parse(stored).encryptedToken, 'base64')), fixtureToken);
+    assert.ok(!readFileSync(join(data, 'desktop.json'), 'utf8').includes(fixtureToken));
+    report.checks.push('Settings saves an explicitly supplied token with native OS encryption; preferences and IPC state contain no plaintext token');
+  } else {
+    await js("Array.from(document.querySelectorAll('.desktop-browser-use-credentials button')).find(b=>b.textContent==='清除令牌').click()");
+    await until(async () => !(await handlers.get('desktop:browser-use-state')(event)).extensionTokenConfigured, 'Credential clear failed');
+    assert.equal(existsSync(credentialsPath), false);
+    report.checks.push('A cold restart decrypts the credential without returning it to the renderer; clearing removes the encrypted file');
+  }
+  const saved = await handlers.get('desktop:browser-use-state')(event);
+  assert.equal(saved.restartRequired, true);
+  assert.ok(!JSON.stringify(saved).includes(fixtureToken));
+  await until(() => js("!document.querySelector('#desktop-browser-use-token')"), 'Credential form did not clear after saving');
+  writeFileSync(join(data, `settings-${restore ? 'disabled' : 'enabled'}.png`), (await host.capturePage()).toPNG());
+  report.checks.push('Settings toggle reaches the real provider and saves the result; untrusted IPC is rejected');
+}
+app.setAppPath(root);
+require('../dist/main/index.cjs');
