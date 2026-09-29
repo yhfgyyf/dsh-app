@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- `DsDark.bgBase` (Bluish950). See the note in values/colors.xml. -->
+    <color name="window_background">#151517</color>
+</resources>

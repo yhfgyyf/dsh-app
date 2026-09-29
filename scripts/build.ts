@@ -56,12 +56,13 @@ const pluginBuild = await build({
 });
 
 await mkdir(resolve(root, 'dist/renderer'), { recursive: true });
+await copyFile(resolve(root, 'assets/readme/app-icon.png'), resolve(root, 'dist/renderer/tray.png'));
 const pluginOutput = Array.isArray(pluginBuild) ? pluginBuild[0] : pluginBuild;
 if (!('output' in pluginOutput)) throw new Error('Desktop plugin build returned no output.');
 const documentStyles = pluginOutput.output.filter(item => item.type === 'asset' && item.fileName.endsWith('.css')).map(item => item.type === 'asset' ? Buffer.from(item.source).toString('utf8') : '').join('\n');
 await writeFile(resolve(root, 'dist/renderer/theme.css'), await readFile(resolve(root, 'src/renderer/theme.css'), 'utf8') + '\n' + documentStyles);
 for (const [packagePath, files] of [
-  ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
+  ['qrcode', ['license']], ['pngjs', ['LICENSE']], ['dijkstrajs', ['LICENSE.md']], ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
   ['echarts', ['LICENSE', 'NOTICE', 'licenses']], ['zrender', ['LICENSE']],
   ['echarts/node_modules/tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
   ['jszip', ['LICENSE.markdown']], ['pako', ['LICENSE']], ['lie', ['license.md']], ['immediate', ['LICENSE.txt']],
@@ -101,6 +102,7 @@ await build({ configFile: false, plugins: [{
   },
 }], root: resolve(root, 'src/renderer'), base: '/__dsh_desktop__/app/', build: { outDir: resolve(root, 'dist/renderer/app'), target: 'chrome148', emptyOutDir: true } });
 
+await cp(resolve(root, 'src/runtime/remote'), resolve(root, 'dist/runtime/remote'), { recursive: true });
 await cp(resolve(root, 'dist/runtime'), resolve(root, '.runtime/app'), { recursive: true });
 // Keep the built-in surface discoverable to Plugin Manager on every platform.
 const surfaceRoot = resolve(root, '.runtime/node_modules/dsh-desktop-surface');

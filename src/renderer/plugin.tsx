@@ -1,3 +1,4 @@
+import { RemoteAccessSettings } from './remote-access.tsx';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { modalSelector } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
@@ -101,7 +102,7 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
+  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /><RemoteAccessSettings /></div>;
 }
 
 /** Route menu actions to their owners; search still uses a version-pinned UI control. */

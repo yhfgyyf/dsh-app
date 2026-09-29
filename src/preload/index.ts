@@ -7,6 +7,14 @@ import type { ComputerState } from '../shared/computer-use.ts';
 import type { BrowserUseState } from '../shared/browser-use.ts';
 
 const api: DesktopAPI = {
+  exportRemoteDiagnostics: () => ipcRenderer.invoke('desktop:remote-diagnostics'),
+  getRemoteState: () => ipcRenderer.invoke('desktop:remote-state'),
+  remoteAction: action => ipcRenderer.invoke('desktop:remote-action', action),
+  onRemoteState: listener => {
+    const callback = (_event: unknown, state: import('../shared/remote-access.ts').RemoteState) => listener(state);
+    ipcRenderer.on('desktop:remote-state', callback);
+    return () => ipcRenderer.removeListener('desktop:remote-state', callback);
+  },
   getBrowserUseState: () => ipcRenderer.invoke('desktop:browser-use-state'),
   setBrowserUseEnabled: enabled => ipcRenderer.invoke('desktop:browser-use-enabled', enabled),
   saveBrowserUseToken: token => ipcRenderer.invoke('desktop:browser-use-token', token),

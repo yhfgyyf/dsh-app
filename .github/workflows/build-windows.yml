@@ -22,6 +22,16 @@ jobs:
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
         run: npm run check
+      - name: Remote pairing, native settings and shared Host sessions
+        timeout-minutes: 4
+        run: |
+          npm ci --prefix services/relay --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --prefix services/relay
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:remote
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:remote-ui
       - name: Plugin marketplace review and explicit installation consent
         timeout-minutes: 4
         run: npm run test:plugin-marketplace
@@ -123,6 +133,7 @@ jobs:
             .test-data/univer-client/report.json
             .test-data/univer-client/*.png
             .test-data/workspace-dependencies-latest.json
+            .test-data/remote-settings-latest.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

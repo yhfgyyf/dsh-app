@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { copyFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { RemoteBridge } from './remote/bridge.ts';
 import { createBrowserUseController } from './browser-use.ts';
 import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames } from './legacy-settings.ts';
 
@@ -16,6 +17,7 @@ const {
 const directory = dirname(fileURLToPath(import.meta.url));
 let context: any;
 let closing = false;
+let remoteBridge: RemoteBridge | undefined;
 let ready = false;
 let browserUse: Awaited<ReturnType<typeof createBrowserUseController>>;
 const readyListeners = new Set<() => void>();
@@ -29,12 +31,18 @@ const appReady = {
 async function close(code = 0) {
   if (closing) return;
   closing = true;
+  remoteBridge?.stop();
   try { await context?.fiber.dispose(); } finally { process.exit(code); }
 }
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { void close(); });
 process.on('disconnect', () => { void close(); });
 process.on('message', (message: unknown) => { if ((message as { type?: string })?.type === 'shutdown') void close(); });
 process.on('message', (message: any) => {
+  if (message?.type === 'remote-configure' && typeof message.id === 'string') {
+    const configure = async () => { if (!remoteBridge || closing) throw new Error('远程模块未就绪。'); await remoteBridge.configure(message.config); };
+    void configure().then(() => process.send?.({ type: 'remote-result', id: message.id }), () => process.send?.({ type: 'remote-result', id: message.id, error: '远程模块配置失败。' }));
+    return;
+  }
   if (message?.type === 'browser-use-configure' && typeof message.id === 'string') {
     const config = message.config;
     const configure = async () => {
@@ -112,6 +120,7 @@ try {
     res.writeHead(204); res.end();
   } }));
   const endpoint = `http://127.0.0.1:${server.port}`;
+  remoteBridge = new RemoteBridge(require('ws'), endpoint, connection.authenticatedUrl(endpoint), state => process.send?.({ type: 'remote-state', state }));
   const names = Array.from(context.loader.entries(), (entry: any) => entry.options.name);
   if (names.some((name: unknown) => typeof name === 'string' && (name.includes('dsh-web-app') || name.includes('dsh-frontend-static')))) throw new Error('Web application entrypoints are forbidden in the desktop composition.');
   ready = true;

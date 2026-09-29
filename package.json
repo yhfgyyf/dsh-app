@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
@@ -44,7 +44,9 @@
     "test:plugin-marketplace": "electron tests/plugin-marketplace.cjs",
     "test:univer-client": "electron tests/univer-client.cjs",
     "test:browser-use": "node scripts/test-browser-use.ts",
-    "test:browser-use-settings": "node scripts/test-browser-use-settings.ts"
+    "test:browser-use-settings": "node scripts/test-browser-use-settings.ts",
+    "test:remote": "node --test tests/remote-access.test.ts tests/remote-interactions.test.ts && node scripts/test-mobile-remote.mjs",
+    "test:remote-ui": "electron tests/remote-settings.cjs"
   },
   "dependencies": {
     "@aiden0z/pptx-renderer": "1.2.4",
@@ -73,6 +75,7 @@
     "micromark-util-classify-character": "2.0.1",
     "micromark-util-sanitize-uri": "2.0.1",
     "micromark-util-symbol": "2.0.1",
+    "qrcode": "1.5.4",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "shiki": "4.4.3",

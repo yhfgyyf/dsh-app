@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small whale silhouette for notification status-bar icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="50"
+    android:viewportHeight="50">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,17 C10,10 18,7 24,9 C30,7 38,10 40,17 C45,18 47,22 45,25 C43,28 38,28 34,27 C33,31 30,35 25,35 C20,35 17,31 16,27 C12,28 7,28 5,25 C3,22 5,18 8,17 Z" />
+</vector>

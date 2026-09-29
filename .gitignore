@@ -22,3 +22,13 @@ docs/*
 !docs/BUILDING.md
 !docs/TESTING.md
 !docs/MACOS-SIGNING.md
+
+# DSH Remote implementation documents and local Android build artifacts.
+!docs/REMOTE-ACCESS.md
+!docs/plans/
+docs/plans/*
+!docs/plans/2026-09-29-mobile-remote-access.md
+mobile/android/**/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+services/relay/data/

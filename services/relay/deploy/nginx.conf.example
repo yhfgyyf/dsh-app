@@ -1,0 +1,20 @@
+# Replace the hostname and certificate paths with your real HTTPS entry.
+# Keep PUBLIC_RELAY_URL and Desktop Settings consistent with this host and port.
+server {
+    listen 8443 ssl;
+    server_name relay.example.com;
+    ssl_certificate /etc/nginx/tls/relay-fullchain.pem;
+    ssl_certificate_key /etc/nginx/tls/relay-key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 90s;
+        proxy_send_timeout 90s;
+        proxy_buffering off;
+        client_max_body_size 1m;
+    }
+}

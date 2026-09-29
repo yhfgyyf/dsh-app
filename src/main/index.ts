@@ -1,6 +1,6 @@
-import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, nativeTheme, powerMonitor, protocol, safeStorage, screen, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, protocol, safeStorage, screen, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, extname, resolve } from 'node:path';
 import { defaultPreferences, isEndpointDocument, parseConnectionInput } from '../shared/config.ts';
 import type { DesktopPreferences } from '../shared/config.ts';
@@ -8,6 +8,8 @@ import { externalWebUrl } from '../shared/desktop-api.ts';
 import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
 import { PreferencesFile } from './preferences.ts';
 import { createDshTransport } from './transport.ts';
+import { DesktopRemoteAccess } from './remote-access.ts';
+import { RemoteCredentialsFile } from './remote-access-credentials.ts';
 import { DesktopRuntime } from './runtime.ts';
 import { SidebarBrowser } from './sidebar-browser.ts';
 import { DesktopUpdates } from './updates.ts';
@@ -40,6 +42,8 @@ else {
   let preferences: DesktopPreferences = defaultPreferences();
   let preferencesFile: PreferencesFile;
   let runtime: DesktopRuntime;
+  let remoteAccess: DesktopRemoteAccess;
+  let remoteTray: Tray | undefined;
   let browser: SidebarBrowser | undefined;
   let updates: DesktopUpdates;
   let computer: DesktopComputerUse;
@@ -146,7 +150,27 @@ else {
     window.on('resize', scheduleSave);
     window.on('move', scheduleSave);
     window.on('focus', () => { void computer.permissions(); });
-    window.on('close', scheduleSave);
+    window.on('close', event => {
+      scheduleSave();
+      if (!quitting && remoteAccess?.state.config.enabled && remoteAccess.state.config.background) {
+        event.preventDefault();
+        try {
+          if (!remoteTray) {
+            const icon = nativeImage.createFromPath(join(app.getAppPath(), 'dist/renderer/tray.png')).resize({ width: 22, height: 22 });
+            if (icon.isEmpty()) throw new Error('tray_icon_missing');
+            remoteTray = new Tray(icon);
+            remoteTray.setToolTip('DSH Desktop');
+            remoteTray.setContextMenu(Menu.buildFromTemplate([
+              { label: '打开 DSH', click: () => { window?.show(); window?.focus(); } },
+              { label: '暂停远程访问', click: () => { void remoteAccess.act({ type: 'configure', config: { ...remoteAccess.state.config, enabled: false } }); window?.show(); } },
+              { label: '退出 DSH', click: () => app.quit() },
+            ]));
+            remoteTray.on('click', () => { window?.show(); window?.focus(); });
+          }
+          window?.hide();
+        } catch { void dialog.showMessageBox({ message: '系统托盘不可用，请保留窗口以维持远程连接。' }); }
+      }
+    });
     window.on('closed', () => { stopComputer(); browser?.clear(); browser = undefined; window = undefined; connected = false; });
     window.webContents.on('did-finish-load', () => window?.webContents.setZoomFactor(preferences.zoomFactor));
     window.webContents.on('before-input-event', (event, input) => {
@@ -177,6 +201,7 @@ else {
       const ready = await runtime.start();
       if (!running) await browserUse.setEnabled(preferences.browserUseEnabled);
       preferences.endpoint = ready.endpoint;
+      if (!running) void remoteAccess.ready();
       const ses = session.fromPartition('persist:dsh');
       if (!running) {
         const response = await ses.fetch(ready.launchUrl, { credentials: 'include', bypassCustomProtocolHandlers: true, signal: AbortSignal.timeout(12000) });
@@ -273,6 +298,16 @@ else {
     handle('desktop:update-check', () => updates.check());
     handle('desktop:update-download', () => updates.download());
     handle('desktop:update-install', () => updates.install());
+    handle('desktop:remote-diagnostics', async () => {
+      if (!window) throw new Error('窗口已关闭。');
+      const result = await dialog.showSaveDialog(window, { title: '导出远程连接诊断', defaultPath: 'dsh-remote-diagnostics.json', filters: [{ name: 'JSON', extensions: ['json'] }] });
+      if (result.canceled || !result.filePath) return;
+      const data = { at: new Date().toISOString(), appVersion: app.getVersion(), platform: process.platform, arch: process.arch, ...remoteAccess.diagnostics() };
+      await writeFile(result.filePath, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
+      return result.filePath;
+    });
+    handle('desktop:remote-state', () => remoteAccess.state);
+    handle('desktop:remote-action', action => remoteAccess.act(action));
     handle('desktop:info', info);
     handle('desktop:boot', () => runtime.graph());
     handle('desktop:connect', connect);
@@ -321,17 +356,23 @@ else {
       cwd: app.getPath('home'),
       computerRequest: (request, signal) => computer.request(request, signal),
       computerStop: () => computer.stop(),
+      remoteState: state => remoteAccess?.update(state),
       pickDirectory: async () => {
         if (!window) return null;
         const result = await dialog.showOpenDialog(window, { title: '选择工作区', buttonLabel: '选择工作区', properties: ['openDirectory', 'createDirectory'] });
         return result.canceled ? null : result.filePaths[0] ?? null;
       },
-      onExit: () => { connected = false; browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
+      onExit: () => { connected = false; remoteAccess?.update({ status: 'error', error: 'DSH 核心已退出，远程连接已断开。' }); browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
     });
     browserUse = new DesktopBrowserUse(config => runtime.configureBrowserUse(config), state => {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:browser-use-state', state);
     }, undefined, new BrowserUseCredentialsFile(app.getPath('userData'), safeStorage));
     await browserUse.restoreCredentials();
+    remoteAccess = new DesktopRemoteAccess(new RemoteCredentialsFile(app.getPath('userData'), safeStorage), config => runtime.configureRemote(config), state => {
+      if (window && !window.isDestroyed()) window.webContents.send('desktop:remote-state', state);
+    });
+    await remoteAccess.restore();
+    powerMonitor.on('resume', () => { if (runtime.ready) void remoteAccess.ready(); });
     await installProtocols();
     updates = new DesktopUpdates({
       currentVersion: app.getVersion(), platform: process.platform, arch: process.arch,
@@ -361,6 +402,8 @@ else {
     quitting = true;
     globalShortcut.unregisterAll();
     updates?.stop();
+    remoteAccess?.stop();
+    remoteTray?.destroy();
     computerPreview?.dispose();
     clearTimeout(saveTimer);
     void savePreferences().then(async () => { await computer?.setEnabled(false).catch(() => {}); browser?.clear(); window?.destroy(); await runtime?.stop(); }).finally(() => app.quit());
