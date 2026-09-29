@@ -20,6 +20,7 @@ import { BrowserUseCredentialsFile } from './browser-use-credentials.ts';
 import { CuaComputerDriver } from './computer-use-driver.ts';
 import { ComputerPreviewWindow } from './computer-preview.ts';
 import { resetDshComputerPermissions } from './macos-privacy.ts';
+import { installDesktopPermissions } from './permissions.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
@@ -226,10 +227,7 @@ else {
     });
     ses.protocol.handle('http', handle);
     ses.protocol.handle('https', handle);
-    ses.setPermissionRequestHandler((contents, permission, callback) => {
-      callback(contents === window?.webContents && isEndpointDocument(contents.getURL(), preferences.endpoint) && permission === 'clipboard-sanitized-write');
-    });
-    ses.setPermissionCheckHandler((contents, permission, origin) => contents === window?.webContents && origin === preferences.endpoint && permission === 'clipboard-sanitized-write');
+    installDesktopPermissions(ses, () => window?.webContents, () => preferences.endpoint);
     ses.on('will-download', (_event, item) => {
       item.setSaveDialogOptions({ title: '保存 DSH 文件', defaultPath: join(app.getPath('downloads'), item.getFilename()) });
     });

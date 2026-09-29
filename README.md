@@ -6,6 +6,8 @@
 
 独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon** 和 **Windows x64**。
 
+v0.1.28 的 Mac/Windows 构建使用 Electron 44.4.5（Mac 需要 macOS 13 或以上），修复语音输入被桌面权限处理器拒绝的问题。录音只允许当前 DSH 主界面发起，摄像头及嵌入页面仍不授予权限。龙芯麒麟继续使用独立的旧 ABI Electron 构建。
+
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
 
 ## v0.1.12 预览版更新

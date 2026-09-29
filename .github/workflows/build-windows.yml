@@ -40,6 +40,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Microphone capture and permission isolation
+        timeout-minutes: 2
+        run: npm run test:voice-input
       - name: Browser Use tools, isolation and settings persistence
         timeout-minutes: 4
         run: |

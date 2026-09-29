@@ -49,7 +49,7 @@ if (developerId) {
   if (stdout.includes('<key>com.apple.security.get-task-allow</key>')) await run('/usr/libexec/PlistBuddy', ['-c', 'Delete :com.apple.security.get-task-allow', nodeEntitlements]);
 }
 const packaged = await packager({
-  extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness' },
+  extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness', NSMicrophoneUsageDescription: '用于录制语音输入并转换为文字。' },
   osxSign: {
     identity: signing.identity, identityValidation: developerId, keychain: signing.keychain,
     preAutoEntitlements: false, preEmbedProvisioningProfile: false,
@@ -62,6 +62,12 @@ const packaged = await packager({
 });
 const app = join(packaged[0], 'DSH Desktop.app');
 await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', app]);
+const { stdout: microphoneUsage } = await promisify(execFile)('/usr/libexec/PlistBuddy', ['-c', 'Print :NSMicrophoneUsageDescription', join(app, 'Contents/Info.plist')]);
+assert.ok(microphoneUsage.trim(), 'Packaged app lacks a microphone usage description');
+for (const bundle of [app, join(app, 'Contents/Frameworks/DSH Desktop Helper.app')]) {
+  const { stdout } = await promisify(execFile)('/usr/bin/codesign', ['--display', '--entitlements', '-', '--xml', bundle]);
+  assert.match(stdout, /<key>com\.apple\.security\.device\.audio-input<\/key>\s*<true\s*\/>/, 'Packaged app lacks the microphone entitlement');
+}
 const signature = await macSignature(app);
 const designatedRequirement = signature.requirement;
 if (developerId) {
