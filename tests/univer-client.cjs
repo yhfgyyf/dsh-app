@@ -9,6 +9,7 @@ const { createRequire } = require('node:module');
 const { join, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { zstdCompressSync } = require('node:zlib');
+const { clientUrl } = require('./fixtures/univer-client-download.cjs');
 
 app.commandLine.appendSwitch('lang', 'en-US');
 const root = join(__dirname, '..');
@@ -20,7 +21,6 @@ const profile = join(home, 'profiles', 'desktop');
 const bundle = join(profile, 'node_modules', 'dsh-univer-office');
 const clientSha256 = 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7';
 const clientBytes = 1101122;
-const clientUrl = 'https://unpkg.com/dsh-univer-office@0.3.2/lib/client.js';
 const sessionId = 'session-' + randomUUID();
 const title = 'Univer ordinary conversation acceptance';
 const reply = 'UNIVER_CLIENT_ORDINARY_TURN_RENDERED';
@@ -164,8 +164,8 @@ async function run(event) {
     report.clientSource = clientUrl;
     // Keep Electron before app.ready until production registers its protocols.
     // The separate bundled Node owns only this fixed, bounded download.
-    bytes = execFileSync(join(root, '.runtime', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), ['--input-type=module', '-e',
-      `const response=await fetch(${JSON.stringify(clientUrl)},{signal:AbortSignal.timeout(30000),redirect:'error'});if(response.status!==200)throw Error('Pinned npm client download failed: '+response.status);process.stdout.write(Buffer.from(await response.arrayBuffer()));`,
+    bytes = execFileSync(join(root, '.runtime', 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), [
+      join(__dirname, 'fixtures', 'univer-client-download.cjs'),
     ], { timeout: 35000, maxBuffer: clientBytes + 1, windowsHide: true });
   }
   assert.equal(bytes.length, clientBytes, 'Original npm Univer client byte count differs');
