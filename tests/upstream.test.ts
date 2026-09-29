@@ -5,8 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { join, resolve } from 'node:path';
 
-const upstream = fileURLToPath(new URL('../.runtime/node_modules/@deepseek-ai/', import.meta.url));
+const runtimeNodeModules = resolve(process.env.DSH_UPSTREAM_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url)));
+const upstream = join(runtimeNodeModules, '@deepseek-ai') + '/';
 const classMap = {
   'ui-layout': ['pI_x6G_frame'],
   'ui-sidebar': ['hHd-Xa_root', 'hHd-Xa_logoRow', 'hHd-Xa_newSession', 'hHd-Xa_collapsed'],
@@ -23,7 +25,7 @@ test('the installed DSH version still exports every CSS-module control used by t
 });
 
 test('Host graph changes and rebuilt code preserve the page-owned desktop shell', async () => {
-  const require = createRequire(new URL('../.runtime/package.json', import.meta.url));
+  const require = createRequire(join(runtimeNodeModules, 'dsh-upstream-test.cjs'));
   const { Context } = await import(pathToFileURL(require.resolve('@deepseek-ai/cordis')).href);
   const { default: Loader } = await import(pathToFileURL(require.resolve('@deepseek-ai/cordis-plugin-loader')).href);
   const evaluate = async (packageName: string, extra: object = {}) => {

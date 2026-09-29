@@ -5,6 +5,38 @@ import { join } from 'node:path';
 type Sections = Record<string, Record<string, unknown>>;
 type Yaml = { parse(text: string): Sections | null; stringify(value: unknown): string };
 
+/** The former DeepSeek plugin became a transport library in DSH 0.2. */
+export async function migrateRuntimePluginNames(files: string[], yaml: { parse(text: string): any; stringify(value: unknown): string }) {
+  for (const file of files) {
+    const original = await readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return undefined;
+      throw error;
+    });
+    if (original === undefined) continue;
+    const rows = yaml.parse(original);
+    if (!Array.isArray(rows)) continue;
+    let changed = false;
+    const visit = (entries: any[]) => {
+      for (const entry of entries) {
+        if (!entry || typeof entry !== 'object') continue;
+        if (entry.name === '@deepseek-ai/dsh-llm-deepseek') {
+          entry.name = '@deepseek-ai/dsh-llm-deepseek-api-key';
+          changed = true;
+        }
+        if (Array.isArray(entry.insert)) visit(entry.insert);
+      }
+    };
+    visit(rows);
+    if (!changed) continue;
+    await copyFile(file, `${file}.before-0.2.0-rc.1`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+    const temporary = `${file}.${process.pid}.tmp`;
+    await writeFile(temporary, yaml.stringify(rows), { mode: 0o600 });
+    await rename(temporary, file);
+  }
+}
+
 /** Preserve the former shared settings before the official per-profile import. */
 export async function prepareLegacySettings(configHome: string, stateHome: string, yaml: Yaml) {
   const target = join(stateHome, 'settings.yaml');

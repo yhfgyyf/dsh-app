@@ -41,7 +41,7 @@ async function start() {
 }
 async function healthyRoster(phase) {
   const roster = await client.rpc('agentPresets/list');
-  assert.equal(roster.modeSelectionEnabled, true, `${phase}: mode selection must be enabled`);
+  assert.ok(Array.isArray(roster.presets), `${phase}: the current preset registry must be available`);
   for (const id of presetIds) {
     const preset = roster.presets.find(preset => preset.id === id);
     assert.ok(preset, `${phase}: missing ${id}`);

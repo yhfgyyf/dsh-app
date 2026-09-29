@@ -15,7 +15,7 @@ const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-
 const start = source.indexOf('function localArtifactPath(');
 const end = source.indexOf('/** Reasoning block', start);
 assert.ok(start > 0 && end > start, 'Install the artifact adapter before testing');
-const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath);
+const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', 'fileMediaUrl', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath, paths.fileMediaUrl);
 const { fileAddressFor } = new Function(source.slice(source.indexOf('const FILE_ADDRESS_PREFIX'), source.indexOf('const EMPTY_LIST$1')) + '; return {fileAddressFor};')();
 
 test('artifact paths use the owning workspace and normalize relative, spaced and Windows destinations', () => {
@@ -38,6 +38,8 @@ test('web URLs, executable schemes, non-path code and unresolved relative paths 
 
 test('Markdown image destinations resolve relative and encoded paths through the authenticated file endpoint', () => {
   assert.equal(localPathMediaUrl('http://localhost:1234/', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
+  assert.equal(localPathMediaUrl('dsh-app://app/', 'charts/my%20plot.svg', '/workspace'), 'dsh-app://app/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
+  assert.equal(localPathMediaUrl('http://localhost:1234/', '/tmp/%XX.png', '/workspace'), undefined);
   assert.equal(localPathMediaUrl('http://localhost:1234/', 'https://outside.invalid/a.png', '/workspace'), undefined);
   assert.equal(localPathMediaUrl('file:///', '/tmp/a.png'), undefined);
 });

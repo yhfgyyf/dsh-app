@@ -59,7 +59,8 @@ export function patchWorkspaceDependencySource(source) {
 export async function applyWorkspaceDependencies({ runtimeNodeModules = join(root, '.runtime/node_modules') } = {}) {
   const base = join(runtimeNodeModules, '@deepseek-ai/dsh-tool-workspace-dependencies');
   const pkg = JSON.parse(await readFile(join(base, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.1.7-alpha.1');
+  const pins = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+  assert.equal(pkg.version, pins.dsh);
   const path = join(base, 'lib/index.js');
   const source = await readFile(path, 'utf8');
   const patched = patchWorkspaceDependencySource(source);

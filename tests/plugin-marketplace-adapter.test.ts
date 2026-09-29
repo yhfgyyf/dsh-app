@@ -11,7 +11,9 @@ import * as stores from '@deepseek-ai/dsh-client-store';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const packageName = '@deepseek-ai/dsh-client-ui-plugin-manager';
 const relativeClient = `${packageName}/lib/client.js`;
-const source = await readFile(join(root, '.runtime/node_modules', relativeClient), 'utf8');
+const installedRuntimeNodeModules = process.env.DSH_OVERLAY_TEST_RUNTIME ?? join(root, '.runtime/node_modules');
+const source = await readFile(join(installedRuntimeNodeModules, relativeClient), 'utf8');
+const { version } = JSON.parse(await readFile(join(installedRuntimeNodeModules, packageName, 'package.json'), 'utf8'));
 
 test('Settings marketplace and sidebar share the official controller with only one install dialog owner', async () => {
   const element = (type: any, props: any) => ({ type, props });
@@ -32,6 +34,7 @@ test('Settings marketplace and sidebar share the official controller with only o
   const disposers: (() => void)[] = [];
   const inspected: string[] = [];
   const context = {
+    get() { return undefined; },
     effect(factory: () => () => void) { disposers.push(factory()); },
     on() { return () => {}; },
     configForms: { describe: () => stores.createSnapshotStore([]), get() {} },
@@ -40,7 +43,9 @@ test('Settings marketplace and sidebar share the official controller with only o
       inspected.push(spec);
       return { ok: true, value: { status: 'refused', problem: 'not-bundle', reason: 'fixture refuses installation' } };
     } } },
-    slots: { inject(_name: string, factory: () => unknown) { factory(); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory(options: any, component: any) { factories.set(options.name, { options, component }); return () => {}; }, getVersion() { return 1; }, entries() { return []; } },
+    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory(options: any, component: any) { factories.set(options.name, { options, component }); return () => {}; }, getVersion() { return 1; }, entries() { return []; } },
+    layout: { panelInfo: { subscribe() { return () => {}; }, getSnapshot() { return { activePanelId: 'plugins' }; } }, selectPanel() {} },
+    reflect: { provide() { return () => {}; } },
   };
   plugin.apply(context);
   try {
@@ -54,7 +59,10 @@ test('Settings marketplace and sidebar share the official controller with only o
     assert.equal(mainFace.hooks.pluginManager, marketFace.hooks.pluginManager);
     const render = (registration: any, face: any) => {
       const slots: any[] = [];
+      const navigation = registration.options.store.create();
       const tree = registration.component({ ...face, t: (key: string) => key,
+        useStore: (select: any) => select(navigation.getSnapshot()),
+        actions: navigation.actions,
         usePluginManager: (select: any) => select(face.hooks.pluginManager.getSnapshot()),
         useConfigurations: (select: any) => select([]),
         useConfigLedger: (select: any) => select(face.hooks.configLedger.getSnapshot()),
@@ -73,7 +81,10 @@ test('Settings marketplace and sidebar share the official controller with only o
     assert.equal(render(main, mainFace).dialog.open, false, 'Underlying sidebar must not open a second modal');
     const dialogProps = render(market, marketFace).dialogProps;
     const modal = factories.get('plugins.install.dialog').component({ ...dialogProps, t: (key: string) => key });
-    const [reviewButton, directButton] = modal.props.footer.props.children;
+    const footer = modal.props.footer.props.children;
+    const reviewButton = footer.find((node: any) => node.props.children === 'installReviewFirst');
+    const directButton = footer.find((node: any) => Array.isArray(node.props.children) && node.props.children.at(-1) === 'installDirect');
+    assert.ok(footer.some((node: any) => node.props.role === 'note'), 'Preserve the upstream installation safety note');
     assert.equal(reviewButton.props.children, 'installReviewFirst');
     assert.equal(reviewButton.props.onClick, marketFace.reviewBeforeInstall);
     assert.equal(directButton.props.children.at(-1), 'installDirect');
@@ -93,15 +104,15 @@ test('Settings marketplace and sidebar share the official controller with only o
 
 test('marketplace adapter is pinned, idempotent, backs up the original and refuses unknown edits', async () => {
   const { applyPluginMarketplace } = await import(new URL('../scripts/install-plugin-marketplace.mjs', import.meta.url).href);
-  assert.deepEqual(await applyPluginMarketplace({ mode: 'verify' }), { changed: 0, verified: true });
+  assert.deepEqual(await applyPluginMarketplace({ runtimeNodeModules: installedRuntimeNodeModules, mode: 'verify' }), { changed: 0, verified: true });
   const scratch = await realpath(await mkdtemp(join(tmpdir(), 'dsh-marketplace-adapter-')));
   try {
     const runtimeNodeModules = join(scratch, 'node_modules');
     const target = join(runtimeNodeModules, relativeClient);
     await mkdir(dirname(target), { recursive: true });
-    await writeFile(join(runtimeNodeModules, packageName, 'package.json'), JSON.stringify({ name: packageName, version: '0.1.7-alpha.1' }));
+    await writeFile(join(runtimeNodeModules, packageName, 'package.json'), JSON.stringify({ name: packageName, version }));
     await writeFile(target, source);
-    const patch = join(root, 'patches/dsh-0.1.7-alpha.1/plugin-marketplace/client.patch');
+    const patch = join(root, 'patches', `dsh-${version}`, 'plugin-marketplace/client.patch');
     const reversed = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), patch], { cwd: scratch, encoding: 'utf8' });
     assert.equal(reversed.status, 0, reversed.stderr);
     const before = await readFile(target, 'utf8');

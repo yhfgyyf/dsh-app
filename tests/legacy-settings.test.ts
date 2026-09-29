@@ -4,9 +4,33 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { prepareLegacySettings, migrateProgressiveOverride } from '../src/runtime/legacy-settings.ts';
+import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames } from '../src/runtime/legacy-settings.ts';
 
 const yaml = createRequire(new URL('../.runtime/package.json', import.meta.url))('yaml');
+test('0.2 upgrades the explicit DeepSeek plugin name while preserving models, secrets and the original profile', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-profile-v020-'));
+  const file = join(home, 'cordis.patch.yml');
+  const rows = [
+    { id: 'llm-deepseek', name: '@deepseek-ai/dsh-llm-deepseek', config: { models: [{ id: 'retained-model' }], apiKey: 'test-fixture-only' } },
+    { id: 'custom', name: 'custom-provider', config: { name: '@deepseek-ai/dsh-llm-deepseek' } },
+    { insert: [{ id: 'second', name: '@deepseek-ai/dsh-llm-deepseek', disabled: true }] },
+  ];
+  const original = '# preserve the exact original\n' + yaml.stringify(rows);
+  await writeFile(file, original);
+  try {
+    await migrateRuntimePluginNames([file, join(home, 'missing.yml')], yaml);
+    const migrated = yaml.parse(await readFile(file, 'utf8'));
+    assert.equal(migrated[0].name, '@deepseek-ai/dsh-llm-deepseek-api-key');
+    assert.deepEqual(migrated[0].config, rows[0].config);
+    assert.deepEqual(migrated[1], rows[1]);
+    assert.deepEqual(migrated[2].insert[0], { ...rows[2].insert![0], name: '@deepseek-ai/dsh-llm-deepseek-api-key' });
+    assert.equal(await readFile(file + '.before-0.2.0-rc.1', 'utf8'), original);
+    const once = await readFile(file, 'utf8');
+    await migrateRuntimePluginNames([file], yaml);
+    assert.equal(await readFile(file, 'utf8'), once);
+    assert.equal(await readFile(file + '.before-0.2.0-rc.1', 'utf8'), original);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
 test('legacy import merges shared models with existing desktop settings and migrates the selected preset once', async () => {
   const root = await mkdtemp(join(tmpdir(), 'dsh-settings-'));
   const shared = join(root, 'shared'), desktop = join(root, 'desktop');

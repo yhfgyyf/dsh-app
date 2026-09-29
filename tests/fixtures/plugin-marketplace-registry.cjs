@@ -63,7 +63,9 @@ exports.startRegistry = async function startRegistry(data) {
       shasum: createHash('sha1').update(tarball).digest('hex'),
     } };
     response.setHeader('Content-Type', 'application/json');
-    if (url.pathname === '/downloads/point/last-month/' + name) {
+    if (url.pathname === '/-/ping' && request.method === 'GET') {
+      response.end('{}');
+    } else if (url.pathname === '/downloads/point/last-month/' + name) {
       response.end(JSON.stringify(downloads));
     } else if (url.pathname === '/-/v1/search') {
       response.end(JSON.stringify({ objects: [{ package: {

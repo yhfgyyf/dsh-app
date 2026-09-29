@@ -106,7 +106,9 @@ async function run(host) {
   assert.equal(existsSync(join(root, '.runtime/node_modules', registry.name)), false);
   await clickText(['插件', 'Plugins']);
   await until(() => js(`!!document.querySelector('[data-plugin-panel]')`), 'Official Plugins page missing');
-  assert.equal(await js(`(() => {const button=document.querySelector('button.VOzbGW_trigger');if(!button)return false;button.click();return true;})()`), true, 'Settings entry missing');
+  // DSH 0.2 moves Settings into the account menu. Exercise the native Settings
+  // command, which invokes settings.open, instead of the removed CSS selector.
+  host.send('desktop:command', 'settings');
   await until(() => js(`Array.from(document.querySelectorAll('button')).some(b=>['插件市场','Plugin marketplace'].includes(b.textContent.trim()))`), 'Marketplace settings entry missing');
   await clickText(['插件市场', 'Plugin marketplace']);
   await until(() => js(`!!document.querySelector('[data-plugin-marketplace] input[aria-label="搜索插件市场"]')`), 'Marketplace independent settings page missing');
@@ -225,7 +227,9 @@ async function run(host) {
   const yaml = createRequire(join(root, '.runtime/package.json'))('yaml');
   const layout = yaml.parse(readFileSync(join(profile, 'node_modules/.modules.yaml'), 'utf8'));
   assert.equal(layout.storeDir, join(data, 'pnpm-store/v11'));
-  assert.ok(registry.requests.every(request => request.path === '/-/v1/search' || request.path === '/downloads/point/last-month/' + registry.name || request.path.startsWith('/' + registry.name)), 'Unexpected registry package request');
+  // The official 0.2 plugin manager also probes registry availability before
+  // choosing its source. Only that fixed GET and this fixture's requests pass.
+  assert.ok(registry.requests.every(request => (request.method === 'GET' && request.path === '/-/ping') || request.path === '/-/v1/search' || request.path === '/downloads/point/last-month/' + registry.name || request.path.startsWith('/' + registry.name)), 'Unexpected registry package request');
   report.checks.push('All package requests target the fixture and all pnpm store writes stay in the test directory');
 }
 (async () => {

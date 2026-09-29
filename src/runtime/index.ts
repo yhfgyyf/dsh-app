@@ -3,7 +3,7 @@ import { copyFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { createBrowserUseController } from './browser-use.ts';
-import { prepareLegacySettings, migrateProgressiveOverride } from './legacy-settings.ts';
+import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames } from './legacy-settings.ts';
 
 const runtimeRoot = process.env.DSH_DESKTOP_RUNTIME_ROOT;
 if (!runtimeRoot || !process.env.DSH_HOME || !process.send) throw new Error('Desktop core requires an owned runtime, data directory and IPC channel.');
@@ -11,7 +11,7 @@ const require = createRequire(join(runtimeRoot, 'package.json'));
 const load = (id: string) => import(pathToFileURL(require.resolve(id)).href);
 const {
   boot, loadLayeredEnv, loadOptionalPatches, installFailLoud,
-  initProfile, loadProfileDirectory, readProfilePatches, createRuntimeResolution, PluginPackages,
+  initProfile, loadProfileDirectory, readProfilePatches, createRuntimeResolution, PluginPackages, reportSkippedBundles,
 } = await load('@deepseek-ai/dsh-app-boot');
 const directory = dirname(fileURLToPath(import.meta.url));
 let context: any;
@@ -66,8 +66,13 @@ try {
     parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }),
     stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }),
   });
+  await migrateRuntimePluginNames([join(profileDir, 'cordis.patch.yml'), join(stateHome, 'desktop.patch.yml')], {
+    parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }),
+    stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }),
+  });
   initProfile(profileDir, ['@deepseek-ai/dsh-base', 'dsh-desktop-surface']);
   const profile = loadProfileDirectory('dsh-desktop', profileDir, installAnchor);
+  reportSkippedBundles('dsh-desktop', profile);
   const profileContext = {
     name: 'desktop', dir: profileDir, patchPath: profile.patchPath, installAnchor,
     packageManager: {

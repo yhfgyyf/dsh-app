@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import * as React from 'react';
 import * as ReactDom from 'react-dom';
 import * as ReactDomClient from 'react-dom/client';
@@ -16,6 +18,7 @@ import { createDesktopModuleFacade, DesktopSlotCore, legacyUniverMatch } from '.
 const name = 'conversation.chat.turnTail';
 const registrant = 'dsh-univer-office';
 const component = () => null;
+const runtimeNodeModules = resolve(process.env.DSH_UPSTREAM_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url)));
 
 function fixture(Core: typeof SlotCore = DesktopSlotCore) {
   const slots = new Core();
@@ -191,7 +194,7 @@ test('actual module Loader and SlotRegistry identify the legacy contribution by 
   };
   async function evaluate(packageName: string) {
     let exports: any;
-    runInNewContext(await readFile(new URL(`../.runtime/node_modules/@deepseek-ai/${packageName}/lib/client.js`, import.meta.url), 'utf8'), {
+    runInNewContext(await readFile(join(runtimeNodeModules, '@deepseek-ai', packageName, 'lib/client.js'), 'utf8'), {
       console, URL, queueMicrotask,
       document: { querySelectorAll: () => [], head: { querySelectorAll: () => [] } },
       window: { __ModuleLoader__: { load(entry: any) { exports = entry.factory((name: string) => {

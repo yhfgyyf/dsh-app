@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 import * as stores from '@deepseek-ai/dsh-client-store';
 
-const source = await readFile(new URL('../.runtime/node_modules/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js', import.meta.url), 'utf8');
+const runtimeNodeModules = process.env.DSH_OVERLAY_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url));
+const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js'), 'utf8');
 const exact = 'dsh-review-test@1.2.3';
 const digest = 'a'.repeat(64);
 const lockedArchive = `/reviewed-packages/${digest}.tgz`;
@@ -27,7 +30,7 @@ function harness(options: { review?: (spec: string, signal: AbortSignal) => Prom
     effect(factory: () => () => void) { disposers.push(factory()); }, on() { return () => {}; },
     configForms: { describe: () => stores.createSnapshotStore([]), get() {} },
     locale: { resolveText: (text: string) => text, register() { return () => {}; }, bind() { return (key: string) => key; } },
-    get(name: string) { assert.equal(name, 'connection'); return { rpc: { async call(channel: string, method: string, payload: any, signal: AbortSignal) {
+    get(name: string) { if (name === 'productAnalytics') return undefined; assert.equal(name, 'connection'); return { rpc: { async call(channel: string, method: string, payload: any, signal: AbortSignal) {
       assert.equal(channel, '/desktop-plugin-security');
       if (method === 'prepare-direct-install') {
         directPrepares.push({ spec: payload.args.spec, signal });
@@ -48,7 +51,9 @@ function harness(options: { review?: (spec: string, signal: AbortSignal) => Prom
       async installBundle(spec: string, settings: any) { installs.push({ spec, options: settings }); return options.install ? options.install(spec, settings) : { ok: true, value: { application: 'applied', bundle: 'dsh-review-test' } }; },
       async listBundles() { return { ok: true, value: [] }; }, async listPlugins() { return { ok: true, value: [] }; },
     } },
-    slots: { inject(_name: string, factory: () => unknown) { factory(); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory() { return () => {}; } },
+    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory() { return () => {}; } },
+    layout: { panelInfo: { subscribe() { return () => {}; }, getSnapshot() { return { activePanelId: 'plugins' }; } }, selectPanel() {} },
+    reflect: { provide() { return () => {}; } },
   };
   plugin.apply(context);
   const main = registrations.find(entry => entry.options.name === 'main').options.inject();

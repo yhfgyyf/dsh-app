@@ -36,7 +36,16 @@ ipcMain.handle = (channel, listener) => {
     const result = await listener(...args);
     if (channel === 'desktop:ready' && !started) {
       started = true;
-      setTimeout(() => run(args[0]).then(() => finish()).catch(finish), 100);
+      setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
+        report.ui = await args[0].sender.executeJavaScript(`({
+          rootInert: document.getElementById('root')?.inert,
+          text: document.body.innerText.slice(0, 2500),
+          buttons: Array.from(document.querySelectorAll('button')).map(b => ({
+            label: b.getAttribute('aria-label'), text: b.textContent, className: b.className,
+          })).slice(0, 40),
+        })`).catch(() => null);
+        finish(error);
+      }), 100);
     }
     return result;
   });
@@ -52,15 +61,32 @@ async function run(event) {
       if (!button.disabled) button.click();
       return false;
     }
-    return document.getElementById('root')?.inert === false;
+    return document.getElementById('root')?.inert === false
+      && document.querySelector('button.VOzbGW_trigger, button[aria-label="账号菜单"], button[aria-label="Account menu"]') !== null;
   })()`), 'Onboarding did not release the Settings controls');
-  if (!restore) {
-    await until(() => js("Array.from(document.querySelectorAll('button')).some(b=>['继续','Continue'].includes(b.textContent))"), 'Onboarding missing');
-  }
+  // DSH 0.2 skips the web welcome notice when the native dshDesktop bridge is
+  // present. Wait for usable Settings instead, still dismissing any optional
+  // credential onboarding that the provider contributes.
   await finishOnboarding();
-  await js("document.querySelector('button.VOzbGW_trigger').click()");
+  const openedDirectly = await js(`(() => {
+    const trigger = document.querySelector('button.VOzbGW_trigger');
+    if (trigger) { trigger.click(); return true; }
+    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
+    return false;
+  })()`);
+  if (!openedDirectly) await until(() => js(`(() => {
+    const settings = Array.from(document.querySelectorAll('button[role="menuitem"]')).find(button =>
+      Array.from(button.querySelectorAll('span')).some(span => ['设置', 'Settings'].includes(span.textContent)));
+    if (!settings) return false;
+    settings.click(); return true;
+  })()`), 'Settings entry missing from the account menu');
   const selector = '.desktop-browser-use-settings [role="switch"]';
   await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
+  host.send('desktop:command', 'settings');
+  await until(() => js(`!document.querySelector(${JSON.stringify(selector)})`), 'The native Settings command did not close Settings');
+  host.send('desktop:command', 'settings');
+  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'The native Settings command did not reopen Settings');
+  report.checks.push('The account menu opens Settings and the native Settings command closes and reopens the official Settings dialog');
   await js(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
   const state = () => js(`(() => { const b=document.querySelector(${JSON.stringify(selector)});return {enabled:b.getAttribute('aria-checked'),busy:b.disabled}; })()`);
   await until(async () => !(await state()).busy, 'Browser switch did not settle');

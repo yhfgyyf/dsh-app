@@ -29,7 +29,7 @@ test('runtime lock fixes every DSH subpackage and preserves the snapshot depende
   for (const name of dshPackages) assert.equal(manifest.overrides[name], pins.dsh);
   assert.equal(manifest.overrides['@earendil-works/pi-ai'], patch.piAi);
   assert.equal(lock.packages[`node_modules/@earendil-works/pi-ai`].version, patch.piAi);
-  assert.equal(manifest.overrides.zod, '4.6.1');
+  assert.equal(manifest.overrides.zod, '4.6.5');
   assert.equal(lock.packages[`node_modules/zod`].version, manifest.overrides.zod);
 });
 
