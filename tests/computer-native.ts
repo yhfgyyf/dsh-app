@@ -231,6 +231,7 @@ void app.whenReady().then(async () => {
   report.checks.push('Resized 320px observations retain correct edge coordinates after repeated PiP captures');
   snapshot = await observe();
   const beforeMove = window.getBounds();
+  const beforeViewport = await window.webContents.executeJavaScript('({width: innerWidth, height: innerHeight})');
   const staleEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
   const stalePoint = {
     x: (staleEdge.frame.x + staleEdge.frame.w / 2 - snapshot.window_bounds.x) / snapshot.window_bounds.width,
@@ -238,7 +239,7 @@ void app.whenReady().then(async () => {
   };
   const requestedBounds = { x: beforeMove.x + 24, y: beforeMove.y + 20, width: beforeMove.width + 80, height: beforeMove.height + 40 };
   const nativeBounds: Record<string, unknown>[] = [];
-  const geometry: Record<string, unknown> = { observationId: snapshot.observation_id, observedBounds: snapshot.window_bounds, beforeMove, requestedBounds, stalePoint, nativeBounds };
+  const geometry: Record<string, unknown> = { observationId: snapshot.observation_id, observedBounds: snapshot.window_bounds, beforeMove, beforeViewport, requestedBounds, stalePoint, nativeBounds };
   let geometryStage = 'before-move';
   const callDriver = driver.call.bind(driver);
   driver.call = async (name, args, signal) => {
@@ -278,8 +279,25 @@ void app.whenReady().then(async () => {
     }, error => { geometry.staleAction = { status: 'rejected', error: String(error) }; throw error; });
     await assert.rejects(staleAction, /not_dispatched; observation_consumed/);
     assert.equal(await window.webContents.executeJavaScript('document.querySelector("#count").textContent'), '21', 'Rejected stale coordinates must not send a click');
+    // Native bounds can commit before Chromium publishes its resized viewport
+    // and accessibility layout. Establish a coherent new observation before
+    // sending the one fresh click; never retry an input to make the test pass.
+    geometryStage = 'renderer-resize-wait';
+    const expectedViewport = { width: beforeViewport.width + requestedBounds.width - beforeMove.width, height: beforeViewport.height + requestedBounds.height - beforeMove.height };
+    await until(() => window.webContents.executeJavaScript(`innerWidth === ${expectedViewport.width} && innerHeight === ${expectedViewport.height}`));
+    await window.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     geometryStage = 'fresh-observation';
-    snapshot = await observe();
+    const freshLayouts: Record<string, unknown>[] = [];
+    geometry.freshLayouts = freshLayouts;
+    await until(async () => {
+      snapshot = await observe();
+      const edge = snapshot.elements.find((element: any) => element.label === 'Edge');
+      const rect = await window.webContents.executeJavaScript(`(() => { const rect = document.querySelector('#edge').getBoundingClientRect(); return { x: rect.x, y: rect.y, w: rect.width, h: rect.height }; })()`);
+      const content = window.getContentBounds();
+      const expected = { ...rect, x: content.x + rect.x, y: content.y + rect.y };
+      freshLayouts.push({ at: Date.now(), observationId: snapshot.observation_id, content, dom: expected, accessibility: edge?.frame });
+      return !!edge && (['x', 'y', 'w', 'h'] as const).every(key => Math.abs(edge.frame[key] - expected[key]) <= 2);
+    });
     geometry.freshObservedBounds = snapshot.window_bounds;
     const movedEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
     geometryStage = 'fresh-action';
