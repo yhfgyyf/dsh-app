@@ -101,6 +101,12 @@ The official session lifecycle lock allows only one process to write to a sessio
 
 Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests for Desktop 0.1.28 are in [patches](patches/dsh-0.2.0-rc.1).
 
+## Univer Office plugin upgrade
+
+DSH `0.2.0-rc.1` checks third-party plugin compatibility. Official `dsh-univer-office` `0.3.2` and `0.3.5` do not declare support for this core. Updating Desktop does not replace plugins in a user profile.
+
+This repository can build `0.3.5-desktop.1` from the official `0.3.5` archive, preserving the `telemetry: false` default and `right` alignment fix while adapting client registration. Install the generated `.tgz` through **Settings → Plugin marketplace → Add manually**, then restart Desktop. See the [compatibility package guide](patches/univer-office-0.3.5-dsh-rc1/README.md) for provenance, builds, validation scope, and rollback. This is a project compatibility build, not a new upstream npm release.
+
 ## Computer use (macOS and Windows)
 
 Enable Computer use in Settings or through the title-bar monitor icon. The app checks and requests system permissions; the switch shows on only after permissions are available and startup succeeds. Enabling it authorizes computer use without a separate prompt for each task. This switch is independent of file and command approvals. Turning it off stops input immediately; the model cannot enable it.

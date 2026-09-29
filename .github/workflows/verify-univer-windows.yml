@@ -1,0 +1,85 @@
+name: Verify Univer plugin on Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  univer:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.15.0
+          cache: npm
+      - name: Install the verified Desktop 0.1.28 runtime
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run download 36538324507 --repo yhfgyyf/dsh-app --name dsh-app-windows-x64 --dir .test-data/desktop-artifact
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot download the pinned installer' }
+          $setup = Join-Path $PWD '.test-data/desktop-artifact/DSH-Desktop-0.1.28-Windows-x64-Setup.exe'
+          if ((Get-FileHash $setup -Algorithm SHA256).Hash -ne '721b0324652055f07a7718e727ae234c9a2ff1bdda0d489593456989759185a6') { throw 'Installer checksum differs' }
+          $install = Join-Path $env:RUNNER_TEMP 'Univer Test Desktop'
+          $result = Start-Process $setup -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"')) -Wait -PassThru
+          if ($result.ExitCode -ne 0) { throw 'Fixture installation failed' }
+          New-Item -ItemType Junction -Path .runtime -Target (Join-Path $install 'resources/runtime') | Out-Null
+      - name: Build the frontend test host
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+      - name: Prepare the pinned compatibility plugin
+        shell: pwsh
+        run: |
+          $inputs = Join-Path $PWD '.test-data/univer-inputs'
+          New-Item -ItemType Directory -Path $inputs -Force | Out-Null
+          $manifest = Get-Content patches/univer-office-0.3.5-dsh-rc1/manifest.json -Raw | ConvertFrom-Json
+          $archive = Join-Path $inputs 'upstream.tgz'
+          Invoke-WebRequest -Uri $manifest.upstream.url -OutFile $archive
+          node scripts/prepare-univer-plugin.mjs --archive $archive --out .test-data/univer-package
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Path "$inputs/upstream", "$inputs/candidate" -Force | Out-Null
+          tar -xzf $archive -C "$inputs/upstream"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          tar -xzf .test-data/univer-package/dsh-univer-office-0.3.5-desktop.1.tgz -C "$inputs/candidate"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upgrade the incompatible plugin through PluginManager
+        timeout-minutes: 8
+        run: node scripts/test-univer-plugin-upgrade.mjs .test-data/univer-package/dsh-univer-office-0.3.5-desktop.1.tgz .test-data/univer-inputs/upstream/package .test-data/univer-inputs/candidate/package
+      - name: Exercise the installed host and native Office worker
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $report = Get-Content .test-data/univer-upgrade/plugin-upgrade-report.json -Raw | ConvertFrom-Json
+          if ($report.status -ne 'pass') { throw 'Plugin upgrade did not pass' }
+          $env:DSH_TEST_UNIVER_PLUGIN = Join-Path $report.data 'home/profiles/test/node_modules/dsh-univer-office'
+          $env:DSH_TEST_REPORTS = Join-Path $PWD '.test-data/univer-host'
+          node scripts/test-univer-plugin-host.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify client startup and migrated history in Electron
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:DSH_TEST_UNIVER_PACKAGE = Join-Path $PWD '.test-data/univer-inputs/candidate/package'
+          npm run test:univer-client
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Save the compatibility package and test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: univer-windows-compatibility
+          path: |
+            .test-data/univer-package/*.tgz
+            .test-data/univer-package/univer-plugin-provenance.json
+            .test-data/univer-upgrade/plugin-upgrade-report.json
+            .test-data/univer-host/*.json
+            .test-data/univer-client-upgrade/report.json
+            .test-data/univer-client-upgrade/ready.png
+          if-no-files-found: error

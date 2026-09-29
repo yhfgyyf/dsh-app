@@ -13,14 +13,17 @@ const { clientUrl } = require('./fixtures/univer-client-download.cjs');
 
 app.commandLine.appendSwitch('lang', 'en-US');
 const root = join(__dirname, '..');
-const reports = join(root, '.test-data', 'univer-client');
+const candidatePackage = process.env.DSH_TEST_UNIVER_PACKAGE && resolve(process.env.DSH_TEST_UNIVER_PACKAGE);
+const compatibility = candidatePackage && require('../patches/univer-office-0.3.5-dsh-rc1/manifest.json');
+const reports = join(root, '.test-data', candidatePackage ? 'univer-client-upgrade' : 'univer-client');
 const data = join(reports, String(Date.now()));
 const home = join(data, 'core');
 const workspace = join(data, 'workspace');
 const profile = join(home, 'profiles', 'desktop');
 const bundle = join(profile, 'node_modules', 'dsh-univer-office');
-const clientSha256 = 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7';
-const clientBytes = 1101122;
+const clientSha256 = candidatePackage ? compatibility.files.find(file => file.path === 'lib/client.js').after : 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7';
+const clientBytes = candidatePackage ? readFileSync(join(candidatePackage, 'lib/client.js')).length : 1101122;
+const clientVersion = candidatePackage ? compatibility.version : '0.3.2';
 const sessionId = 'session-' + randomUUID();
 const title = 'Univer ordinary conversation acceptance';
 const reply = 'UNIVER_CLIENT_ORDINARY_TURN_RENDERED';
@@ -32,7 +35,7 @@ process.env.DSH_TELEMETRY_DISABLED = '1';
 const report = {
   status: 'running', checks: [], failures: [], console: [], expectedReloadMessages: [], externalRequests: [],
   clientSha256, clientBytes, platform: process.platform,
-  scope: 'Original npm Univer 0.3.2 client startup, V3 history migrated to V4 tool results and reload; inert host, no Office engine or online model.',
+  scope: `Pinned Univer ${clientVersion} client startup, V3 history migrated to V4 tool results and reload; inert host, no Office engine or online model.`,
   data, readyCount: 0,
 };
 const sanitize = text => String(text).replace(/token=[^\s&"']+/g, 'token=[redacted]');
@@ -157,7 +160,13 @@ async function run(event) {
 
 (async () => {
   let bytes;
-  if (process.env.DSH_TEST_UNIVER_CLIENT) {
+  if (candidatePackage) {
+    const manifestBytes = readFileSync(join(candidatePackage, 'package.json'));
+    assert.equal(createHash('sha256').update(manifestBytes).digest('hex'), compatibility.files.find(file => file.path === 'package.json').after);
+    assert.equal(JSON.parse(manifestBytes).version, clientVersion);
+    report.clientSource = 'SHA-pinned Desktop compatibility package';
+    bytes = readFileSync(join(candidatePackage, 'lib/client.js'));
+  } else if (process.env.DSH_TEST_UNIVER_CLIENT) {
     report.clientSource = 'local SHA-pinned input';
     bytes = readFileSync(resolve(process.env.DSH_TEST_UNIVER_CLIENT));
   } else {
@@ -180,7 +189,7 @@ export function apply(ctx) {
 `);
   writeFileSync(join(bundle, 'cordis.patch.yml'), '- insert:\n    - id: univer-client-fixture\n      name: dsh-univer-office\n');
   writeFileSync(join(bundle, 'package.json'), JSON.stringify({
-    name: 'dsh-univer-office', version: '0.3.2', type: 'module', main: './index.mjs',
+    name: 'dsh-univer-office', version: clientVersion, type: 'module', main: './index.mjs',
     exports: { '.': './index.mjs', './client': { default: './client.js' }, './package.json': './package.json' },
     dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: [
       '@deepseek-ai/dsh-client-locale', '@deepseek-ai/dsh-client-ui-chat', '@deepseek-ai/dsh-client-ui-conversation',
@@ -189,7 +198,7 @@ export function apply(ctx) {
     ] } },
   }, null, 2));
   writeFileSync(join(profile, 'package.json'), JSON.stringify({ name: 'dsh-profile-desktop', private: true,
-    dependencies: { 'dsh-univer-office': '0.3.2' },
+    dependencies: { 'dsh-univer-office': clientVersion },
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface', 'dsh-univer-office'] } },
   }, null, 2));
   const persistence = readFileSync(requireRuntime.resolve('@deepseek-ai/dsh-session-persistence-jsonl'), 'utf8');

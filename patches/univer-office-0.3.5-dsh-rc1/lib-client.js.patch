@@ -1,0 +1,12 @@
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -21682,7 +21682,8 @@
+     var index_exports = {};
+     __export(index_exports, {
+       apply: () => apply,
+-      inject: () => inject
++      inject: () => inject,
++      name: () => "dsh-univer-office"
+     });
+     module.exports = __toCommonJS(index_exports);
+ 

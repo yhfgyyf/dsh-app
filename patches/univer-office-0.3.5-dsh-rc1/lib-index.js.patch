@@ -1,0 +1,20 @@
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -3760,7 +3760,7 @@
+   unitCacheTtlMs: z.natural().default(5e3),
+   tools: z.boolean().default(true),
+   skills: z.boolean().default(true),
+-  telemetry: z.boolean().default(true)
++  telemetry: z.boolean().default(false)
+ });
+ function resolveConfig(config = {}) {
+   const browserExecutablePath = resolveBrowserExecutablePath(config.browserExecutablePath);
+@@ -3784,7 +3784,7 @@
+     unitCacheTtlMs: config.unitCacheTtlMs ?? 5e3,
+     tools: config.tools ?? true,
+     skills: config.skills ?? true,
+-    telemetry: config.telemetry ?? true
++    telemetry: config.telemetry ?? false
+   };
+   if (!Number.isInteger(resolved.gatewayPort) || resolved.gatewayPort < 1 || resolved.gatewayPort > 65535) {
+     throw new Error("univer: gatewayPort must be an integer between 1 and 65535");
