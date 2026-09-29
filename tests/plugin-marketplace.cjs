@@ -4,7 +4,7 @@ const { app, ipcMain, BrowserWindow } = require('electron');
 app.commandLine.appendSwitch('lang', 'en-US');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+const { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } = require('node:fs');
 const { basename, isAbsolute, join, resolve, sep } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { startRegistry } = require('./fixtures/plugin-marketplace-registry.cjs');
@@ -44,6 +44,11 @@ function finish(error) {
   report.registryRequests = registry?.requests;
   report.modelRequests = registry?.modelRequests.map(request => ({ model: request.model, stream: request.stream, tools: request.tools?.length ?? 0 }));
   if (registry) report.packageCommands = packageCommands();
+  const logRoot = join(profile, '.plugin-manager', 'logs');
+  report.packageLogs = existsSync(logRoot) ? readdirSync(logRoot).sort().map(operation => {
+    const path = join(logRoot, operation, 'pnpm.log');
+    return { path, output: existsSync(path) ? sanitize(readFileSync(path, 'utf8').slice(-32000)) : '' };
+  }) : [];
   writeFileSync(join(data, 'report.json'), JSON.stringify(report, null, 2));
   writeFileSync(join(reports, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
@@ -92,6 +97,14 @@ async function run(host) {
   const card = `document.querySelector('[data-marketplace-package="${registry.name}"]')`;
   const dialog = `Array.from(document.querySelectorAll('[role="dialog"]')).at(-1)`;
   const review = `document.querySelector('[data-plugin-security-review]')`;
+  const assertInstallationNotFailed = async () => {
+    const phase = await js(`document.querySelector('[data-install-phase]')?.getAttribute('data-install-phase')`);
+    if (phase !== 'failed') return phase;
+    await js(`Array.from(${dialog}?.querySelectorAll('button')??[]).find(button=>['Show install details','查看安装详情'].includes(button.textContent.trim()))?.click()`);
+    await js('new Promise(resolve=>requestAnimationFrame(resolve))');
+    report.installFailureDetails = await js(`${dialog}?.textContent`);
+    throw new Error('Official installation failed: ' + report.installFailureDetails);
+  };
   const assertNotInstalled = () => {
     assert.equal(installed(), false, 'Review or cancellation changed the profile dependency');
     assert.equal(enabled(), false, 'Review or cancellation enabled the bundle');
@@ -166,9 +179,7 @@ async function run(host) {
   await clickText(['继续安装'], review);
   await until(async () => {
     if (await js(`!!document.querySelector('[role="dialog"] input[aria-invalid="true"]')`)) throw new Error('Official package inspection failed: ' + await js(`${dialog}?.textContent`));
-    const phase = await js(`document.querySelector('[data-install-phase]')?.getAttribute('data-install-phase')`);
-    if (phase === 'failed') throw new Error('Official installation failed: ' + await js(`document.body.innerText.slice(-7000)`));
-    return phase === 'done';
+    return await assertInstallationNotFailed() === 'done';
   }, 'Official package installation did not complete', 40000);
   assert.equal(installed(), true);
   const additions = packageCommands().filter(command => command.args.includes('add'));
@@ -208,7 +219,7 @@ async function run(host) {
   await until(() => js(`!!${dialog}?.querySelector('input')`), 'Direct-install input missing');
   await js(`{const input=${dialog}.querySelector('input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(registry.spec)});input.dispatchEvent(new Event('input',{bubbles:true}));}`);
   await clickText(['直接安装', 'Install directly'], dialog);
-  await until(() => installed(), 'Direct install did not persist the package', 30000);
+  await until(async () => { await assertInstallationNotFailed(); return installed(); }, 'Direct install did not persist the package', 30000);
   await until(() => js(`Array.from(${dialog}?.querySelectorAll('button')??[]).some(b=>['立即启用','Enable now'].includes(b.textContent.trim()))`), 'Direct install did not finish');
   assert.equal(registry.modelRequests.length, reviewsBeforeDirect, 'Direct install invoked the reviewer');
   assert.equal(enabled(), false, 'Direct installation unexpectedly enabled the bundle');
