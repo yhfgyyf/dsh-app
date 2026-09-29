@@ -39,6 +39,7 @@ ipcMain.handle = (channel, listener) => {
       setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
         report.ui = await args[0].sender.executeJavaScript(`({
           rootInert: document.getElementById('root')?.inert,
+          settingsTransitions: window.__browserSettingsTransitions,
           text: document.body.innerText.slice(0, 2500),
           buttons: Array.from(document.querySelectorAll('button')).map(b => ({
             label: b.getAttribute('aria-label'), text: b.textContent, className: b.className,
@@ -82,10 +83,30 @@ async function run(event) {
   })()`), 'Settings entry missing from the account menu');
   const selector = '.desktop-browser-use-settings [role="switch"]';
   await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
+  await until(() => js(`Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
+    .at(-1)?.dataset.shortcutModal === 'settings'`), 'Settings did not become the foreground dialog');
+  await js(`(() => {
+    window.__browserSettingsTransitions = [];
+    const record = () => {
+      const state = JSON.stringify({ inert: document.getElementById('root')?.inert,
+        viewport: { width: innerWidth, height: innerHeight },
+        sidebarCollapsed: document.querySelector('[data-sidebar-collapsed]')?.dataset.sidebarCollapsed,
+        modals: Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
+          .map(el => ({ role: el.getAttribute('role'), scope: el.dataset.shortcutModal ?? null })) });
+      if (window.__browserSettingsTransitions.at(-1) !== state) window.__browserSettingsTransitions.push(state);
+    };
+    record();
+    window.__browserSettingsObserver = new MutationObserver(record);
+    window.__browserSettingsObserver.observe(document.body, { subtree: true, childList: true, attributes: true });
+  })()`);
   host.send('desktop:command', 'settings');
-  await until(() => js(`!document.querySelector(${JSON.stringify(selector)})`), 'The native Settings command did not close Settings');
+  // A contributed row can unmount before its dialog or an account menu. The
+  // native command correctly yields to those modal owners, so wait for the shell.
+  await until(() => js(`document.getElementById('root')?.inert === false
+    && !document.querySelector('[role="dialog"][aria-modal="true"], [role="menu"]')`), 'The native Settings command did not close Settings');
   host.send('desktop:command', 'settings');
   await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'The native Settings command did not reopen Settings');
+  report.settingsTransitions = await js('window.__browserSettingsObserver.disconnect(); window.__browserSettingsTransitions');
   report.checks.push('The account menu opens Settings and the native Settings command closes and reopens the official Settings dialog');
   await js(`document.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center'})`);
   const state = () => js(`(() => { const b=document.querySelector(${JSON.stringify(selector)});return {enabled:b.getAttribute('aria-checked'),busy:b.disabled}; })()`);
