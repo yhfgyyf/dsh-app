@@ -63,12 +63,17 @@ async function run(event) {
       return false;
     }
     return document.getElementById('root')?.inert === false
+      && document.querySelector('[data-conversation-content][data-conversation-session]:not([data-conversation-session=""]) [contenteditable="true"][data-phase="plain"]') !== null
       && document.querySelector('button.VOzbGW_trigger, button[aria-label="账号菜单"], button[aria-label="Account menu"]') !== null;
   })()`), 'Onboarding did not release the Settings controls');
   // DSH 0.2 skips the web welcome notice when the native dshDesktop bridge is
   // present. Wait for usable Settings instead, still dismissing any optional
   // credential onboarding that the provider contributes.
   await finishOnboarding();
+  // The account menu mounts before the initial session. Its later blank-session
+  // onboarding transition can close Settings even when native onboarding renders
+  // nothing. Wait for the live composer above and let that React commit finish.
+  await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   const openedDirectly = await js(`(() => {
     const trigger = document.querySelector('button.VOzbGW_trigger');
     if (trigger) { trigger.click(); return true; }
