@@ -8,9 +8,12 @@ $application = Get-Process -Id $ApplicationId
 if ($application.MainWindowHandle -eq 0) { throw 'Application window is not restored' }
 $window = [System.Windows.Automation.AutomationElement]::FromHandle($application.MainWindowHandle)
 $menuType = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuItem)
+$menuBarType = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::MenuBar)
+$menuBar = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $menuBarType)
+if (!$menuBar) { throw 'Application menu bar was not exposed' }
 $appName = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, 'DSH Desktop')
-$appMenuCondition = [System.Windows.Automation.AndCondition]::new($menuType, $appName)
-$appMenu = $window.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $appMenuCondition)
+# Electron exposes top-level submenu buttons as popup buttons, not menu items.
+$appMenu = $menuBar.FindFirst([System.Windows.Automation.TreeScope]::Children, $appName)
 if (!$appMenu) { throw 'DSH Desktop application menu was not exposed' }
 $pattern = $null
 if ($appMenu.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$pattern)) {
