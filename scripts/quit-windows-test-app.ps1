@@ -15,12 +15,10 @@ $appName = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Au
 # Electron exposes top-level submenu buttons as popup buttons, not menu items.
 $appMenu = $menuBar.FindFirst([System.Windows.Automation.TreeScope]::Children, $appName)
 if (!$appMenu) { throw 'DSH Desktop application menu was not exposed' }
-$pattern = $null
-if ($appMenu.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$pattern)) {
-  $pattern.Expand()
-} else {
-  $appMenu.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
-}
+# Electron's popup button advertises ExpandCollapse but Expand returns E_FAIL.
+# Invoke performs its default Open action, as it does for an ordinary button.
+Write-Output 'Invoking the DSH Desktop menu popup button.'
+$appMenu.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 # Keep this helper ASCII so Windows PowerShell 5.1 reads it consistently.
 $quitLabel = [string][char]0x9000 + [char]0x51fa + ' DSH Desktop'
 $quitName = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $quitLabel)
@@ -32,5 +30,6 @@ do {
   if (!$quitItem) { Start-Sleep -Milliseconds 100 }
 } until ($quitItem -or (Get-Date) -gt $deadline)
 if (!$quitItem) { throw 'Application quit menu item was not exposed' }
+Write-Output 'Invoking the explicit Quit menu item.'
 $quitItem.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
 Write-Output 'Invoked the installed application Quit menu item.'

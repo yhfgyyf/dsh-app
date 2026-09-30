@@ -26,6 +26,9 @@ jobs:
           }
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
+      - name: Windows menu Quit helper preflight
+        timeout-minutes: 1
+        run: npx --no-install electron tests/windows-quit-smoke.cjs
       - name: Build pinned runtime and apply verified patch
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
@@ -115,6 +118,7 @@ jobs:
           npm run test:workspace-dependencies
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install, launch, close and uninstall
+        timeout-minutes: 6
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
       - name: Collect verified installer and reports
