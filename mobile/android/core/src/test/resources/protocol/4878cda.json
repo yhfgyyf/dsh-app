@@ -1,0 +1,41 @@
+{
+  "upstreamCommit": "4878cdabd87d4041bdaff61d04c966883b9fd07a",
+  "release": "0.2.0-rc.1",
+  "roster": {"presets": [{"id":"standard","isDefault":true,"name":"Standard"},{"id":"ptc","isDefault":false}]},
+  "legacyRoster": {"presets": [{"id":"standard","trust":"system","isDefault":true}], "authorable":true,"modeSelectionEnabled":false},
+  "permissionCatalog": {"options":[{"value":"read-only","name":"read-only"},{"value":"auto","name":"Auto review"}],"defaultOptions":[{"value":"read-only","name":"read-only"}],"defaultPreset":"read-only"},
+  "feedbackConflict": {"ok":false,"error":{"code":"version-conflict","current":{"messageId":"m1","rating":"positive","note":"Retained note","version":"v2","createdAt":1000,"updatedAt":2000}}},
+  "fileRead": {"absolutePath":"/workspace/README.md","version":"v1","bytes":20,"offset":1,"text":"# Preview","lines":1,"eof":false},
+  "terminalSnapshot": {"type":"snapshot","sequence":3,"screen":"hello\r\n","info":{"id":"terminal-1","title":"Shell","shell":{"path":"/bin/sh","args":[],"name":"sh"},"cwd":"/workspace","cols":80,"rows":24,"state":"running","exitCode":null,"controllerId":"attachment-2"}},
+  "terminalOutput": {"type":"output","sequence":4,"data":"world\r\n"},
+  "unarchive": {"archivedSessionIds":[]},
+  "workspaceBaseline": {"type":"baseline","value":{"items":[],"archivedSessionIds":["archived"],"pinnedSessionIds":["newest","older"]}},
+  "workspacePinned": {"type":"pinned","pinnedSessionIds":["older"]},
+  "jobRows": {"type":"rows","jobs":[{"id":"bash-1","kind":"bash","label":"npm test","owner":"s","status":"running","progress":"3/10","startedAt":1000,"output":{"total":42,"earliest":0}},{"id":"bash-2","kind":"bash","label":"weird","status":"paused","startedAt":1001,"output":{"total":0,"earliest":0}}]},
+  "jobFollow": [
+    {"type":"opened","job":{"id":"bash-1","kind":"bash","label":"npm test","status":"running","startedAt":1000,"output":{"total":12,"earliest":4}},"from":4},
+    {"type":"output","chunks":[{"at":4,"text":"PASS a\n","channel":"stdout","gapBefore":true},{"at":11,"text":"x","channel":"stderr"}],"next":12,"lossy":true},
+    {"type":"status","job":{"id":"bash-1","kind":"bash","label":"npm test","status":"completed","detail":"exit code: 0","startedAt":1000,"finishedAt":2000,"output":{"total":12,"earliest":4}}},
+    {"type":"heartbeat"}
+  ],
+  "sessionActive": {"code":"workspace/session-active","message":"Session has running work","details":{"sessionId":"s","activity":[{"kind":"turn"},{"kind":"job","items":[{"id":"bash-1","label":"npm test"}]},{"kind":"schedule","items":[{"id":"sched-1"}]}]}},
+  "approval": {"toolName":"bash","callId":"c1","reason":"Auto review denied tool \"bash\": destructive","displayReason":{"en":"Auto review blocked this command","zh":"自动审查拦截了此命令"}},
+  "subagentCatalog": [
+    {"id":"child-1","createdAt":1000,"mode":"continuable","label":"Research"},
+    {"id":"child-2","createdAt":1001,"mode":"one-shot"},
+    {"id":"child-3","createdAt":1002,"mode":"unknown","label":"Unreadable"},
+    {"createdAt":1003,"mode":"continuable"}
+  ],
+  "events": [
+    {"seq":0,"time":1000,"type":"user/message","surfaceOp":"append","data":{"id":"u1","role":"user","source":{"kind":"user","rpcId":"r1"},"content":[{"type":"image","attachment":{"attachmentId":"sha256:fixture","mediaType":"image/png","width":1,"height":1,"bytes":68}}]}},
+    {"seq":1,"time":1001,"type":"image/offload","data":{"targets":[{"seq":0,"imageIndexes":[0]}]}},
+    {"seq":2,"time":1002,"type":"system/message","surfaceOp":"append","data":{"turn":1,"step":1,"message":{"role":"system","source":{"kind":"system-prompt"},"content":[{"type":"text","text":"Original context"}]}}},
+    {"seq":3,"time":1003,"type":"system/message","surfaceOp":{"op":"replace","startSeq":2,"endSeq":2},"sourceEventSeqs":[2],"data":{"turn":1,"step":2,"message":{"role":"system","source":{"kind":"system-prompt"},"content":[{"type":"text","text":"Updated context"}]}}},
+    {"seq":4,"time":1004,"type":"future/notice","ignorable":true,"data":{"future":true}},
+    {"seq":5,"time":1005,"type":"tool/call","data":{"turn":1,"step":2,"callId":"call-1","name":"bash","arguments":"{\"command\":\"ls nope\"}"}},
+    {"seq":6,"time":1006,"type":"tool/result","data":{"turn":1,"step":2,"meta":{"exitCode":2},"error":{"name":"ToolError","message":"exit 2"},"message":{"id":"tr-1","role":"tool","source":{"kind":"tool","callId":"call-1"},"toolCallId":"call-1","isError":true,"content":[{"type":"text","text":"ls: cannot access 'nope'"}]}}},
+    {"seq":7,"time":1007,"type":"developer/message","data":{"turn":1,"step":3,"headerSeq":4,"message":{"id":"d1","role":"developer","source":{"kind":"tool-registry"},"content":[{"type":"tool-addition","toolName":"web_search"}]}}},
+    {"seq":8,"time":1008,"type":"user/message","surfaceOp":"append","data":{"id":"u2","role":"user","source":{"kind":"goal"},"content":[{"type":"text","text":"Continue toward the goal."}]}},
+    {"seq":9,"time":1009,"type":"turn/end","data":{"turn":1,"reason":{"kind":"forked"}}}
+  ]
+}

@@ -8,6 +8,20 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.32: mobile previews, downloads, sharing, terminals and voice input
+
+Android 0.12.5-dsh.4 previews Office files as PDFs converted on the computer, animates GIFs, and plays media from bounded private cache downloads. Original files can be saved to the phone or shared through Android's system chooser. Phones with control access can use the computer's interactive terminal. Finish a voice recording to transcribe it on the computer and automatically send the text; cancellation, navigation and backgrounding retire the recording.
+
+## v0.1.31: stable phone connections
+
+Fix the reconnect loop caused by rejecting the phone's job status subscription. Rejected subscriptions now return an individual stream error while other streams stay connected. Android 0.12.4-dsh.3 also converts tunnel failures into UI errors instead of crashing. Existing bindings remain valid.
+
+## v0.1.30: scan to connect
+
+Desktop now pairs phones with a short-lived QR code. Same-network connections work without a relay; registered computers also support automatic relay fallback. Android opens the existing chat interface after scanning, with computer switching, globe markers, and unbinding in the sidebar. Both ends support revocation, including queued offline requests. Closing the desktop window keeps the Host running until explicit Quit.
+
+See [remote access setup](docs/REMOTE-ACCESS.md) for pairing, builds, and relay upgrades.
+
 ## v0.1.28 preview updates
 
 Desktop **0.1.28** supports and bundles **DSH `0.2.0-rc.1`**, with compatibility updates for the local Auto, Audit, and Progressive Tools plugins.

@@ -62,6 +62,18 @@
       name: '@deepseek-ai/dsh-api-workspace-files'
     - id: terminal-controller
       name: '@deepseek-ai/dsh-api-terminal-controller'
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+    - id: api-speech-to-text
+      name: '@deepseek-ai/dsh-experimental-api-speech-to-text'
+    - id: ui-voice-input
+      name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
     - id: job-controller
       name: '@deepseek-ai/dsh-api-job-controller'
     - id: cordis-host-runner

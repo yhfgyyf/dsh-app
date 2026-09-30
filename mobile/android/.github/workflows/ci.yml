@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+        with:
+          # The legacy `tools` package is no longer published on current runners.
+          packages: platform-tools
+      - uses: gradle/actions/setup-gradle@v4
+      # :app was missing here, so nothing under app/src/test ever ran on CI.
+      - name: Unit tests
+        run: ./gradlew :core:test :mock-harness:test :app:testDebugUnitTest --stacktrace
+      - name: Lint
+        run: ./gradlew :app:lintDebug --stacktrace
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-mobile-debug
+          path: app/build/outputs/apk/debug/*.apk

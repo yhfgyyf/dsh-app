@@ -1,3 +1,4 @@
+import type { RemoteAction, RemoteState } from './remote-access.ts';
 import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
 import type { UpdateSchedule, UpdateState } from './updates.ts';
 import type { LocalOpenRequest } from './local-open.ts';
@@ -19,6 +20,10 @@ export type DesktopInfo = {
 };
 
 export interface DesktopAPI {
+  exportRemoteDiagnostics(): Promise<string | undefined>;
+  getRemoteState(): Promise<RemoteState>;
+  remoteAction(action: RemoteAction): Promise<RemoteState>;
+  onRemoteState(listener: (state: RemoteState) => void): () => void;
   getBrowserUseState(): Promise<BrowserUseState>;
   setBrowserUseEnabled(enabled: boolean): Promise<BrowserUseState>;
   saveBrowserUseToken(token: string | null): Promise<BrowserUseState>;

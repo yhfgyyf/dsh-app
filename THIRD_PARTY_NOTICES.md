@@ -54,3 +54,12 @@ available in the [Cua release source](https://github.com/trycua/cua/tree/cua-dri
 and [UniFFI source](https://github.com/jhugman/uniffi-bindgen-react-native).
 Driver archives are verified against the SHA-256 pins in
 `runtime/computer-use/driver.json`; npm packages use the accompanying lockfile.
+
+## DSH Remote
+
+- qrcode 1.5.4 (MIT), added with user approval; bundled license under `dist/renderer/licenses/qrcode/license`.
+- Native Android fork: sorsama/deepseek-harness-mobile v0.12.1 (MIT), license retained in `mobile/android/LICENSE`.
+- Relay fork: april-jk/dsh-relay v0.1.9 (MIT), license retained in `services/relay/LICENSE`.
+- Sealed transport crypto: april-jk/dsh-mobile-plugin v0.1.9, Copyright (c) 2026 dsh-mobile contributors (MIT). Full license retained in `src/runtime/remote/LICENSE`, copied to the packaged runtime; Android port retains `mobile/android/CENTRAL-CRYPTO-LICENSE`.
+
+Exact source commits and modifications are recorded in `REMOTE-SOURCES.json`.

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The languages this app ships, declared for the platform.
+
+    Without it Android 13+ has no list to offer under Settings → Apps → Language, and the per-app
+    language the picker in Settings writes has nothing to validate against. The set must stay in
+    step with res/values-* and with LanguageOptions in SettingsViewModel.kt.
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="zh-CN" />
+    <locale android:name="hi" />
+    <locale android:name="es" />
+    <locale android:name="fr" />
+    <locale android:name="ar" />
+    <locale android:name="bn" />
+    <locale android:name="pt" />
+    <locale android:name="ru" />
+    <locale android:name="ur" />
+    <locale android:name="th" />
+</locale-config>

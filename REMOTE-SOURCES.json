@@ -1,0 +1,10 @@
+{
+  "desktopBaseline": "0.1.28",
+  "dshBaseline": "0.2.0-rc.1",
+  "protocol": "dsh-desktop-remote-v1",
+  "upstream": [
+    { "path": "mobile/android", "repository": "https://github.com/sorsama/deepseek-harness-mobile", "tag": "v0.12.1", "commit": "07471cc89a3c78889528df54811764486a7f4c6e", "license": "MIT" },
+    { "path": "services/relay", "repository": "https://github.com/april-jk/dsh-relay", "tag": "v0.1.9", "commit": "0ef16ab69e61eccd2967dc222f145157d13a8f54", "license": "MIT" },
+    { "path": "src/runtime/remote/e2ee.ts", "repository": "https://github.com/april-jk/dsh-mobile-plugin", "tag": "v0.1.9", "commit": "489a1a2c0f12246e478a93eb25683f87c1f33832", "license": "MIT", "modifications": "Constructor properties expanded for Node strip-only compatibility; Kotlin port and shared vectors added." }
+  ]
+}
