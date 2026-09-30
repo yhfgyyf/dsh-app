@@ -16,6 +16,14 @@ jobs:
         with:
           node-version: 24.15.0
           cache: npm
+      - name: Validate Windows lifecycle test syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
       - name: Install frontend dependencies
         run: npm ci --no-audit --no-fund
       - name: Build pinned runtime and apply verified patch

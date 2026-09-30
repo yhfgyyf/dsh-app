@@ -46,7 +46,24 @@ try {
   } until ($ready -or (Get-Date) -gt $deadline)
   if (!$ready) { throw 'Installed application did not create its window and owned core' }
   if (!$application.CloseMainWindow()) { throw 'Application window could not receive close request' }
-  if (!$application.WaitForExit(20000)) { throw 'Application did not exit after closing its window' }
+  # Window close deliberately preserves the Host for phone connections.
+  if ($application.WaitForExit(1000)) { throw 'Closing the window unexpectedly exited the background application' }
+  if (!(Get-Process -Id $corePid -ErrorAction SilentlyContinue)) { throw 'Window close stopped the owned core' }
+  $port = (Get-Content $transport -Raw | ConvertFrom-Json).port
+  $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -NoProxy -SkipHttpErrorCheck -TimeoutSec 5
+  if ($response.StatusCode -ne 401) { throw 'Background core no longer serves its protected transport' }
+  # Reopening the installed executable restores the same window/Host, then use
+  # the real menu's explicit Quit action instead of treating close as quit.
+  Start-Process -FilePath $exe -Wait
+  $deadline = (Get-Date).AddSeconds(10)
+  do {
+    $application.Refresh()
+    if ($application.MainWindowHandle -eq 0) { Start-Sleep -Milliseconds 100 }
+  } until ($application.MainWindowHandle -ne 0 -or (Get-Date) -gt $deadline)
+  if ($application.MainWindowHandle -eq 0) { throw 'Reopening did not restore the background window' }
+  & powershell.exe -NoProfile -NonInteractive -STA -File (Join-Path $PSScriptRoot 'quit-windows-test-app.ps1') -ApplicationId $application.Id
+  if ($LASTEXITCODE -ne 0) { throw 'Application Quit menu could not be invoked' }
+  if (!$application.WaitForExit(20000)) { throw 'Application did not exit after explicit Quit' }
   Start-Sleep -Milliseconds 500
   if (Get-Process -Id $corePid -ErrorAction SilentlyContinue) { throw 'Owned core survived application exit' }
 } finally {
@@ -56,6 +73,6 @@ try {
 $uninstall = Start-Process -FilePath (Join-Path $install 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
 if ($uninstall.ExitCode -ne 0 -or (Test-Path $exe)) { throw 'Silent uninstall failed' }
 if (!(Test-Path $sentinel)) { throw 'Uninstall removed user data' }
-$report = @{ status = 'pass'; update = $updateReport; checks = @('silent per-user installation into a path with spaces', 'installed app.asar and complete runtime match package', 'restart icon completes an external update and retains a complete previous-app backup', 'updated app.asar and complete runtime match package', 'bundled Node runs without system Node', 'updated application automatically creates a native window and owned core', 'closing the application releases its core', 'silent uninstall preserves user data') }
+$report = @{ status = 'pass'; update = $updateReport; checks = @('silent per-user installation into a path with spaces', 'installed app.asar and complete runtime match package', 'restart icon completes an external update and retains a complete previous-app backup', 'updated app.asar and complete runtime match package', 'bundled Node runs without system Node', 'updated application automatically creates a native window and owned core', 'closing the window preserves the app and protected Host transport', 'reopening restores the same application window', 'explicit Quit through the real application menu releases its core', 'silent uninstall preserves user data') }
 $report | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $root '.test-data/windows-installer-report.json')
 $report | ConvertTo-Json -Depth 4 | Write-Output
