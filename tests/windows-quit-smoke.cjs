@@ -19,7 +19,7 @@ app.whenReady().then(async () => {
   const window = new BrowserWindow({ width: 640, height: 400 });
   await window.loadURL('data:text/html,<title>Windows Quit menu fixture</title>');
   window.show(); window.focus();
-  helper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-File', join(__dirname, '../scripts/quit-windows-test-app.ps1'), '-ApplicationId', String(process.pid)], { stdio: 'inherit' });
+  helper = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-File', join(__dirname, '../scripts/quit-windows-test-app.ps1'), '-ApplicationId', String(process.pid)], { stdio: 'inherit', windowsHide: true });
   helper.on('error', error => { console.error(error); app.exit(1); });
   helper.on('exit', code => { if (code !== 0 && !quitRequested) app.exit(1); });
 }).catch(error => { console.error(error); app.exit(1); });
