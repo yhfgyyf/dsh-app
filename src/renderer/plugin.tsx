@@ -102,7 +102,7 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /><RemoteAccessSettings /></div>;
+  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /><RemoteAccessSettings /></div>;
 }
 
 /** Route menu actions to their owners; search still uses a version-pinned UI control. */

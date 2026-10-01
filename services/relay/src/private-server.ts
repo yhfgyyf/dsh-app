@@ -4,13 +4,17 @@ import { pathToFileURL } from 'node:url';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { PrivateStore, hash, token } from './private-store.js';
+import { parseClientEndpoints } from './client-endpoints.js';
 
 const FRAME_LIMIT = 256 * 1024;
 const BUFFER_LIMIT = 4 * 1024 * 1024;
-export function createPrivateRelay(store: PrivateStore, origin: string) {
+export function createPrivateRelay(store: PrivateStore, origin: string, options: { clientEndpoints?: unknown } = {}) {
   const publicUrl = new URL(origin);
   if (publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash || publicUrl.username || publicUrl.password ||
       (publicUrl.protocol !== 'https:' && !(publicUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname)))) throw new Error('PUBLIC_RELAY_URL must be an HTTPS origin');
+  const routes = options.clientEndpoints === undefined ? {} : {
+    relayRoutes: { id: store.relayId, endpoints: parseClientEndpoints(options.clientEndpoints) },
+  };
   const devices = new Map<string, WebSocket>();
   const clients = new Map<string, { socket: WebSocket; device: string; binding: string }>();
   const accounts = new Map<string, { account: string; expires: number }>();
@@ -39,7 +43,7 @@ export function createPrivateRelay(store: PrivateStore, origin: string) {
     try {
       if (!rate(req)) return reply(429, { error: 'rate_limited' });
       if (req.headers.origin) return reply(403, { error: 'native_client_required' });
-      if (req.url === '/health' && req.method === 'GET') return reply(200, { protocol: 'dsh-desktop-remote-v1', ok: true });
+      if (req.url === '/health' && req.method === 'GET') return reply(200, { protocol: 'dsh-desktop-remote-v1', ok: true, relayId: store.relayId });
       if (req.method !== 'POST' || !req.url?.startsWith('/v1/')) return reply(404, { error: 'not_found' });
       const chunks: Buffer[] = []; let size = 0;
       for await (const chunk of req) {
@@ -63,7 +67,7 @@ export function createPrivateRelay(store: PrivateStore, origin: string) {
       }
       if (req.url === '/v1/register') {
         const result = store.register(str('code'), str('name', 80));
-        return reply(result ? 201 : 403, result ?? { error: 'invalid_registration_code' });
+        return reply(result ? 201 : 403, result ? { ...result, ...routes } : { error: 'invalid_registration_code' });
       }
       if (req.url === '/v1/claim') {
         const account = accounts.get(hash(bearer(req)));
@@ -104,10 +108,10 @@ export function createPrivateRelay(store: PrivateStore, origin: string) {
         })();
         return reply(200, { ok: true });
       }
-      if (req.url === '/v1/invite') return reply(201, store.invite(device.id, body.qr === true));
+      if (req.url === '/v1/invite') return reply(201, { ...store.invite(device.id, body.qr === true), ...routes });
       if (req.url === '/v1/bind') {
         const result = store.bind(device.id, str('name', 80));
-        return reply(result ? 201 : 409, result ?? { error: 'binding_limit' });
+        return reply(result ? 201 : 409, result ? { ...result, ...routes } : { error: 'binding_limit' });
       }
       if (req.url === '/v1/bindings') return reply(200, { bindings: store.bindingStates(device.id) });
       if (req.url === '/v1/cancel') { store.cancel(device.id); return reply(200, { ok: true }); }
@@ -196,7 +200,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const store = new PrivateStore(path); chmodSync(path, 0o600);
   if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_RELAY_URL?.startsWith('https://')) throw new Error('Production requires PUBLIC_RELAY_URL with HTTPS');
-  const relay = createPrivateRelay(store, process.env.PUBLIC_RELAY_URL ?? 'http://127.0.0.1:8787');
+  const relay = createPrivateRelay(store, process.env.PUBLIC_RELAY_URL ?? 'http://127.0.0.1:8787', {
+    clientEndpoints: process.env.RELAY_CLIENT_ENDPOINTS === undefined ? undefined : JSON.parse(process.env.RELAY_CLIENT_ENDPOINTS),
+  });
   relay.server.listen(Number(process.env.PORT ?? 8787), process.env.HOST ?? '127.0.0.1', () => console.log('DSH private relay ready'));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { void relay.close().then(() => { store.db.close(); process.exit(0); }); });
 }

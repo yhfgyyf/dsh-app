@@ -1,0 +1,15 @@
+{
+  "sourceArchive": "DSH-Relay-0.1.30-source.tar.gz",
+  "archiveSha256": "e9f03c89d41004ff171aa42f7d80bf041bd921d6c0991f58bcfdb155ea55a460",
+  "purpose": "Unmodified previous private relay used only by upgrade and rollback tests",
+  "files": [
+    {
+      "path": "private-server.js",
+      "sha256": "318e0643da6b25039769b8ca00fd0e80a2c5f659d52660d0a1dd663885bd447e"
+    },
+    {
+      "path": "private-store.js",
+      "sha256": "f4d54e23d8ff30c75f686274e5fcd177a0579bb805cf81a88f1096611ce6c969"
+    }
+  ]
+}

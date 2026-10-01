@@ -1,5 +1,6 @@
 # Replace the hostname and certificate paths with your real HTTPS entry.
-# Keep PUBLIC_RELAY_URL and Desktop Settings consistent with this host and port.
+# For a NEW installation only. An upgrade must retain existing proxy and CA files.
+# Additional phone entry IPs must route to this same backend and match their TLS certificate.
 server {
     listen 8443 ssl;
     server_name relay.example.com;

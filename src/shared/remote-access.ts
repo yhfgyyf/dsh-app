@@ -2,7 +2,8 @@
 export type RemoteRole = 'viewer' | 'control';
 export type RemoteConfig = { enabled: boolean; relay: string; name: string; background: boolean; sessionOnly: boolean };
 export type RemoteBinding = { id: string; name: string; account: string; role: RemoteRole; key: string; revoked: boolean; lastSeen?: number };
-export type RemoteCredentials = { relay: string; deviceId: string; deviceToken: string; bindings: RemoteBinding[] };
+export type RemoteRelayRoutes = { id: string; endpoints: { origin: string; network: 'private' | 'public' }[] };
+export type RemoteCredentials = { relay: string; relayRoutes?: RemoteRelayRoutes; deviceId: string; deviceToken: string; bindings: RemoteBinding[] };
 export type LocalRemoteCredentials = { deviceId: string; port?: number; bindings: RemoteBinding[] };
 export type RemoteInvitation = { id: string; key: string; expiresAt: number };
 export type RemoteRuntimeConfig = { enabled: boolean; credentials?: RemoteCredentials; local?: LocalRemoteCredentials; invitation?: RemoteInvitation };
@@ -54,7 +55,28 @@ export function parseRemoteCredentials(value: unknown): RemoteCredentials {
   const c = value as RemoteCredentials;
   const id = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(v);
   if (!c || !id(c.deviceId) || !id(c.deviceToken) || !Array.isArray(c.bindings) || c.bindings.length > 128) throw new Error('远程凭据无效。');
-  return { relay: relayOrigin(c.relay), deviceId: c.deviceId, deviceToken: c.deviceToken, bindings: parseRemoteBindings(c.bindings) };
+  const relayRoutes = parseRemoteRelayRoutes(c.relayRoutes);
+  return { relay: relayOrigin(c.relay), ...(relayRoutes ? { relayRoutes } : {}), deviceId: c.deviceId, deviceToken: c.deviceToken, bindings: parseRemoteBindings(c.bindings) };
+}
+
+export function parseRemoteRelayRoutes(value: unknown): RemoteRelayRoutes | undefined {
+  if (value === undefined) return undefined;
+  const routes = value as RemoteRelayRoutes;
+  if (!routes || typeof routes.id !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(routes.id) ||
+      !Array.isArray(routes.endpoints) || !routes.endpoints.length || routes.endpoints.length > 6) throw new Error('中继手机入口配置无效。');
+  const seen = new Set<string>();
+  const endpoints = routes.endpoints.map(entry => {
+    if (!entry || !['private', 'public'].includes(entry.network) || typeof entry.origin !== 'string' || entry.origin.length > 256) throw new Error('中继手机入口无效。');
+    const origin = relayOrigin(entry.origin);
+    if (seen.has(origin)) throw new Error('中继手机入口重复。');
+    seen.add(origin);
+    return { origin, network: entry.network };
+  });
+  return { id: routes.id, endpoints };
+}
+
+export function phoneRelayOrigin(relay: string, routes?: RemoteRelayRoutes): string {
+  return routes?.endpoints.find(e => e.network === 'private')?.origin ?? routes?.endpoints[0]?.origin ?? relay;
 }
 
 function parseRemoteBindings(bindings: RemoteBinding[]): RemoteBinding[] {

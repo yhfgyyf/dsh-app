@@ -8,11 +8,13 @@ export type Binding = { id: string; device: string; account: string; name: strin
 /** Private-deployment schema. No chat, attachments or end-to-end keys are stored here. */
 export class PrivateStore {
   db: Database.Database;
+  readonly relayId: string;
   constructor(path: string) {
     this.db = new Database(path);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS remote_metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS remote_accounts (email TEXT PRIMARY KEY, salt TEXT NOT NULL, password TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS remote_codes (hash TEXT PRIMARY KEY, account TEXT NOT NULL, expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS remote_devices (id TEXT PRIMARY KEY, account TEXT NOT NULL, name TEXT NOT NULL, token TEXT NOT NULL);
@@ -22,6 +24,8 @@ export class PrivateStore {
     if (!(this.db.prepare('PRAGMA table_info(remote_invites)').all() as { name: string }[]).some(c => c.name === 'qr')) {
       this.db.exec('ALTER TABLE remote_invites ADD COLUMN qr INTEGER NOT NULL DEFAULT 0');
     }
+    this.db.prepare("INSERT OR IGNORE INTO remote_metadata (key, value) VALUES ('relay_id', ?)").run(token());
+    this.relayId = (this.db.prepare("SELECT value FROM remote_metadata WHERE key = 'relay_id'").get() as { value: string }).value;
   }
   provision(email: string, password: string) {
     if (!/^[^\s@]+@[^\s@]+$/.test(email) || email.length > 254 || password.length < 12 || password.length > 1024) throw new Error('Account email and password (12+ characters) required');

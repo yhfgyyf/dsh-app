@@ -1,112 +1,98 @@
-# DSH 私有中继：Ubuntu 测试部署
+# DSH 私有中继：保留数据的 Ubuntu 升级
 
-此包服务于 DSH Desktop 0.1.30 与 DSH Remote Android，协议为 `dsh-desktop-remote-v1`。它包含独立中继源码、锁定依赖、编译结果和部署模板，不包含账号、数据库、密码或桌面会话。部署机需要能访问 npm 下载依赖。
+本包包含多入口映射功能：桌面可以连接服务器内网 IP，手机连接 APN/NAT IP 或互联网入口，手机按局域网 → 专网 → 互联网选择。所有入口必须到同一个中继进程。旧的局域网和单中继方式继续支持。
 
-## 1. 安装并验证
+适用现有部署：`dsh-relay.service`、程序 `/opt/dsh-relay`、环境配置 `/etc/dsh-relay.env`，Ubuntu x86_64/arm64、Node 22。本说明针对已有注册和证书的升级，不需要重新创建账号、注册码、CA 或服务用户。
 
-适用 Ubuntu x86_64 / arm64，预先安装 Node.js 22 LTS（`node --version` 应输出 `v22.x`）。使用组织批准的 Node 安装方式，不要使用 Ubuntu 旧版默认 Node。SQLite 依赖有原生组件，必须在 Ubuntu 上安装依赖，不能复制 Mac 的 `node_modules`。
+## 保留范围与回退行为
 
-在解压后的目录执行：
+- 原 `/opt/dsh-relay`、原 systemd 服务文件、原 `/etc/dsh-relay.env` 保留。
+- 不安装或重载 Nginx/Caddy，不复制证书模板，不修改 CA、证书、私钥或系统信任库。即使证书在原程序目录内，也不会被替换。
+- 使用运行中服务的实际绝对 `DB_PATH`；路径不存在、与环境配置不一致或程序布局不符时，升级前直接拒绝，不创建空数据库。
+- 新代码和 Ubuntu 上安装的依赖放在 `/opt/dsh-relay-releases/` 的独立目录，仅通过 `90-dsh-relay-release.conf` 切换 `ExecStart`。工作目录、用户、监听地址、端口和环境文件沿用原服务。
+- 切换前短暂停服务，备份 SQLite 与现存 WAL/SHM 到 `/var/backups/dsh-relay/`，再用备份副本验证新 schema 保留已有账号、注册码、设备、邀请和绑定。此次迁移只新增中继标识元数据，旧代码仍可读取数据库。
+- 新进程、数据库标识或 `/health` 检查失败时，自动恢复原启动入口并检查旧服务。成功升级后仍可以手动回退。
+- **回退只切换代码，不自动用旧快照覆盖当前数据库。** 升级后新增的注册、绑定及解绑状态因此不会被回退抹掉。数据库备份用于灾难恢复，不能直接当作日常回退步骤覆盖。
+
+升级期间不要同时运行管理命令、手工改配置或启动第二个中继实例。终止信号会进入回退；断电或强制 `kill -9` 后，使用已经写入磁盘的回退记录恢复。
+
+## 1. 上传和准备
+
+把 tar 包与同目录的 `SHA256SUMS` 上传到服务器。先以普通用户执行，旧服务可继续运行：
 
 ```sh
-sudo apt-get update
-sudo apt-get install -y build-essential python3 nginx
+sha256sum -c SHA256SUMS
+tar -xzf DSH-Relay-{{RELAY_VERSION}}-source.tar.gz
+cd dsh-relay-{{RELAY_VERSION}}
+node --version
 npm ci --no-audit --no-fund
 npm run build
 npm test
 ```
 
-测试只启动回环服务和内存数据库，检查注册、扫码认领、手机解绑、撤销同步、权限以及未批准/离线访问拒绝。完整手机/桌面加密和会话测试已在主项目进行，`PACKAGE-MANIFEST.json` 记录来源；此包未在你的 Ubuntu 服务器运行过。
+Node 应为 `v22.x`。`better-sqlite3` 有原生组件，必须在目标 Ubuntu 安装依赖；不要复制 Mac 的 `node_modules`。部署机需要访问 npm，或使用你现有的内部 npm 镜像。若需要从源码编译原生组件，沿用服务器已有的 Python 3 / C++ 构建工具。
 
-## 2. 安装到固定目录
+包内测试使用临时目录、回环端口和独立数据库，不接触 `/etc`、`/opt` 或正式数据库。升级测试使用旧版 0.1.30 的真实中继代码和模拟 systemd 控制层，覆盖升级、故意启动/健康失败、回退和注册保留；它不等于服务器实际 systemd 验收。
 
-以下按首次安装配置；已有同名服务或目录时先备份并比较配置。`npm ci` 和构建应以普通用户完成。
+## 2. 可选：增加手机入口
 
-```sh
-sudo useradd --system --user-group --home-dir /var/lib/dsh-relay --shell /usr/sbin/nologin dsh-relay
-sudo install -d -m 755 /opt/dsh-relay
-sudo cp -a . /opt/dsh-relay/
-sudo chown -R root:root /opt/dsh-relay
-sudo install -d -o dsh-relay -g dsh-relay -m 700 /var/lib/dsh-relay
-sudo install -m 640 -o root -g dsh-relay deploy/relay.env.example /etc/dsh-relay.env
-sudo install -m 644 deploy/dsh-relay.service /etc/systemd/system/dsh-relay.service
-command -v node
-```
-
-把服务文件的 `ExecStart=/usr/bin/node` 改成实际 Node 22 的绝对路径。Node 必须位于服务账号可读、可执行的系统目录；模板的 `ProtectHome=true` 不允许使用其他用户家目录内的 nvm 路径。
-
-编辑 `/etc/dsh-relay.env`：
+先完成代码升级、继续沿用原地址也可以。若本次就需要 APN/NAT 多入口，只在现有 `/etc/dsh-relay.env` 中增加以下变量，保留原有 `DB_PATH`、`HOST`、`PORT`、`PUBLIC_RELAY_URL` 和其他配置：
 
 ```ini
-NODE_ENV=production
-HOST=127.0.0.1
-PORT=8787
-DB_PATH=/var/lib/dsh-relay/private-relay.sqlite
-PUBLIC_RELAY_URL=https://relay.example.com:8443
+RELAY_CLIENT_ENDPOINTS='[{"origin":"https://10.80.0.9:8443","network":"private"},{"origin":"https://203.0.113.9:9443","network":"public"}]'
 ```
 
-`HOST`/`PORT` 是内部监听；`PUBLIC_RELAY_URL` 是手机和电脑使用的公网或专网 HTTPS 入口。IP、域名和外部端口均可改，内部与外部端口无需相同。外部入口必须提供匹配地址、客户端信任的证书。
+上面的 IP 都是示例，必须替换；没有互联网入口时只保留 private 项。最多 6 项，不写 URL 路径、查询参数或用户名密码。改动这一个变量后，继续执行下节升级；不要先重启旧服务或重装模板文件。
 
-Nginx 与中继同机时保持 `127.0.0.1:8787`。若反向代理位于另一台服务器，改为中继机器的内网 IP，并将代理的 `proxy_pass` 改成该内部地址，内部端口只向代理开放。
+各入口须转发 `/health`、`/v1/*` 和 WebSocket Upgrade。使用 IP 访问时，现有 TLS 证书须包含该入口的 IP SAN，手机和电脑须信任其签发 CA。NAT 不会改写证书；本包不会替你重签或覆盖证书，也不会创建 APN 路由或防火墙规则。
 
-## 3. HTTPS 入口
+## 3. 检查与升级
 
-准备自己的证书，将 `deploy/nginx.conf.example` 的域名、端口和证书路径替换后安装到 Nginx。示例监听 8443，并支持 WebSocket。若网关还做端口映射，`PUBLIC_RELAY_URL` 必须填写客户端实际访问的外部端口。
+以下假定服务的 Node 22 为 `/usr/bin/node`；如实际路径不同，使用原服务 `ExecStart` 中的 Node 绝对路径。不要改用另一套 Node 运行升级脚本。
 
 ```sh
-sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/dsh-relay
-# 先编辑 /etc/nginx/sites-available/dsh-relay 的地址和证书路径。
-sudo ln -s /etc/nginx/sites-available/dsh-relay /etc/nginx/sites-enabled/dsh-relay
-sudo nginx -t
-sudo systemctl reload nginx
-sudo systemctl daemon-reload
-sudo systemctl enable --now dsh-relay
-curl --fail http://127.0.0.1:8787/health
-curl --fail https://relay.example.com:8443/health
+systemctl show dsh-relay.service -p ExecStart --value
+sudo /usr/bin/node deploy/upgrade.mjs check
+sudo /usr/bin/node deploy/upgrade.mjs apply
 ```
 
-`/health` 应返回 `ok: true` 和上述协议名。公网/专网路由、防火墙及网关映射需允许访问所选 HTTPS 端口。无需开放电脑端口。
+`check` 不停服务、不切换代码。它校验包清单、Node/原生模块、现有运行进程、配置和健康接口。`apply` 会再次检查，先在新目录准备代码，再停服务备份和切换。
 
-## 4. 创建账号和一次性设备注册码
+开始停服务之前会打印：
 
-在 Bash 中执行，把 `/usr/bin/node` 改成服务使用的 Node 路径。账号是管理员手动创建的标识，不会发送验证邮件。密码至少 12 位；注册码有效 10 分钟。
+- `Backup and recovery journal: ...`：本次备份目录。
+- `Rollback: sudo ...`：即使原解压目录被移走仍可执行的完整回退命令。
+
+请保存这两行。成功时最后输出 `UPGRADE_OK`；失败但已恢复旧服务时输出 `ROLLBACK_OK`，升级命令仍返回非零退出码。若出现 `AUTOMATIC_ROLLBACK_FAILED`，保留所有目录，根据备份记录和服务日志处理，不要清空数据库或重新注册。
 
 ```sh
-sudo -v
-read -rs -p '新账号密码（至少 12 位）: ' remote_password
-printf '\n'
-printf '%s' "$remote_password" | sudo -u dsh-relay /usr/bin/node --env-file=/etc/dsh-relay.env /opt/dsh-relay/dist/private-admin.js account operator@example.com
-unset remote_password
-sudo -u dsh-relay /usr/bin/node --env-file=/etc/dsh-relay.env /opt/dsh-relay/dist/private-admin.js registration operator@example.com
+sudo systemctl status dsh-relay.service --no-pager
+sudo journalctl -u dsh-relay.service -n 80 --no-pager
 ```
 
-将最后一条命令输出的注册码填入桌面 App。此包没有公开自助注册接口，也没有上游公共账号服务。
+然后用原来的 HTTPS 地址和既有 CA 检查 `/health`，并从已注册桌面、已绑定手机验证连接。脚本自动验证原监听地址的后端 HTTP 健康接口；外部 TLS、NAT 和 APN 需要在实际网络验收。
 
-## 5. 桌面与 Android 测试
+如果只升级服务器代码，原绑定无需重注册。要使用新增多个入口，需要桌面和 Android 同时包含此功能，再刷新二维码绑定；旧手机已有绑定不会自动获得后来添加的入口列表。
 
-1. 安装新版桌面与 Android 0.12.3-dsh.2 调试 APK。Android 包名为 `io.github.yhfgyyf.dshremote.debug`，需要 Android 8.0 及以上。
-2. 桌面打开“设置 → 管理连接”，填写与 `PUBLIC_RELAY_URL` 相同的 HTTPS 地址和一次性注册码，点击“注册电脑”。
-3. 点击“扫码绑定手机”；二维码有效 120 秒，只能使用一次。手机扫码后直接进入会话，不再输入账号密码或选择连接方式。
-4. 同一局域网优先使用独立加密直连；其他网络自动使用中继。纯局域网扫码不要求注册中继。
-5. 在手机创建会话、发送消息，确认桌面能看到同一会话；从桌面改名后检查手机同步。
-6. 分别验证桌面与手机“解绑”。撤销先在接收到请求的一端生效，离线时保留待同步记录；电脑恢复中继连接后也会撤销对应的 LAN 权限。
-7. 默认关闭窗口继续后台运行；从应用菜单“退出”会停止 Host。桌面“解除注册”保留局域网绑定，撤销手机全部访问请用“解绑”。
+## 4. 手动回退
 
-两端需要可访问二维码中的同一 HTTPS 中继域名和端口，内外网可配合分离 DNS。电脑局域网地址改变后，纯 LAN 绑定可能需要重新扫码。
-
-升级已有中继前停服务，备份数据库及 WAL/SHM 和原程序，再替换本包。首次启动会增加邀请类型字段，不移除已有账号、设备和绑定。旧邀请仍要求原有账号登录；只有新版桌面发出的扫码邀请允许免登录认领。手机主动解绑依赖本包新增 API；桌面更新不会自动升级服务器。
-
-Android 调试包不作为应用商店正式发行包；扫码相机、Android Keystore 和实际网络需真机验收。本包未在用户的 Ubuntu 服务上部署。
-
-## 6. 排查与停止
+优先执行升级时打印的完整 `Rollback:` 命令。也可以从本包目录执行，把下面最后一项替换成**本次**打印的目录：
 
 ```sh
-sudo systemctl status dsh-relay
-sudo journalctl -u dsh-relay -n 100 --no-pager
-sudo ss -lntp | rg '8787|8443'
-sudo systemctl stop dsh-relay
+sudo /usr/bin/node deploy/upgrade.mjs rollback /var/backups/dsh-relay/本次备份目录
 ```
 
-无 `rg` 时可改用 `grep -E`。管理页显示中继注册和连接状态。数据库位于 `DB_PATH`；备份时停服务后复制数据库及残留 WAL/SHM 文件，恢复时保留服务账号权限。不要删除数据目录来排查连接问题。
+回退会短暂停服务、恢复原启动入口、重新启动并检查旧代码。原环境配置、证书和当前数据库保持原状。如果后来又升级过一次，应先回退最近一次；脚本会拒绝用旧记录覆盖更新的部署。
 
-中继只保存账号、设备和绑定元数据；会话内容通过手机与桌面之间的加密隧道传输，仍保存在电脑上的 DSH。当前 PSK 加密协议不提供前向保密。
+回到不支持多入口的旧服务后，多入口功能暂停；原单中继/LAN 功能仍按原版本工作。新产生的注册/绑定记录保留，之后重新升级即可继续使用。环境配置不会自动被旧备份覆盖；若你还需要撤回新增的入口配置，只修改对应变量并与备份对照。
+
+备份目录权限为 700，包含：原环境配置、原 systemd 配置、原入口信息、数据库与 WAL/SHM、校验哈希、迁移副本和回退状态。它包含认证数据，应保留在服务器受限目录。不要删除旧程序目录、releases 或备份目录，直到完成验证和保留期。
+
+## 5. 验收清单
+
+1. 原 HTTPS 地址仍使用既有证书，客户端无需重新安装 CA。
+2. 原账号可以继续使用；已注册桌面能上线，原绑定手机可访问。
+3. 使用多入口时，桌面内网地址和手机 APN/NAT 地址访问同一实例；LAN 优先，专网失败后可使用配置的互联网入口。
+4. 在维护窗口需要回退时，执行打印的回退命令；检查旧服务健康以及原注册仍在。
+
+参考：[systemd 的服务启动与 ExecStart 配置](https://github.com/systemd/systemd/blob/main/man/systemd.service.xml)、[SQLite WAL 备份边界](https://sqlite.org/wal.html#the_wal_file)。WAL 属于数据库持久状态，不能在备份中遗漏或单独随意删除。

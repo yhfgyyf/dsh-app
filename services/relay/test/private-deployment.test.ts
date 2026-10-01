@@ -14,7 +14,7 @@ test('standalone deployment: health, registration, same-account pairing and appr
     return { status: response.status, body: await response.json() as any };
   };
   try {
-    assert.deepEqual(await (await fetch(origin + '/health')).json(), { protocol: 'dsh-desktop-remote-v1', ok: true });
+    assert.deepEqual(await (await fetch(origin + '/health')).json(), { protocol: 'dsh-desktop-remote-v1', ok: true, relayId: store.relayId });
     store.provision('deployment@example.test', 'local-test-password');
     const code = store.registration('deployment@example.test');
     const device = await post('register', { code, name: 'Test desktop' });

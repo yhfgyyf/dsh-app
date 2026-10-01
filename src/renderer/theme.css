@@ -19,6 +19,7 @@ html[data-dsh-desktop] .pI_x6G_frame { border-top: 1px solid var(--dsw-alias-bor
 .desktop-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; font-size: 13px; }
 .desktop-settings-row p { margin: 6px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; overflow-wrap: anywhere; }
 .desktop-settings-row button { flex: none; background: var(--dsw-alias-bg-layer-1); border: 1px solid var(--dsw-alias-border-l3); color: inherit; padding: 7px 12px; border-radius: 7px; cursor: pointer; }
+.desktop-general-settings > div { margin: 0; padding: 16px 0; border-top: .5px solid var(--dsw-alias-border-l2); }
 .desktop-boot-error { position: fixed; z-index: 10000; inset: 60px 20px auto; background: #fff4df; color: #533e18; padding: 18px; border-radius: 10px; }
 .desktop-boot-error button { margin-left: 16px; }
 .desktop-local-open { position: relative; }

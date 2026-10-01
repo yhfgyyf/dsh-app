@@ -34,9 +34,11 @@ internal fun remoteObject(vararg pairs: Pair<String, Any?>): JsonObject = buildJ
 data class CentralCredential(
     val bindingId: String, val bindingToken: String, val key: String,
     val computerId: String? = null, val lanOrigins: List<String> = emptyList(), val relay: String? = null,
+    val relayRoutes: RelayRoutes? = null,
 ) {
     fun encode(): String = remoteObject("bindingId" to bindingId, "bindingToken" to bindingToken, "key" to key,
-        "computerId" to computerId, "lanOrigins" to JsonArray(lanOrigins.map(::JsonPrimitive)), "relay" to relay).toString()
+        "computerId" to computerId, "lanOrigins" to JsonArray(lanOrigins.map(::JsonPrimitive)), "relay" to relay,
+        "relayRoutes" to relayRoutes?.encode()).toString()
     companion object { fun decode(value: String): CentralCredential {
         val o = Json.parseToJsonElement(value).jsonObject
         CentralCrypto.decode(o.text("key"), 32)
@@ -46,9 +48,11 @@ data class CentralCredential(
         val origins = o["lanOrigins"]?.jsonArray?.map { lanOrigin(it.jsonPrimitive.content) } ?: emptyList()
         require(origins.size <= 16)
         val relay = o["relay"]?.jsonPrimitive?.contentOrNull?.let(::centralOrigin)
+        val routes = RelayRoutes.decode(o["relayRoutes"])
+        require(routes == null || routes.endpoints.any { it.origin == relay })
         val token = o.text("bindingToken")
         require(token.isEmpty() || remoteId(token))
-        return CentralCredential(o.text("bindingId"), token, o.text("key"), computerId, origins, relay)
+        return CentralCredential(o.text("bindingId"), token, o.text("key"), computerId, origins, relay, routes)
     } }
 }
 
@@ -59,6 +63,7 @@ data class CentralPairCode(
     val claimSecret: String, val key: String, val expiresAt: Long,
     val computerId: String = deviceId, val lanOrigins: List<String> = emptyList(),
     val localInviteId: String? = null, val version: Int = 1,
+    val relayRoutes: RelayRoutes? = null,
 ) {
     companion object {
         fun parse(value: String): CentralPairCode? = runCatching {
@@ -81,9 +86,12 @@ data class CentralPairCode(
             require(localInvite == null || remoteId(localInvite))
             require(origins.isEmpty() || localInvite != null)
             if (relay != null) require(listOf("deviceId", "inviteId", "claimSecret").all { remoteId(relay.text(it)) })
-            CentralPairCode(relay?.let { centralOrigin(it.text("origin")) } ?: "", relay?.text("deviceId") ?: "", name,
+            val origin = relay?.let { centralOrigin(it.text("origin")) } ?: ""
+            val routes = RelayRoutes.decode(relay?.get("routes"))
+            require(routes == null || routes.endpoints.any { it.origin == origin })
+            CentralPairCode(origin, relay?.text("deviceId") ?: "", name,
                 relay?.text("inviteId") ?: "", relay?.text("claimSecret") ?: "", o.text("key"), expires,
-                computer, origins, localInvite, version)
+                computer, origins, localInvite, version, routes)
         }.getOrNull()
     }
 }
@@ -118,11 +126,12 @@ fun centralOrigin(value: String): String {
     require(u.isHttps || u.host in setOf("localhost", "127.0.0.1", "::1")) { "HTTPS required" }
     return u.toString().removeSuffix("/")
 }
-fun centralPost(http: OkHttpClient, origin: String, path: String, body: JsonObject, token: String? = null): JsonObject {
+fun centralPost(http: OkHttpClient, origin: String, path: String, body: JsonObject, token: String? = null, timeoutMs: Long = 15000): JsonObject {
     val request = Request.Builder().url(centralOrigin(origin) + "/v1/" + path)
         .post(body.toString().toRequestBody("application/json".toMediaType()))
     if (token != null) request.header("Authorization", "Bearer $token")
-    http.newBuilder().followRedirects(false).followSslRedirects(false).callTimeout(15, TimeUnit.SECONDS).build().newCall(request.build()).execute().use {
+    http.newBuilder().followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false)
+        .callTimeout(timeoutMs, TimeUnit.MILLISECONDS).build().newCall(request.build()).execute().use {
         if (!it.isSuccessful) throw RpcTransportException(it.code, "Relay request failed (${it.code})")
         val bytes = it.body?.byteStream()?.remoteReadLimited(65537) ?: throw IOException("Empty relay response")
         require(bytes.size <= 65536)
@@ -210,7 +219,7 @@ private class RemoteSocket(
     override fun close() { closed = true; socket?.cancel(); socket = null; failure = IOException("Remote closed"); ready.countDown() }
 }
 
-/** Automatically chooses a reachable local address before the registered relay. */
+/** Each new connection tries LAN, private relay aliases, then public relay aliases. */
 internal class CentralTunnel(
     private val http: OkHttpClient, private val origin: String, private val credential: CentralCredential,
     private val onFrame: ((JsonObject) -> Unit)? = null, private val onClosed: ((Throwable?) -> Unit)? = null,
@@ -219,22 +228,36 @@ internal class CentralTunnel(
     @Volatile private var closed = false
     fun connect() {
         var failure: Exception = IOException("Computer is not on this network")
+        val lanDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(4)
         for (lan in credential.lanOrigins.filter(::onLocalNetwork)) {
             if (credential.computerId == null) break
+            val timeout = if (credential.relayRoutes == null) 1800 else minOf(1800, TimeUnit.NANOSECONDS.toMillis(lanDeadline - System.nanoTime()))
+            if (timeout <= 0) break
             val attempt = RemoteSocket(http, lan.replaceFirst("http", "ws") + "/v1/lan",
                 remoteObject("type" to "auth", "computerId" to credential.computerId, "bindingId" to credential.bindingId), credential.key,
                 onFrame = onFrame, onClosed = onClosed)
             active = attempt
-            try { check(!closed); attempt.connect(1800); return }
+            try { check(!closed); attempt.connect(timeout); return }
             catch (e: Exception) { failure = e; attempt.close(); if (closed) throw e }
         }
         val relay = credential.relay ?: origin.takeIf { credential.computerId == null }
-        if (relay == null || credential.bindingToken.isEmpty()) throw failure
-        val ticket = centralPost(http, relay, "ticket", remoteObject("bindingId" to credential.bindingId), credential.bindingToken)
-        val attempt = RemoteSocket(http, centralOrigin(relay).replaceFirst("http", "ws") + "/v1/tunnel",
-            remoteObject("type" to "auth", "ticket" to ticket.text("ticket")), credential.key, ticket.text("accessSessionId"), onFrame, onClosed)
-        active = attempt
-        try { check(!closed); attempt.connect(15000) } catch (e: Exception) { attempt.close(); throw e }
+        if (credential.bindingToken.isEmpty()) throw failure
+        for (candidate in relayOrigins(relay, credential.relayRoutes)) {
+            try {
+                check(!closed)
+                val deadline = relayDeadline()
+                checkRelayIdentity(http, candidate, credential.relayRoutes)
+                val ticket = centralPost(http, candidate, "ticket", remoteObject("bindingId" to credential.bindingId), credential.bindingToken,
+                    if (credential.relayRoutes == null) 15000 else relayTimeLeft(deadline))
+                check(!closed)
+                val attempt = RemoteSocket(http, centralOrigin(candidate).replaceFirst("http", "ws") + "/v1/tunnel",
+                    remoteObject("type" to "auth", "ticket" to ticket.text("ticket")), credential.key, ticket.text("accessSessionId"), onFrame, onClosed)
+                active = attempt
+                attempt.connect(if (credential.relayRoutes == null) 15000 else relayTimeLeft(deadline))
+                return
+            } catch (e: Exception) { failure = e; active?.close(); if (closed) throw e }
+        }
+        throw failure
     }
     fun send(value: JsonObject) = checkNotNull(active).send(value)
     fun receive(timeoutSeconds: Long = 120): JsonObject = checkNotNull(active).receive(timeoutSeconds)
@@ -255,7 +278,7 @@ suspend fun pairDesktop(http: OkHttpClient, qr: CentralPairCode, name: String): 
                     val answer = t.receive(30); check(answer.text("type") == "paired")
                     CentralCredential.decode(answer.getValue("credential").toString()).also {
                         require(it.computerId == qr.computerId && it.key == qr.key)
-                        require(it.relay == null || it.relay == qr.relay)
+                        require(it.relay == null || (it.relay == qr.relay && it.relayRoutes == qr.relayRoutes))
                     }
                 }
             }
@@ -263,21 +286,28 @@ suspend fun pairDesktop(http: OkHttpClient, qr: CentralPairCode, name: String): 
         result.getOrNull()?.let { return it }
     }
     require(qr.relay.isNotEmpty()) { "Connect the phone and computer to the same Wi-Fi and refresh the QR code" }
-    val result = withContext(Dispatchers.IO) { centralPost(http, qr.relay, "claim-qr",
+    // Probe without credentials, then claim once. A lost receipt must not replay the one-use claim at another entry.
+    val relay = withContext(Dispatchers.IO) {
+        relayOrigins(qr.relay, qr.relayRoutes).firstOrNull { candidate ->
+            runCatching { checkRelayIdentity(http, candidate, qr.relayRoutes) }.isSuccess
+        } ?: throw IOException("No reachable relay matches the scanned QR")
+    }
+    val result = withContext(Dispatchers.IO) { centralPost(http, relay, "claim-qr",
         remoteObject("inviteId" to qr.inviteId, "claimSecret" to qr.claimSecret, "name" to name)) }
     require(result.text("deviceId") == qr.deviceId)
     val credential = CentralCredential.decode(remoteObject("bindingId" to result.text("bindingId"), "bindingToken" to result.text("bindingToken"),
-        "key" to qr.key, "computerId" to qr.computerId, "lanOrigins" to JsonArray(qr.lanOrigins.map(::JsonPrimitive)), "relay" to qr.relay).toString())
+        "key" to qr.key, "computerId" to qr.computerId, "lanOrigins" to JsonArray(qr.lanOrigins.map(::JsonPrimitive)), "relay" to qr.relay,
+        "relayRoutes" to qr.relayRoutes?.encode()).toString())
     try {
         while (System.currentTimeMillis() < qr.expiresAt) {
-            val state = withContext(Dispatchers.IO) { centralPost(http, qr.relay, "status", remoteObject("bindingId" to credential.bindingId), credential.bindingToken) }
+            val state = withContext(Dispatchers.IO) { bindingPost(http, qr.relay, qr.relayRoutes, "status", remoteObject("bindingId" to credential.bindingId), credential.bindingToken) }
             if (state.text("state") == "approved") return credential
             check(state.text("state") == "pending") { "Pairing was revoked" }
             delay(750)
         }
         throw IOException("Pairing timed out")
     } catch (e: Exception) {
-        withContext(Dispatchers.IO) { runCatching { centralPost(http, qr.relay, "unbind", remoteObject("bindingId" to credential.bindingId), credential.bindingToken) } }
+        withContext(Dispatchers.IO) { runCatching { bindingPost(http, qr.relay, qr.relayRoutes, "unbind", remoteObject("bindingId" to credential.bindingId), credential.bindingToken) } }
         throw e
     }
 }
@@ -285,7 +315,7 @@ suspend fun pairDesktop(http: OkHttpClient, qr: CentralPairCode, name: String): 
 /** True means the computer or its relay accepted revocation; false must remain queued offline. */
 fun unbindDesktop(http: OkHttpClient, origin: String, credential: CentralCredential): Boolean {
     if (credential.computerId != null && credential.lanOrigins.any(::onLocalNetwork)) {
-        val local = credential.copy(bindingToken = "", relay = null)
+        val local = credential.copy(bindingToken = "", relay = null, relayRoutes = null)
         if (runCatching {
             CentralTunnel(http, "", local).use { t ->
                 t.connect(); t.send(remoteObject("type" to "binding_unbind"))
@@ -294,7 +324,7 @@ fun unbindDesktop(http: OkHttpClient, origin: String, credential: CentralCredent
         }.isSuccess) return true
     }
     val relay = credential.relay ?: origin.takeIf { credential.computerId == null } ?: return false
-    return runCatching { centralPost(http, relay, "unbind", remoteObject("bindingId" to credential.bindingId), credential.bindingToken); true }.getOrDefault(false)
+    return runCatching { bindingPost(http, relay, credential.relayRoutes, "unbind", remoteObject("bindingId" to credential.bindingId), credential.bindingToken); true }.getOrDefault(false)
 }
 
 class CentralRpcTransport(private val origin: String, private val http: OkHttpClient, private val credential: CentralCredential) : RpcTransport {
@@ -383,7 +413,7 @@ class CentralWsChannel(origin: String, http: OkHttpClient, credential: CentralCr
     override fun close() { stopped = true; tunnel.close() }
 }
 
-private fun InputStream.remoteReadLimited(limit: Int): ByteArray {
+internal fun InputStream.remoteReadLimited(limit: Int): ByteArray {
     val out = ByteArrayOutputStream(); val chunk = ByteArray(8192)
     while (out.size() < limit) { val count = read(chunk, 0, minOf(chunk.size, limit - out.size())); if (count < 0) break; if (count > 0) out.write(chunk, 0, count) }
     return out.toByteArray()

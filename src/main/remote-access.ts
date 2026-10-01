@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
 import QRCode from 'qrcode/lib/server.js';
-import { defaultRemoteConfig, parseRemoteConfig, parseRemoteCredentials, type LocalRemoteAction, type LocalRemoteCredentials, type RemoteBinding, type RemoteCredentials, type RemoteState, type RemoteAction, type RemoteRuntimeConfig, type RemoteRuntimeState } from '../shared/remote-access.ts';
+import { defaultRemoteConfig, parseRemoteConfig, parseRemoteCredentials, parseRemoteRelayRoutes, phoneRelayOrigin, type RemoteRelayRoutes, type LocalRemoteAction, type LocalRemoteCredentials, type RemoteBinding, type RemoteCredentials, type RemoteState, type RemoteAction, type RemoteRuntimeConfig, type RemoteRuntimeState } from '../shared/remote-access.ts';
 import { RemoteCredentialsFile } from './remote-access-credentials.ts';
 
 export class DesktopRemoteAccess {
@@ -12,7 +12,7 @@ export class DesktopRemoteAccess {
   private status: RemoteState['status'] = 'disabled';
   private error?: string;
   private restoreError?: string;
-  private invitation?: { id: string; inviteId?: string; key: string; expiresAt: number; qr: string };
+  private invitation?: { id: string; inviteId?: string; key: string; expiresAt: number; qr: string; relay?: { origin: string; routes?: RemoteRelayRoutes } };
   private pending: (RemoteState['pending'][number] & { invite: string })[] = [];
   private timer?: ReturnType<typeof setInterval>;
   private polling = false;
@@ -142,7 +142,7 @@ export class DesktopRemoteAccess {
           typeof action.name !== 'string' || !action.name.trim() || action.name.length > 80) throw new Error('配对已失效。');
       if (this.local.bindings.filter(b => !b.revoked).length >= 32) throw new Error('手机绑定数量已达上限。');
       this.invitation = undefined; this.pending = [];
-      const response = this.credentials ? await this.api('bind', { name: action.name }).catch(() => undefined) : undefined;
+      const response = this.credentials && invite.relay ? await this.api('bind', { name: action.name }).catch(() => undefined) : undefined;
       const validId = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(value);
       const relay = response && validId(response.bindingId) && validId(response.bindingToken) ? response : undefined;
       const binding: RemoteBinding = { id: relay?.bindingId ?? randomBytes(32).toString('base64url'), name: action.name,
@@ -159,7 +159,8 @@ export class DesktopRemoteAccess {
       }
       if (this.credentials) await this.api('cancel', {}).catch(() => {});
       return { bindingId: binding.id, bindingToken: relay?.bindingToken ?? '', key: binding.key, computerId: this.local.deviceId,
-        lanOrigins: [...this.lan.origins], ...(relay ? { relay: this.config.relay } : {}) };
+        lanOrigins: [...this.lan.origins], ...(relay ? { relay: invite.relay!.origin,
+          ...(invite.relay!.routes ? { relayRoutes: invite.relay!.routes } : {}) } : {}) };
     });
   }
   act(action: RemoteAction): Promise<RemoteState> {
@@ -179,7 +180,7 @@ export class DesktopRemoteAccess {
         if (!this.file.available()) this.config.sessionOnly = true;
         if (typeof action.code !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(action.code.trim())) throw new Error('注册码无效。');
         const result = await this.api('register', { code: action.code.trim(), name: this.config.name });
-        this.credentials = parseRemoteCredentials({ relay: this.config.relay, deviceId: result.deviceId, deviceToken: result.deviceToken, bindings: [] });
+        this.credentials = parseRemoteCredentials({ relay: this.config.relay, relayRoutes: result.relayRoutes, deviceId: result.deviceId, deviceToken: result.deviceToken, bindings: [] });
         this.config.enabled = true;
         await this.save(); await this.apply();
       } else if (action.type === 'pair') {
@@ -188,12 +189,19 @@ export class DesktopRemoteAccess {
         await this.save(); await this.apply();
         const result = this.credentials ? await this.api('invite', { qr: true }).catch(() => undefined) : undefined;
         if (!this.lan.origins.length && !result) throw new Error('请连接局域网，或先注册可用的中继。');
+        let relay: { origin: string; routes?: RemoteRelayRoutes } | undefined;
+        if (result) {
+          const routes = parseRemoteRelayRoutes(result.relayRoutes);
+          this.credentials!.relayRoutes = routes;
+          await this.save();
+          relay = { origin: phoneRelayOrigin(this.config.relay, routes), ...(routes ? { routes } : {}) };
+        }
         const id = randomBytes(24).toString('base64url'), key = randomBytes(32).toString('base64url');
         const expiresAt = Math.min(Date.now() + 120000, result?.expiresAt ?? Infinity);
         const payload = JSON.stringify({ kind: 'dsh-desktop-pair', version: 2, computerId: this.local.deviceId, name: this.config.name, key, expiresAt,
-          lan: { origins: this.lan.origins, inviteId: id }, ...(result ? { relay: { origin: this.config.relay, deviceId: this.credentials!.deviceId,
+          lan: { origins: this.lan.origins, inviteId: id }, ...(result ? { relay: { ...relay, deviceId: this.credentials!.deviceId,
             inviteId: result.inviteId, claimSecret: result.claimSecret } } : {}) });
-        this.invitation = { id, inviteId: result?.inviteId, key, expiresAt, qr: await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', width: 340 }) }; this.pending = [];
+        this.invitation = { id, inviteId: result?.inviteId, key, expiresAt, relay, qr: await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', width: 340 }) }; this.pending = [];
         await this.apply();
       } else if (action.type === 'cancel-pair') {
         this.invitation = undefined; this.pending = []; await this.apply(); if (this.credentials) await this.api('cancel', {});

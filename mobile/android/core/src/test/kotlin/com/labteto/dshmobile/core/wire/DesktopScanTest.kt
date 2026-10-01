@@ -114,10 +114,11 @@ class DesktopScanTest {
             assertTrue(api.terminalList(id).checked().any { it.id == terminal.id && it.title == "Phone terminal" })
         } finally { api.terminalClose(id, terminal.id).checked(); mux.close() }
     }
-    private fun fixture(relay: Boolean, block: suspend (JsonObject, OkHttpClient) -> Unit) = runBlocking {
+    private fun fixture(relay: Boolean, mappings: Boolean = false, block: suspend (JsonObject, OkHttpClient) -> Unit) = runBlocking {
         val root = generateSequence(File(System.getProperty("user.dir"))) { it.parentFile }.first { File(it, "services/relay/test/scan-fixture.ts").exists() }
         val args = mutableListOf("node", "services/relay/node_modules/tsx/dist/cli.mjs", "services/relay/test/scan-fixture.ts")
         if (relay) args.add("--relay")
+        if (mappings) args.add("--mappings")
         val process = ProcessBuilder(args).directory(root).redirectError(ProcessBuilder.Redirect.INHERIT).start()
         val http = OkHttpClient()
         try {
@@ -127,6 +128,95 @@ class DesktopScanTest {
             http.connectionPool.evictAll(); http.dispatcher.executorService.shutdown(); process.outputStream.close()
             if (!process.waitFor(15, TimeUnit.SECONDS)) process.destroyForcibly()
         }
+    }
+
+    @Test fun mappedRelayPreservesLanPriorityAndFallsBackAfterPrivateNetworkFailure() = fixture(true, mappings = true) { f, http ->
+        val qr = checkNotNull(CentralPairCode.parse(f.getValue("qr").toString()))
+        assertNotNull(qr.relayRoutes)
+        assertNotEquals("The phone must not inherit the desktop's internal address", f.text("origin"), qr.relay)
+        fun control(vararg command: Pair<String, Any?>) = centralPost(http, f.text("control"), "control", remoteObject(*command))
+        fun requests(stats: JsonObject, network: String, path: String): Int =
+            stats.getValue(network).jsonObject.getValue("requests").jsonObject[path]?.jsonPrimitive?.int ?: 0
+
+        val credential = pairDesktop(http, qr, "Android on multiple networks")
+        assertEquals(qr.relayRoutes, credential.relayRoutes)
+        assertEquals(credential, CentralCredential.decode(credential.encode()))
+        assertTrue(DshApiClient(CentralRpcTransport("", http, credential)).sessionList() is RpcResult.Ok)
+        val lanStats = control()
+        assertEquals(0, requests(lanStats, "private", "/health"))
+        assertEquals(0, requests(lanStats, "public", "/health"))
+
+        val remote = credential.copy(lanOrigins = emptyList())
+        val api = DshApiClient(CentralRpcTransport("", http, remote))
+        assertTrue(api.sessionList() is RpcResult.Ok)
+        val privateStats = control()
+        assertTrue(requests(privateStats, "private", "/v1/ticket") > 0)
+        assertEquals(0, requests(privateStats, "public", "/health"))
+
+        // HTTPS/API reachability alone is insufficient: the private WebSocket may be blocked by the NAT.
+        control("private" to "no-websocket")
+        assertTrue(api.sessionList() is RpcResult.Ok)
+        assertTrue(requests(control(), "public", "/v1/ticket") > 0)
+        control("private" to "offline")
+        val ready = CountDownLatch(1)
+        val mux = CentralWsChannel("", http, remote, object : WsChannelSink {
+            override fun onOpen() { ready.countDown() }
+            override fun onMessage(text: String) {}
+            override fun onClosed(cause: Throwable?) {}
+        })
+        try { mux.start(); assertTrue(ready.await(20, TimeUnit.SECONDS)) } finally { mux.close() }
+
+        // A newly established connection checks the preferred private entry again when it returns.
+        val publicBefore = requests(control("private" to "online"), "public", "/v1/ticket")
+        assertTrue(api.sessionList() is RpcResult.Ok)
+        assertEquals(publicBefore, requests(control(), "public", "/v1/ticket"))
+        control("private" to "offline")
+        assertTrue(unbindDesktop(http, "", remote))
+        assertTrue(requests(control(), "public", "/v1/unbind") > 0)
+        assertTrue(api.sessionList() is RpcResult.Err)
+        var revoked = false
+        repeat(40) {
+            if (!revoked) {
+                revoked = DshApiClient(CentralRpcTransport("", http, credential)).sessionList() is RpcResult.Err
+                if (!revoked) delay(100)
+            }
+        }
+        assertTrue("Revocation through the public entry must also remove LAN access", revoked)
+    }
+
+    @Test fun apnPairingReachesTheSameDesktopThroughADifferentAddress() = fixture(true, mappings = true) { f, http ->
+        val qr = checkNotNull(CentralPairCode.parse(f.getValue("qr").toString())).copy(lanOrigins = emptyList())
+        val credential = pairDesktop(http, qr, "APN Android")
+        assertEquals(qr.relayRoutes, credential.relayRoutes)
+        assertTrue(DshApiClient(CentralRpcTransport("", http, credential)).sessionList() is RpcResult.Ok)
+        val stats = centralPost(http, f.text("control"), "control", remoteObject())
+        assertEquals(1, stats.getValue("private").jsonObject.getValue("requests").jsonObject.getValue("/v1/claim-qr").jsonPrimitive.int)
+        assertTrue(stats.getValue("public").jsonObject.getValue("requests").jsonObject.isEmpty())
+        assertTrue(unbindDesktop(http, "", credential))
+    }
+
+    @Test fun mappedConnectionLoopReconnectsThroughPublicEntryAfterPrivateLinkDrops() = fixture(true, mappings = true) { f, http ->
+        val qr = checkNotNull(CentralPairCode.parse(f.getValue("qr").toString())).copy(lanOrigins = emptyList())
+        val credential = pairDesktop(http, qr, "Moving Android")
+        val generations = CopyOnWriteArrayList<HostGeneration>()
+        val loop = ConnectionLoop(
+            { RemoteStreamMux { sink -> CentralWsChannel("", http, credential, sink) } },
+            object : LoopSinks {
+                override fun onEventFrame(frame: RemoteEventFrame) {}
+                override fun onConnected(generation: HostGeneration) { generations.add(generation) }
+                override fun onStateChange(state: ConnectionState) {}
+            },
+            LoopConfig(streamOpenTimeoutMs = 30_000),
+        )
+        try {
+            loop.start()
+            withTimeout(20_000) { while (generations.size < 1) delay(50) }
+            centralPost(http, f.text("control"), "control", remoteObject("private" to "offline"))
+            withTimeout(20_000) { while (generations.size < 2) delay(50) }
+            val stats = centralPost(http, f.text("control"), "control", remoteObject())
+            assertTrue(stats.getValue("public").jsonObject.getValue("upgrades").jsonPrimitive.int > 0)
+            assertTrue(DshApiClient(CentralRpcTransport("", http, credential)).sessionList() is RpcResult.Ok)
+        } finally { loop.stop() }
     }
 
     @Test fun localQrPairsWithoutRelayAndUnbindsActualHost() = fixture(false) { f, http ->
