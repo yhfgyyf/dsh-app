@@ -79,6 +79,28 @@ node dist/private-admin.js registration operator@example.com
 
 第二条管理命令输出一次性注册码，10 分钟有效。数据库和目录仅供服务账号读写，备份数据库及其 WAL 状态；不要把它们提交到仓库。没有开放账号注册的 HTTP 接口。修改中继地址前，先在桌面点击“解除注册”并确认，再重新注册；已有凭据不能直接发送到另一地址。
 
+### 私有 CA 自动配置（Desktop 0.1.34 起）
+
+桌面只需填写中继地址和完整注册码，无需在 Ubuntu 手动安装系统 CA 或使用 sudo。管理员使用服务器上已有的根 CA 证书生成带指纹的注册码：
+
+```sh
+node dist/private-admin.js registration operator@example.com --ca-file /path/to/relay-root-ca.pem
+```
+
+新码形如 `dshca1_<根CA的SHA-256指纹>_<原一次性注册码>`，仍然一次有效、10 分钟过期。CA 文件必须是根证书，不能使用服务器叶证书或私钥。旧版普通注册码和已注册设备继续按原方式工作。
+
+无需更新或重启正在运行的中继：独立的 `registration-code.js` 只依赖 Node 内置模块，可以包装旧管理工具输出的注册码；沿用原来的 `DB_PATH` 和管理账号执行：
+
+```sh
+node dist/private-admin.js registration operator@example.com | node /path/to/registration-code.mjs /path/to/relay-root-ca.pem
+```
+
+桌面先通过 TLS 握手取得公开证书链，核对注册码中的根 CA 指纹，然后建立正常校验证书链、有效期和 IP/DNS SAN 的 HTTPS 连接，才发送一次性注册码。中继的 TLS 前端须发送该根 CA（例如在 fullchain 中附加根证书）。首次握手不发送注册码、设备令牌或 HTTP 请求；指纹不匹配、缺少根 CA、证书过期或地址不匹配都会拒绝注册。此流程采用[凭注册码中的 CA 摘要验证首次连接](https://docs.k3s.io/cli/token#tls-bootstrapping)的方式。
+
+核验后的 CA 随中继凭据保存在 DSH 的加密配置中，仅供该中继的 HTTPS/WSS 使用；不修改操作系统的信任库，也不设置全局跳过 TLS 校验。系统密钥环不可用时仍遵守现有的“仅本次运行”限制。Android 的系统/用户 CA 配置不由此桌面功能修改。
+
+中继注册与手机绑定分别保存。局域网配对成功、切换连接路径、临时断网、关闭远程开关、解绑手机或应用重启都不会自动解除已保存的中继注册；只有在桌面明确点击“解除注册”并确认，才删除中继身份和对应的专用 CA。
+
 ## 配对与使用
 
 1. 桌面打开“设置 → 通用设置 → 手机远程控制 → 管理连接”。

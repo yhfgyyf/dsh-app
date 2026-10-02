@@ -4,6 +4,26 @@
 
 适用现有部署：`dsh-relay.service`、程序 `/opt/dsh-relay`、环境配置 `/etc/dsh-relay.env`，Ubuntu x86_64/arm64、Node 22。本说明针对已有注册和证书的升级，不需要重新创建账号、注册码、CA 或服务用户。
 
+## 可选：桌面自动取得 CA，无需升级中继服务
+
+Desktop 0.1.34 支持只输入地址和带 CA 指纹的注册码，自动取得并保存该中继的根 CA。服务端 TLS 证书链须包含该根 CA；现有服务器证书仍须匹配客户端填写的 IP/域名。客户端核对指纹后才发送注册码，HTTPS/WSS 继续校验证书链、有效期和地址。桌面不改系统信任库，也不需要 sudo。
+
+如果只是启用这个功能，可直接使用本包独立的 `dist/registration-code.js`（也可复制并改名为 `.mjs`）。它只使用 Node 内置模块，不需要安装依赖、改数据库格式、替换正在运行的服务或重启。沿用原管理命令的账号与 `DB_PATH`，把一次性注册码通过标准输入传给它：
+
+```sh
+node /opt/dsh-relay/dist/private-admin.js registration operator@example.com | node /path/to/registration-code.mjs /path/to/existing-root-ca.pem
+```
+
+将输出的完整 `dshca1_...` 注册码交给桌面用户即可，仍为一次有效、10 分钟过期；根证书无需复制给用户。证书路径应指向已有的根 CA，不能填服务器叶证书或私钥。普通旧注册码仍需事先信任 CA，不能从未知连接自动确认 CA 身份。
+
+若已采用本包新版管理工具，也可以直接执行：
+
+```sh
+node dist/private-admin.js registration operator@example.com --ca-file /path/to/existing-root-ca.pem
+```
+
+只为生成这种注册码，不必执行下方的完整服务升级。已有注册和手机绑定保持原状；局域网配对不会自动解除中继注册，解除注册需在桌面明确点击并确认。
+
 ## 保留范围与回退行为
 
 - 原 `/opt/dsh-relay`、原 systemd 服务文件、原 `/etc/dsh-relay.env` 保留。

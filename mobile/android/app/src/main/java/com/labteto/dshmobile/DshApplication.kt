@@ -16,6 +16,7 @@ class DshApplication : Application() {
     // their frame collectors; start() then begins notification classification.
     @Inject lateinit var notificationObserver: NotificationObserver
     @Inject lateinit var remoteBindings: RemoteBindings
+    @Inject lateinit var collaboration: com.labteto.dshmobile.collab.CollaborationManager
 
     override fun onCreate() {
         super.onCreate()
@@ -23,6 +24,7 @@ class DshApplication : Application() {
         KeepAliveWorker.schedule(this)
         notificationObserver.start()
         remoteBindings.start()
+        collaboration.start()
     }
 
     companion object {

@@ -13,6 +13,8 @@
     "test": "tsx --test test/*.test.ts",
     "test:deployment": "tsx --test test/private-deployment.test.ts",
     "start:private": "node dist/private-server.js",
+    "start:collaboration": "node dist/collab-server.js",
+    "admin:collaboration": "node dist/collab-admin.js",
     "admin:private": "tsx src/private-admin.ts",
     "start:upstream": "node dist/server.js"
   },

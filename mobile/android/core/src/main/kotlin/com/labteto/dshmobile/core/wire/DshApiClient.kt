@@ -137,11 +137,12 @@ class DshApiClient(
     private suspend fun <T> unaryWith(
         endpoint: String,
         payload: JsonElement,
+        channel: String = "/api",
         decode: (value: JsonElement, attachments: Map<List<String>, ByteArray>) -> T,
     ): RpcResult<T> {
         val request = ClientRequest(rpcId = newRpcId(), method = endpoint, payload = payload)
         return try {
-            val response = transport.post("/api/$endpoint", encodeEnvelope(request))
+            val response = transport.post("$channel/$endpoint", encodeEnvelope(request))
             val multipart = response.multipart?.let { RpcMultipart.decode(response.contentType.orEmpty(), it) }
             val envelope = decodeServerResponse(multipart?.envelope?.toString() ?: response.body)
             when (val result = envelope.result) {
@@ -176,6 +177,10 @@ class DshApiClient(
      */
     suspend fun <T> call(endpoint: String, args: JsonObject, value: KSerializer<T>): RpcResult<T> =
         unary(endpoint, buildJsonObject { put("args", args) }, value)
+
+    /** Desktop collaboration channel; the host enforces the paired device's control role. */
+    suspend fun collaboration(method: String, args: JsonObject = JsonObject(emptyMap())): RpcResult<JsonObject> =
+        unaryWith(method, buildJsonObject { put("args", args) }, "/desktop-collab") { value, _ -> value.jsonObject }
 
     /** Invoke one Remote endpoint and decode its value by inferred type. */
     private suspend inline fun <reified T> call(endpoint: String, args: JsonObject): RpcResult<T> =
@@ -716,7 +721,7 @@ class DshApiClient(
     suspend fun officePreview(sessionId: String, path: String): RpcResult<WorkspaceFileContent> =
         unaryWith("officeToPdf/render", buildJsonObject {
             put("args", JsonObject(fileArgs(sessionId, path) + ("priority" to JsonPrimitive("foreground"))))
-        }, ::fileContentOf)
+        }, decode = ::fileContentOf)
 
     suspend fun speechCatalog(): RpcResult<SpeechCatalog> = callEmpty("speech/catalog")
     suspend fun speechPrepare(providerId: String): RpcResult<JsonElement> =
@@ -742,7 +747,7 @@ class DshApiClient(
         val args = JsonObject(
             fileArgs(sessionId, path) + ("options" to encodeToJsonElement(WorkspaceByteReadOptions.serializer(), options)),
         )
-        val result = unaryWith("workspaceFiles/readBytes", buildJsonObject { put("args", args) }, ::fileContentOf)
+        val result = unaryWith("workspaceFiles/readBytes", buildJsonObject { put("args", args) }, decode = ::fileContentOf)
         if (result !is RpcResult.Err || result.error.code != ARGUMENTS_INVALID) return result
         // A 0.1.6 host: one endpoint per read shape, and base64 data in a JSON answer.
         val baseFile = options.baseFile
@@ -756,7 +761,7 @@ class DshApiClient(
                 fileArgs(sessionId, path) + ("range" to encodeToJsonElement(WorkspaceByteRange.serializer(), range)),
             )
         }
-        return unaryWith(endpoint, buildJsonObject { put("args", legacy) }, ::fileContentOf)
+        return unaryWith(endpoint, buildJsonObject { put("args", legacy) }, decode = ::fileContentOf)
     }
 
     /** A `readBytes` value from either host: the bytes from their part, or from base64 `data`. */

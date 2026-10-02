@@ -77,6 +77,7 @@ export class DesktopUpdates {
     return this.state;
   }
   start() {
+    if (this.options.platform !== 'darwin' && this.options.platform !== 'win32') return;
     if (!this.options.packaged || this.started) return;
     this.started = true;
     this.scheduleNext(true);

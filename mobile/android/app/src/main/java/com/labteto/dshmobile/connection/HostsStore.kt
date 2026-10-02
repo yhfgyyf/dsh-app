@@ -35,6 +35,7 @@ class HostsStore @Inject constructor(
         val AUTO_RELAY = booleanPreferencesKey("auto_relay")
         val CONNECT_MODE = stringPreferencesKey("connect_mode")
         val BACKGROUND = booleanPreferencesKey("background")
+        val COLLAB_BACKGROUND = booleanPreferencesKey("collab_background")
         val NOTIFY_TURN = booleanPreferencesKey("notify_turn")
         val NOTIFY_GOAL = booleanPreferencesKey("notify_goal")
         val NOTIFY_ACTION = booleanPreferencesKey("notify_action")
@@ -70,6 +71,7 @@ class HostsStore @Inject constructor(
             autoConnectRelay = prefs[Keys.AUTO_RELAY] ?: false,
             connectMode = ConnectMode.of(prefs[Keys.CONNECT_MODE]),
             keepConnectedInBackground = prefs[Keys.BACKGROUND] ?: false,
+            collabBackground = prefs[Keys.COLLAB_BACKGROUND] ?: false,
             notifyTurnComplete = prefs[Keys.NOTIFY_TURN] ?: true,
             notifyGoal = prefs[Keys.NOTIFY_GOAL] ?: true,
             notifyNeedsAction = prefs[Keys.NOTIFY_ACTION] ?: true,
@@ -220,6 +222,7 @@ class HostsStore @Inject constructor(
             prefs[Keys.AUTO_RELAY] = next.autoConnectRelay
             prefs[Keys.CONNECT_MODE] = next.connectMode
             prefs[Keys.BACKGROUND] = next.keepConnectedInBackground
+            prefs[Keys.COLLAB_BACKGROUND] = next.collabBackground
             prefs[Keys.NOTIFY_TURN] = next.notifyTurnComplete
             prefs[Keys.NOTIFY_GOAL] = next.notifyGoal
             prefs[Keys.NOTIFY_ACTION] = next.notifyNeedsAction

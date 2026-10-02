@@ -50,3 +50,7 @@ data class PluginInventoryEntry(
 data class PluginInventorySnapshot(
     @SerialName("entries") val entries: List<PluginInventoryEntry> = emptyList(),
 )
+
+/** Entries inherit disabled ancestors; a failed or still loading plugin is not available. */
+fun PluginInventorySnapshot?.hasActivePlugin(moduleName: String): Boolean =
+    this?.entries?.any { it.moduleName == moduleName && it.enabled && it.fiberPhase == PluginFiberPhase.ACTIVE } == true

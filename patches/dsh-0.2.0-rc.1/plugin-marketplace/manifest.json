@@ -5,8 +5,15 @@
       "package": "@deepseek-ai/dsh-client-ui-plugin-manager",
       "path": "@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js",
       "before": "1ac0d19068d31aa5dc0cdfca8e718fa0ebbad52bda8b4166b02c00e14e7868e8",
-      "after": "6172f43fc2344dc582b0688afa4c5da971be92c4308b87878e2f30eef09ac5b2",
-      "patchSha256": "d0cf0641d831ebe9b15b6aed0b8a84b864fc77c6dd7f4e7fb0d0eac11beb3315"
+      "after": "8020ed0e7d6a7f37060208768763e42b1cf7d0bc2096439307c5181fe45fa727",
+      "patchSha256": "b008b8c2d73602e88349e027b6a793337cdf3e78f32d8df2dac999ca7430e375",
+      "upgrades": [
+        {
+          "before": "6172f43fc2344dc582b0688afa4c5da971be92c4308b87878e2f30eef09ac5b2",
+          "patch": "upgrade-collab-visibility.patch",
+          "patchSha256": "2bf18186a21ffcec25ca6229700cbd8552d524ca9760c2f68ce0a4790f8f8230"
+        }
+      ]
     }
   ]
 }

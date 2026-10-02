@@ -18,6 +18,7 @@ import { verifyMigrationCopy } from '../deploy/database-check.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const sha = (file: string) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const files = ['package.json', 'src/private-server.ts', 'src/private-store.ts', 'src/client-endpoints.ts',
+  'src/collab-auth.ts', 'src/collab-types.ts', 'dist/collab-auth.js', 'dist/collab-types.js',
   'dist/private-server.js', 'dist/private-store.js', 'dist/client-endpoints.js', 'deploy/upgrade.mjs', 'deploy/database-check.mjs'];
 
 async function fixture() {

@@ -23,7 +23,7 @@ export class RemoteBridge {
   async configure(config: RemoteRuntimeConfig) {
     const previous = this.config.credentials, next = config.credentials;
     if (this.config.enabled && config.enabled && previous && next && previous.deviceId === next.deviceId &&
-        previous.deviceToken === next.deviceToken && previous.relay === next.relay) {
+        previous.deviceToken === next.deviceToken && previous.relay === next.relay && previous.relayCa === next.relayCa) {
       this.config = config; this.tunnel.revokeMissing(next.bindings); this.publishConnections(); return;
     }
     this.stop(); this.config = config;
@@ -41,7 +41,10 @@ export class RemoteBridge {
   }
   private connect(generation: number) {
     const credentials = this.config.credentials!;
-    const socket = this.socket = new this.WebSocket(credentials.relay.replace(/^http/, 'ws') + '/v1/device', { maxPayload: 256 * 1024, perMessageDeflate: false, handshakeTimeout: 10000 });
+    const socket = this.socket = new this.WebSocket(credentials.relay.replace(/^http/, 'ws') + '/v1/device', {
+      maxPayload: 256 * 1024, perMessageDeflate: false, handshakeTimeout: 10000,
+      ...(credentials.relayCa ? { ca: credentials.relayCa, rejectUnauthorized: true } : {}),
+    });
     let authenticated = false;
     let lastReceived = Date.now();
     const watchdog = setInterval(() => { if (Date.now() - lastReceived > 70000) socket.terminate(); }, 15000);

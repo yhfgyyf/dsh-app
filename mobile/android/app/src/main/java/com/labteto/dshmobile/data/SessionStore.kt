@@ -599,6 +599,7 @@ class SessionStore @Inject constructor(
         scope.launch {
             var prev = connectionManager.state.value
             connectionManager.state.collect { state ->
+                if (prev.host?.id != state.host?.id || prev.host?.baseUrl != state.host?.baseUrl || state.phase == ConnectionPhase.DISCONNECTED) _plugins.value = null
                 val initialConnect = !prev.hasConnected && state.hasConnected
                 val reconnect = prev.hasConnected &&
                     prev.phase == ConnectionPhase.RECONNECTING &&
@@ -678,6 +679,7 @@ class SessionStore @Inject constructor(
             // thing the reader actually looks at. Neither throws — each reports its own failure —
             // so nothing downstream has to know whether they have landed yet.
             launch { refreshAgentPresets() }
+            launch { refreshPlugins() }
             launch { refreshPermissionCatalog() }
             // The list is the one read the landing session is chosen from, so it alone is awaited.
             refreshSessions()
@@ -2352,8 +2354,11 @@ class SessionStore @Inject constructor(
      * failure to report.
      */
     suspend fun refreshPlugins() {
-        val api = apiOrNull() ?: return
-        when (val r = api.pluginInventoryList()) {
+        val key = activeHostKey
+        val api = apiForHost(key) ?: return
+        val r = api.pluginInventoryList()
+        if (apiForHost(key) !== api) return
+        when (r) {
             is RpcResult.Ok -> _plugins.value = r.value
             is RpcResult.Err -> {
                 _plugins.value = null

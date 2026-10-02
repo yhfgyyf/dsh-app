@@ -3,6 +3,7 @@ import { hostname } from 'node:os';
 import QRCode from 'qrcode/lib/server.js';
 import { defaultRemoteConfig, parseRemoteConfig, parseRemoteCredentials, parseRemoteRelayRoutes, phoneRelayOrigin, type RemoteRelayRoutes, type LocalRemoteAction, type LocalRemoteCredentials, type RemoteBinding, type RemoteCredentials, type RemoteState, type RemoteAction, type RemoteRuntimeConfig, type RemoteRuntimeState } from '../shared/remote-access.ts';
 import { RemoteCredentialsFile } from './remote-access-credentials.ts';
+import { fetchWithRelayCa, parseRegistrationCode, relayConnectionError, retrieveRelayCa } from './relay-ca.ts';
 
 export class DesktopRemoteAccess {
   private config = { ...defaultRemoteConfig(), name: hostname().slice(0, 80) || 'DSH Desktop' };
@@ -74,10 +75,15 @@ export class DesktopRemoteAccess {
   stop() { clearInterval(this.timer); this.timer = undefined; this.invitation = undefined; this.pending = []; }
   private enqueue<T>(fn: () => Promise<T>): Promise<T> { const task = this.queue.then(fn); this.queue = task.catch(() => {}); return task; }
   private save() { return this.file.save(this.config, this.credentials, this.config.enabled || this.local.bindings.length ? this.local : undefined); }
-  private async api(path: string, body: unknown) {
-    const response = await fetch(this.config.relay + '/v1/' + path, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: {
+  private async api(path: string, body: unknown, ca = this.credentials?.relayCa) {
+    const headers = {
       'content-type': 'application/json', ...(this.credentials ? { authorization: `Bearer ${this.credentials.deviceToken}` } : {}),
-    }, body: JSON.stringify({ ...body as object, ...(this.credentials ? { deviceId: this.credentials.deviceId } : {}) }) });
+    };
+    const payload = JSON.stringify({ ...body as object, ...(this.credentials ? { deviceId: this.credentials.deviceId } : {}) });
+    const url = this.config.relay + '/v1/' + path;
+    const response = await (ca ? fetchWithRelayCa(url, headers, payload, ca) : fetch(url, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers, body: payload,
+    })).catch(error => { throw relayConnectionError(error); });
     const reader = response.body?.getReader();
     const chunks: Uint8Array[] = []; let size = 0;
     try {
@@ -178,9 +184,10 @@ export class DesktopRemoteAccess {
         if (this.credentials) throw new Error('此电脑已注册。');
         if (!this.config.relay) throw new Error('请先填写中继地址。');
         if (!this.file.available()) this.config.sessionOnly = true;
-        if (typeof action.code !== 'string' || !/^[A-Za-z0-9_-]{32,128}$/.test(action.code.trim())) throw new Error('注册码无效。');
-        const result = await this.api('register', { code: action.code.trim(), name: this.config.name });
-        this.credentials = parseRemoteCredentials({ relay: this.config.relay, relayRoutes: result.relayRoutes, deviceId: result.deviceId, deviceToken: result.deviceToken, bindings: [] });
+        const registration = parseRegistrationCode(action.code);
+        const relayCa = registration.fingerprint ? await retrieveRelayCa(this.config.relay, registration.fingerprint) : undefined;
+        const result = await this.api('register', { code: registration.code, name: this.config.name }, relayCa);
+        this.credentials = parseRemoteCredentials({ relay: this.config.relay, relayRoutes: result.relayRoutes, relayCa, deviceId: result.deviceId, deviceToken: result.deviceToken, bindings: [] });
         this.config.enabled = true;
         await this.save(); await this.apply();
       } else if (action.type === 'pair') {
@@ -211,6 +218,7 @@ export class DesktopRemoteAccess {
       } else if (action.type === 'revoke') {
         await this.revoke(action.id);
       } else if (action.type === 'unregister') {
+        // LAN pairing and transport failures retain registration; only this explicit action removes it.
         if (this.credentials) await this.api('unregister', {});
         this.credentials = undefined; this.syncedRevocations.clear();
         this.invitation = undefined; this.pending = [];

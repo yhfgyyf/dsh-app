@@ -81,6 +81,7 @@ internal fun VoiceInput(
     onText: (String) -> Unit,
     onStatus: (String?) -> Unit,
     onError: (String) -> Unit,
+    finishLabel: String? = null,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -121,7 +122,7 @@ internal fun VoiceInput(
         }) {
             if (phase in setOf(VoicePhase.CHECKING, VoicePhase.TRANSCRIBING)) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             else Icon(if (phase == VoicePhase.RECORDING) Icons.Filled.Stop else Icons.Filled.Mic,
-                stringResource(if (phase == VoicePhase.RECORDING) R.string.voice_finish_send else R.string.voice_start))
+                if (phase == VoicePhase.RECORDING && finishLabel != null) finishLabel else stringResource(if (phase == VoicePhase.RECORDING) R.string.voice_finish_send else R.string.voice_start))
         }
         if (phase != VoicePhase.IDLE) IconButton(onClick = { controller?.cancel() }) {
             Icon(Icons.Filled.Close, stringResource(R.string.common_cancel))

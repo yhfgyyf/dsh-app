@@ -2,11 +2,13 @@ const reads = new Set([
   'session/list', 'session/search', 'session/page', 'session/modelCatalog', 'session/attachment',
   'session/canOpenWorkspacePath', 'subagents/list', 'agentPresets/list', 'agentPresets/read',
   'llm/listProviders', 'permissionPresets/catalog', 'skills/list', 'messageFeedback/list',
+  'pluginInventory/list', 'schedule/catalog', 'schedule/history',
 ]);
 const controls = new Set([
   'directoryPicker/list', 'workspaceFiles/list', 'workspaceFiles/stat', 'workspaceFiles/read', 'workspaceFiles/readBytes', 'officeToPdf/render',
   'terminal/environment', 'terminal/shells', 'terminal/list', 'terminal/create', 'terminal/write', 'terminal/resize', 'terminal/rename', 'terminal/close',
   'speech/catalog', 'speech/prepare', 'speech/transcribe',
+  'schedule/create', 'schedule/update', 'schedule/delete',
   'session/create', 'session/delete', 'session/prompt', 'session/rename', 'session/fork', 'session/cancel', 'session/updateQueue', 'session/selectModel',
   'session/uploadFileBinary', 'session/uploadFile', 'session/openWorkspacePath', 'subagents/prompt',
   'workspace/create', 'workspace/rename', 'workspace/delete', 'workspace/insertBefore', 'workspace/insertSessionBefore',
@@ -15,6 +17,7 @@ const controls = new Set([
 ]);
 const streams = new Set(['$events', 'session/follow', 'workspace/follow', 'session/control', 'job/list', 'job/follow']);
 const controlStreams = new Set(['workspaceFiles/changes', 'terminal/follow', 'terminal/retain']);
+const collabControls = new Set(['state', 'sync', 'catalog', 'detail', 'history', 'inbox', 'read', 'create', 'update', 'follow', 'accept', 'upload', 'download', 'draft-get', 'draft-put', 'start', 'run', 'cancel', 'reply', 'generated-file', 'publish-run']);
 
 /** A refused logical stream must not retire the other streams on the same socket. */
 export class RemoteStreamDenied extends Error {
@@ -23,9 +26,13 @@ export class RemoteStreamDenied extends Error {
 }
 
 export function permittedPath(method: string, path: unknown, role: 'viewer' | 'control'): string {
-  if (typeof path !== 'string' || path.length > 8192 || /[\u0000-\u0020\u007f\\#]/.test(path) || /[%]/.test(path.split('?')[0]) || !path.startsWith('/api/')) throw new Error('forbidden_path');
+  if (typeof path !== 'string' || path.length > 8192 || /[\u0000-\u0020\u007f\\#]/.test(path) || /[%]/.test(path.split('?')[0]) || (!path.startsWith('/api/') && !path.startsWith('/desktop-collab/'))) throw new Error('forbidden_path');
   const url = new URL(path, 'http://127.0.0.1');
   if (url.origin !== 'http://127.0.0.1' || url.pathname !== path.split('?')[0]) throw new Error('forbidden_path');
+  if (path.startsWith('/desktop-collab/')) {
+    if (method !== 'POST' || role !== 'control' || url.search || !collabControls.has(url.pathname.slice('/desktop-collab/'.length))) throw new Error('forbidden_operation');
+    return path;
+  }
   const endpoint = url.pathname.slice(5);
   if (method === 'GET' && ['session.export', 'session/export'].includes(endpoint)) return path;
   if (method !== 'POST' || (!reads.has(endpoint) && !(role === 'control' && controls.has(endpoint)))) throw new Error('forbidden_operation');

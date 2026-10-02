@@ -3,7 +3,7 @@ export type RemoteRole = 'viewer' | 'control';
 export type RemoteConfig = { enabled: boolean; relay: string; name: string; background: boolean; sessionOnly: boolean };
 export type RemoteBinding = { id: string; name: string; account: string; role: RemoteRole; key: string; revoked: boolean; lastSeen?: number };
 export type RemoteRelayRoutes = { id: string; endpoints: { origin: string; network: 'private' | 'public' }[] };
-export type RemoteCredentials = { relay: string; relayRoutes?: RemoteRelayRoutes; deviceId: string; deviceToken: string; bindings: RemoteBinding[] };
+export type RemoteCredentials = { relay: string; relayRoutes?: RemoteRelayRoutes; relayCa?: string; deviceId: string; deviceToken: string; bindings: RemoteBinding[] };
 export type LocalRemoteCredentials = { deviceId: string; port?: number; bindings: RemoteBinding[] };
 export type RemoteInvitation = { id: string; key: string; expiresAt: number };
 export type RemoteRuntimeConfig = { enabled: boolean; credentials?: RemoteCredentials; local?: LocalRemoteCredentials; invitation?: RemoteInvitation };
@@ -55,8 +55,11 @@ export function parseRemoteCredentials(value: unknown): RemoteCredentials {
   const c = value as RemoteCredentials;
   const id = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(v);
   if (!c || !id(c.deviceId) || !id(c.deviceToken) || !Array.isArray(c.bindings) || c.bindings.length > 128) throw new Error('远程凭据无效。');
+  const relay = relayOrigin(c.relay);
+  if (c.relayCa !== undefined && (typeof c.relayCa !== 'string' || c.relayCa.length > 16384 ||
+      !/^-----BEGIN CERTIFICATE-----\r?\n[A-Za-z0-9+/=\r\n]+-----END CERTIFICATE-----\s*$/.test(c.relayCa) || !relay.startsWith('https:'))) throw new Error('中继 CA 证书无效。');
   const relayRoutes = parseRemoteRelayRoutes(c.relayRoutes);
-  return { relay: relayOrigin(c.relay), ...(relayRoutes ? { relayRoutes } : {}), deviceId: c.deviceId, deviceToken: c.deviceToken, bindings: parseRemoteBindings(c.bindings) };
+  return { relay, ...(relayRoutes ? { relayRoutes } : {}), ...(c.relayCa ? { relayCa: c.relayCa } : {}), deviceId: c.deviceId, deviceToken: c.deviceToken, bindings: parseRemoteBindings(c.bindings) };
 }
 
 export function parseRemoteRelayRoutes(value: unknown): RemoteRelayRoutes | undefined {

@@ -123,6 +123,18 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     assert.equal(await readFile(join(applied.backup, relativeClient), 'utf8'), before);
     assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
     assert.equal(await readFile(target, 'utf8'), source);
+    const { files } = JSON.parse(await readFile(join(root, 'patches', `dsh-${version}`, 'plugin-marketplace/manifest.json'), 'utf8'));
+    for (const upgrade of files[0].upgrades ?? []) {
+      const reversedUpgrade = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), join(root, 'patches', `dsh-${version}`, 'plugin-marketplace', upgrade.patch)], { cwd: scratch, encoding: 'utf8' });
+      assert.equal(reversedUpgrade.status, 0, reversedUpgrade.stderr);
+      const previous = await readFile(target, 'utf8');
+      assert.deepEqual(await applyPluginMarketplace({ ...options, mode: 'check' }), { pending: 1 });
+      const upgraded = await applyPluginMarketplace(options);
+      assert.equal(upgraded.changed, 1);
+      assert.equal(await readFile(join(upgraded.backup, relativeClient), 'utf8'), previous);
+      assert.equal(await readFile(target, 'utf8'), source);
+      assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
+    }
     const unknown = source + '\n// local change\n';
     await writeFile(target, unknown);
     await assert.rejects(applyPluginMarketplace(options), /Unrecognized changes preserved/);

@@ -53,6 +53,7 @@ fun MainScreen(onOpenSettings: () -> Unit, onPair: () -> Unit) {
         drawerState = drawerState,
         drawerContent = {
             ChatListDrawer(
+                isOpen = drawerState.isOpen,
                 onClose = { scope.launch { drawerState.close() } },
                 onOpenSettings = onOpenSettings,
                 onPair = onPair,

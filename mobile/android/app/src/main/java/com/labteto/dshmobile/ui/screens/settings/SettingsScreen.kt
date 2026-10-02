@@ -147,6 +147,10 @@ fun SettingsScreen(onClose: () -> Unit, viewModel: SettingsViewModel = hiltViewM
                 }
 
                 SettingsCard(stringResource(R.string.settings_notifications)) {
+                    ToggleRow("协作消息后台接收", settings.collabBackground,
+                        "无需 Google Play；通过专网或互联网中继接收。开启后显示常驻通知；系统休眠或强制停止后可能延迟。") {
+                        viewModel.set { it.copy(collabBackground = !it.collabBackground) }
+                    }
                     ToggleRow(
                         stringResource(R.string.settings_notifications_turn),
                         settings.notifyTurnComplete,

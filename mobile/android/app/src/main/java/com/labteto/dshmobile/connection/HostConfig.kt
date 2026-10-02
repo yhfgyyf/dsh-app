@@ -118,6 +118,7 @@ data class AppSettings(
     /** Relay mode's counterpart to [autoConnectLan]: connect to a paired relay that mDNS finds. */
     val autoConnectRelay: Boolean = false,
     val keepConnectedInBackground: Boolean = false,
+    val collabBackground: Boolean = false,
     val notifyTurnComplete: Boolean = true,
     val notifyGoal: Boolean = true,
     val notifyNeedsAction: Boolean = true,

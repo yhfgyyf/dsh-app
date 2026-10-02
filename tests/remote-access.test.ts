@@ -31,6 +31,16 @@ test('sealed-tunnel verifies peer identity, direction, ciphertext and exact sequ
   assert.throws(() => createClientCipher(Buffer.alloc(32, 4).toString('base64url'), id, random, accepted.hello));
 });
 test('remote preview, speech and terminals require control while settings stay private', () => {
+  for (const endpoint of ['pluginInventory/list', 'schedule/catalog', 'schedule/history']) assert.equal(permittedPath('POST', '/api/' + endpoint, 'viewer'), '/api/' + endpoint);
+  for (const endpoint of ['schedule/create', 'schedule/update', 'schedule/delete']) {
+    assert.equal(permittedPath('POST', '/api/' + endpoint, 'control'), '/api/' + endpoint);
+    assert.throws(() => permittedPath('POST', '/api/' + endpoint, 'viewer'));
+  }
+  for (const endpoint of ['state', 'create', 'reply', 'start', 'run', 'generated-file', 'publish-run']) {
+    assert.equal(permittedPath('POST', '/desktop-collab/' + endpoint, 'control'), '/desktop-collab/' + endpoint);
+    assert.throws(() => permittedPath('POST', '/desktop-collab/' + endpoint, 'viewer'));
+  }
+  for (const path of ['/desktop-collab/profile', '/desktop-collab/unknown', '/desktop-collab/../api/settings/update', '/desktop-collab/state?other=1']) assert.throws(() => permittedPath('POST', path, 'control'));
   assert.equal(permittedPath('POST', '/api/session/list', 'viewer'), '/api/session/list');
   assert.equal(permittedPath('POST', '/api/session/prompt', 'control'), '/api/session/prompt');
   for (const path of ['/api/session/prompt', '/api/$events/result', '/api/session/uploadFileBinary', '/api/workspaceFiles/read', '/api/directoryPicker/list']) assert.throws(() => permittedPath('POST', path, 'viewer'));

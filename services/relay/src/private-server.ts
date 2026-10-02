@@ -5,10 +5,11 @@ import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { PrivateStore, hash, token } from './private-store.js';
 import { parseClientEndpoints } from './client-endpoints.js';
+import { issueCollabGrant, verifyCollabGrant, requireCollabSecret } from './collab-auth.js';
 
 const FRAME_LIMIT = 256 * 1024;
 const BUFFER_LIMIT = 4 * 1024 * 1024;
-export function createPrivateRelay(store: PrivateStore, origin: string, options: { clientEndpoints?: unknown } = {}) {
+export function createPrivateRelay(store: PrivateStore, origin: string, options: { clientEndpoints?: unknown; collabSecret?: string } = {}) {
   const publicUrl = new URL(origin);
   if (publicUrl.pathname !== '/' || publicUrl.search || publicUrl.hash || publicUrl.username || publicUrl.password ||
       (publicUrl.protocol !== 'https:' && !(publicUrl.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(publicUrl.hostname)))) throw new Error('PUBLIC_RELAY_URL must be an HTTPS origin');
@@ -32,11 +33,12 @@ export function createPrivateRelay(store: PrivateStore, origin: string, options:
   };
   function bearer(req: IncomingMessage) { return req.headers.authorization?.replace(/^Bearer /, '') ?? ''; }
   function rate(req: IncomingMessage) {
-    const key = req.socket.remoteAddress ?? 'unknown', now = Date.now();
+    const validation = req.url === '/v1/collab-validate';
+    const key = (validation ? 'collab-auth:' : '') + (req.socket.remoteAddress ?? 'unknown'), now = Date.now();
     if (rates.size > 10000 && !rates.has(key)) return false;
     let value = rates.get(key);
     if (!value || value.expires <= now) { value = { count: 0, expires: now + 60000 }; rates.set(key, value); }
-    return ++value.count <= 1200;
+    return ++value.count <= (validation ? 12000 : 1200);
   }
   const server = createServer(async (req, res) => {
     const reply = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -53,6 +55,28 @@ export function createPrivateRelay(store: PrivateStore, origin: string, options:
       }
       const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
       const str = (key: string, max = 128) => { const v = body[key]; if (typeof v !== 'string' || !v || v.length > max) throw new Error('invalid_input'); return v; };
+      if (req.url === '/v1/collab-token' || req.url === '/v1/collab-validate') {
+        try {
+          requireCollabSecret(options.collabSecret);
+          if (req.url === '/v1/collab-token') {
+            if (body.bindingId !== undefined) {
+              const b = store.binding(str('bindingId'), bearer(req));
+              if (!b || b.state !== 'approved') return reply(403, { error: 'invalid_binding' });
+              return reply(200, issueCollabGrant({ kind: 'mobile', deviceId: b.device, bindingId: b.id, role: b.role as 'viewer' | 'control' }, options.collabSecret));
+            }
+            const d = store.device(str('deviceId'), bearer(req));
+            if (!d) return reply(401, { error: 'invalid_device_token' });
+            return reply(200, issueCollabGrant({ kind: 'desktop', deviceId: d.id, role: 'control' }, options.collabSecret));
+          }
+          const identity = verifyCollabGrant(bearer(req), options.collabSecret);
+          if (!store.db.prepare('SELECT 1 FROM remote_devices WHERE id = ?').get(identity.deviceId)) return reply(403, { error: 'device_unregistered' });
+          if (identity.kind === 'mobile') {
+            const b = store.db.prepare("SELECT role FROM remote_bindings WHERE id = ? AND device = ? AND state = 'approved'").get(identity.bindingId, identity.deviceId) as { role: string } | undefined;
+            if (!b || b.role !== identity.role) return reply(403, { error: 'binding_revoked' });
+          }
+          return reply(200, identity);
+        } catch (error) { const status = (error as { status?: number }).status; return reply(status === 503 ? 503 : 401, { error: status === 503 ? 'collaboration_not_configured' : 'invalid_collaboration_grant' }); }
+      }
       if (req.url === '/v1/login') {
         // A second, strict rate bucket bounds scrypt CPU cost independently of ordinary polling.
         const loginKey = `login:${req.socket.remoteAddress}`;
@@ -202,6 +226,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   if (process.env.NODE_ENV === 'production' && !process.env.PUBLIC_RELAY_URL?.startsWith('https://')) throw new Error('Production requires PUBLIC_RELAY_URL with HTTPS');
   const relay = createPrivateRelay(store, process.env.PUBLIC_RELAY_URL ?? 'http://127.0.0.1:8787', {
     clientEndpoints: process.env.RELAY_CLIENT_ENDPOINTS === undefined ? undefined : JSON.parse(process.env.RELAY_CLIENT_ENDPOINTS),
+    collabSecret: process.env.COLLAB_AUTH_SECRET,
   });
   relay.server.listen(Number(process.env.PORT ?? 8787), process.env.HOST ?? '127.0.0.1', () => console.log('DSH private relay ready'));
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => { void relay.close().then(() => { store.db.close(); process.exit(0); }); });

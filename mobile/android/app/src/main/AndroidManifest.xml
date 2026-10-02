@@ -19,6 +19,7 @@
         android:required="false" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
 
     <application
         android:name=".DshApplication"
@@ -77,6 +78,10 @@
             android:name=".connection.ConnectionService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <activity android:name=".collab.CollaborationActivity" android:exported="false" />
+        <activity android:name=".collab.AutomationActivity" android:exported="false" />
+        <service android:name=".collab.CollaborationService" android:exported="false" android:foregroundServiceType="remoteMessaging" />
 
         <!--
             Opts into AppCompat's own storage for the per-app language. Below API 33 the framework

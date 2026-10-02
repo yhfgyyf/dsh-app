@@ -4,6 +4,7 @@ import { copyFile, mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyComputerDriverBuild } from './build-computer-driver.ts';
+import { buildCollabPlugin } from './build-collab-plugin.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 if (process.platform === 'darwin') await verifyComputerDriverBuild(resolve(root, '.runtime/computer-use'));
@@ -83,7 +84,7 @@ await build({
 await build({ configFile: false, root: resolve(root, 'src/renderer/computer-preview'), base: './', build: { outDir: resolve(root, 'dist/renderer/computer-preview'), target: 'chrome148', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
 // Reuse the official preset declarations without mounting the Web App surface.
 const desktopPatchPath = resolve(root, 'dist/runtime/desktop.patch.yml');
 let desktopPatch = await readFile(desktopPatchPath, 'utf8');
@@ -119,3 +120,4 @@ const runtimeManifestPath = resolve(root, '.runtime/package.json');
 const runtimeManifest = JSON.parse(await readFile(runtimeManifestPath, 'utf8'));
 runtimeManifest.dependencies['dsh-desktop-surface'] = 'file:./app';
 await writeFile(runtimeManifestPath, JSON.stringify(runtimeManifest, null, 2));
+await buildCollabPlugin(root);

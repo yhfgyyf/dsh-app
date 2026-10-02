@@ -6,6 +6,8 @@ import { RemoteBridge } from './remote/bridge.ts';
 import { LanRemoteAccess } from './remote/lan.ts';
 import { randomUUID } from 'node:crypto';
 import type { LocalRemoteAction, RemoteRuntimeState } from '../shared/remote-access.ts';
+import type { RemoteCredentials } from '../shared/remote-access.ts';
+import { createCollabBroker } from './collab-transport.ts';
 import { createBrowserUseController } from './browser-use.ts';
 import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames } from './legacy-settings.ts';
 
@@ -23,6 +25,7 @@ let closing = false;
 let remoteBridge: RemoteBridge | undefined;
 let lanRemote: LanRemoteAccess | undefined;
 let remoteState: RemoteRuntimeState = { status: 'disabled' };
+let collaborationCredentials: RemoteCredentials | undefined;
 const localRequests = new Map<string, { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 function localRemoteAction(action: LocalRemoteAction): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -62,6 +65,7 @@ process.on('message', (message: any) => {
     return;
   }
   if (message?.type === 'remote-configure' && typeof message.id === 'string') {
+    collaborationCredentials = message.config?.credentials;
     const configure = async () => { if (!remoteBridge || !lanRemote || closing) throw new Error('远程模块未就绪。'); await lanRemote.configure(message.config); await remoteBridge.configure(message.config); };
     void configure().then(() => process.send?.({ type: 'remote-result', id: message.id }), () => process.send?.({ type: 'remote-result', id: message.id, error: '远程模块配置失败。' }));
     return;
@@ -129,6 +133,7 @@ try {
     ctx.provide('launchEnvironment', launchEnvironment);
     ctx.provide('profileContext', profileContext);
     ctx.provide('appReady', appReady);
+    ctx.provide('desktopCollabBroker', createCollabBroker(() => collaborationCredentials));
     await ctx.plugin(PluginPackages, { resolution });
   });
   const connection = context.get('connection');

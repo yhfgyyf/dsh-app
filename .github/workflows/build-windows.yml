@@ -43,6 +43,12 @@ jobs:
           npm run test:remote
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:remote-ui
+      - name: Collaboration publishing, attachments, Markdown and voice input
+        timeout-minutes: 4
+        run: |
+          node services/relay/node_modules/tsx/dist/cli.mjs scripts/test-collaboration.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx --no-install electron tests/collaboration.cjs
       - name: Plugin marketplace review and explicit installation consent
         timeout-minutes: 4
         run: npm run test:plugin-marketplace

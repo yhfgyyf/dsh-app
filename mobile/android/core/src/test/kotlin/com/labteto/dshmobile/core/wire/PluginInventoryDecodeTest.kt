@@ -1,6 +1,7 @@
 package com.labteto.dshmobile.core.wire
 
 import com.labteto.dshmobile.core.wire.dto.PluginFiberPhase
+import com.labteto.dshmobile.core.wire.dto.hasActivePlugin
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -17,6 +18,14 @@ import java.io.InputStream
  * deployment as having no plugins at all.
  */
 class PluginInventoryDecodeTest {
+    @Test fun `mobile entries require the exact active enabled host plugin`() = runTest {
+        val snapshot = listOrFail("""{"entries":[{"entryId":"collab","moduleName":"dsh-p2p-collab","enabled":true,"fiberPhase":"active"},{"entryId":"schedule","moduleName":"@deepseek-ai/dsh-schedule","enabled":false,"fiberPhase":"active"},{"entryId":"failed","moduleName":"failed-plugin","enabled":true,"fiberPhase":"failed"}]}""")
+        assertTrue(snapshot.hasActivePlugin("dsh-p2p-collab"))
+        org.junit.Assert.assertFalse(snapshot.hasActivePlugin("@deepseek-ai/dsh-schedule"))
+        org.junit.Assert.assertFalse(snapshot.hasActivePlugin("failed-plugin"))
+        org.junit.Assert.assertFalse(snapshot.hasActivePlugin("unknown"))
+        org.junit.Assert.assertFalse(null.hasActivePlugin("dsh-p2p-collab"))
+    }
 
     private class FixedTransport(private val body: String) : RpcTransport {
         override suspend fun post(path: String, body: String): RpcHttpResponse =

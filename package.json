@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.33",
+  "version": "0.1.37",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
@@ -41,6 +41,7 @@
     "setup:runtime": "node scripts/bootstrap-runtime.ts",
     "test:three-surfaces": "node scripts/test-three-surfaces.ts",
     "package:windows": "npm run check && node scripts/package-windows.ts",
+    "package:linux": "npm run check && node scripts/package-linux.ts",
     "test:plugin-marketplace": "electron tests/plugin-marketplace.cjs",
     "test:univer-client": "electron tests/univer-client.cjs",
     "test:browser-use": "node scripts/test-browser-use.ts",

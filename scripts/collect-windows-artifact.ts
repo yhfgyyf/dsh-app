@@ -8,6 +8,13 @@ await mkdir(output, { recursive: true });
 const remote = JSON.parse(await readFile(join(root, '.test-data/remote-settings-latest.json'), 'utf8'));
 if (remote.platform !== 'win32' || !Array.isArray(remote.errors) || remote.errors.length || !Array.isArray(remote.checks) || remote.checks.length < 5) throw new Error('Windows remote pairing verification did not pass.');
 await writeFile(join(output, 'windows-remote-settings-report.json'), JSON.stringify(remote, null, 2));
+for (const [prefix, name] of [['collaboration-native-', 'windows-collaboration-ui-report.json'], ['collaboration-', 'windows-collaboration-runtime-report.json']]) {
+  const candidates = (await readdir(join(root, '.test-data'))).filter(entry => entry.startsWith(prefix) && (prefix.includes('native') || !entry.startsWith('collaboration-native-')));
+  if (candidates.length !== 1) throw new Error('Expected one collaboration verification report: ' + prefix);
+  const collaboration = JSON.parse(await readFile(join(root, '.test-data', candidates[0], 'report.json'), 'utf8'));
+  if (collaboration.errors?.length || (collaboration.status !== 'pass' && !Array.isArray(collaboration.errors)) || !collaboration.checks?.length) throw new Error('Windows collaboration verification did not pass.');
+  await writeFile(join(output, name), JSON.stringify({ status: 'pass', checks: collaboration.checks, errors: collaboration.errors, modelCalls: collaboration.modelCalls }, null, 2));
+}
 const voice = JSON.parse(await readFile(join(root, '.test-data/voice-input-latest.json'), 'utf8'));
 if (voice.platform !== 'win32' || voice.errors.length || voice.checks.length !== 4) throw new Error('Windows microphone verification did not pass.');
 await writeFile(join(output, 'windows-voice-input-report.json'), JSON.stringify(voice, null, 2));

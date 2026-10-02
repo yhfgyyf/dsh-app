@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -54,6 +55,7 @@ import com.labteto.dshmobile.R
 import com.labteto.dshmobile.data.SessionRow
 import com.labteto.dshmobile.data.SessionStore
 import com.labteto.dshmobile.data.WorkspaceRow
+import com.labteto.dshmobile.core.wire.dto.hasActivePlugin
 import com.labteto.dshmobile.ui.components.DisclosureRow
 import com.labteto.dshmobile.ui.components.DsButton
 import com.labteto.dshmobile.ui.components.DsButtonVariant
@@ -93,6 +95,7 @@ private const val SORT_UPDATED = "updated"
  */
 @Composable
 fun ChatListDrawer(
+    isOpen: Boolean,
     onClose: () -> Unit,
     onOpenSettings: () -> Unit,
     onPair: () -> Unit,
@@ -101,6 +104,8 @@ fun ChatListDrawer(
     val store = rememberSessionStore()
     val scope = rememberCoroutineScope()
     val hostsStore = rememberHostsStore()
+    val context = LocalContext.current
+    val plugins by store.plugins.collectAsStateWithLifecycle()
 
     val sessions by store.sessions.collectAsStateWithLifecycle()
     val workspaces by store.workspaces.collectAsStateWithLifecycle()
@@ -110,6 +115,9 @@ fun ChatListDrawer(
     val currentSessionId by store.currentSessionId.collectAsStateWithLifecycle()
     val hostInfo by store.hostInfo.collectAsStateWithLifecycle()
     val connection by store.connectionState.collectAsStateWithLifecycle()
+    LaunchedEffect(isOpen, connection.host?.id, connection.phase) {
+        if (isOpen) while (true) { store.refreshPlugins(); delay(15_000) }
+    }
     // Null against a harness without pinning (before 0.1.7), which hides the section and the menu row.
     val pinnedIds by store.pinnedSessionIds.collectAsStateWithLifecycle()
 
@@ -197,6 +205,20 @@ fun ChatListDrawer(
             .padding(horizontal = DsSpacing.medium),
     ) {
         RemoteComputerMenu(onPair = onPair, onClose = onClose)
+        if (plugins.hasActivePlugin("dsh-p2p-collab")) DsButton(
+            text = "协作空间", variant = DsButtonVariant.Ghost, modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                context.startActivity(android.content.Intent(context, com.labteto.dshmobile.collab.CollaborationActivity::class.java).putExtra("hostId", connection.host?.id))
+                onClose()
+            },
+        )
+        if (plugins.hasActivePlugin("@deepseek-ai/dsh-schedule")) DsButton(
+            text = "自动化任务", variant = DsButtonVariant.Ghost, modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                context.startActivity(android.content.Intent(context, com.labteto.dshmobile.collab.AutomationActivity::class.java).putExtra("hostKey", store.activeHostKey))
+                onClose()
+            },
+        )
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = DsSpacing.small),
             verticalAlignment = Alignment.CenterVertically,
