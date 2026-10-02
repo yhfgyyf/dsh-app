@@ -70,7 +70,7 @@ async function run(event) {
   const contents = event.sender, window = BrowserWindow.fromWebContents(contents), js = code => contents.executeJavaScript(code, true);
   window.setSize(1220, 900); contents.setBackgroundThrottling(false);
   const until = async (check, message) => { const start = Date.now(); while (Date.now() - start < 20000) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 100)); } throw new Error(message); };
-  const click = text => js(`(() => {const b=Array.from(document.querySelectorAll('button')).find(b=>b.textContent.trim()===${JSON.stringify(text)}); if(!b)throw Error('Button missing: '+${JSON.stringify(text)}); b.click();})()`);
+  const click = text => js(`(() => {const b=Array.from(document.querySelectorAll('button')).find(b=>${JSON.stringify([text].flat())}.includes(b.textContent.trim())); if(!b)throw Error('Button missing: '+${JSON.stringify(text)}); b.click();})()`);
   const rpc = (method, args = {}, channel = '/api') => js(`(async()=>{const method=${JSON.stringify(method)},rpcId=crypto.randomUUID(); const r=await fetch(${JSON.stringify(channel + '/' + method)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId,method,payload:{args:${JSON.stringify(args)}}})});const body=await r.json(); if(!body.result.ok)throw Error(JSON.stringify(body.result.error));return body.result.value;})()`);
   const fill = (selector, value) => js(`(async () => {const el=document.querySelector(${JSON.stringify(selector)}); if(!el)throw Error('Input missing');const proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>requestAnimationFrame(r));})()`);
   const attach = (selector, files) => js(`(() => {const input=document.querySelector(${JSON.stringify(selector)}); if(!input)throw Error('Upload input missing');const list=new DataTransfer();for(const f of ${JSON.stringify(files)}){const bytes=f.base64?Uint8Array.from(atob(f.base64),c=>c.charCodeAt(0)):f.size?new Uint8Array(f.size):f.text;list.items.add(new File([bytes],f.name,{type:f.type||'application/octet-stream'}));}input.files=list.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
@@ -83,7 +83,7 @@ async function run(event) {
   await act({ type: 'register', code: f.code });
   const bundles = await rpc('pluginManager/listBundles');
   assert.equal(bundles.find(b => b.name === 'dsh-p2p-collab').enabled, false);
-  await click('插件');
+  await click(['插件', 'Plugins']);
   await until(() => js(`!!document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]')`), 'Bundled collaboration plugin is missing from Plugins while disabled');
   assert.equal(await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]').getAttribute('aria-checked')`), 'false');
   await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]').click()`);
@@ -225,7 +225,7 @@ async function run(event) {
   assert.equal((await stats()).collaborationUpgrades, 0);
   report.checks.push('100 million Token / 30-day budgets save; HTTP-only manual inbox refresh receives peer replies while collaboration WebSocket is rejected');
   report.checks.push('Task/reply images and attachments upload and preview; exact 8 MiB upload succeeds; oversized batch and ninth file are rejected before upload; a lost reply response preserves its draft and retry creates one reply');
-  await click('插件');
+  await click(['插件', 'Plugins']);
   await until(() => js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]')?.getAttribute('aria-checked')==='true'`), 'Enabled collaboration switch missing');
   await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]').click()`);
   await until(async () => !(await rpc('pluginManager/listBundles')).find(b => b.name === 'dsh-p2p-collab').enabled, 'Plugin did not disable');
