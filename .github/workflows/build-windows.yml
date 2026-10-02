@@ -24,8 +24,11 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
           }
-      - name: Install frontend dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Install frontend and relay dependencies
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm ci --prefix services/relay --no-audit --no-fund
       - name: Windows menu Quit helper preflight
         timeout-minutes: 1
         run: npx --no-install electron tests/windows-quit-smoke.cjs
@@ -36,8 +39,6 @@ jobs:
       - name: Remote pairing, native settings and shared Host sessions
         timeout-minutes: 4
         run: |
-          npm ci --prefix services/relay --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run build --prefix services/relay
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:remote
