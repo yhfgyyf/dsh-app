@@ -1,5 +1,5 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
-import { isAbsolute, relative, resolve, basename } from 'node:path';
+import { isAbsolute, relative, resolve, basename, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { record, textField, MAX_ATTACHMENT_BYTES } from '../../services/relay/src/collab-types.ts';
 import type { CollabGeneratedFile, CollabSubmission } from '../shared/collab.ts';
@@ -10,7 +10,7 @@ export const COLLAB_ANSWER_FORMAT = `使用 GitHub Issue 风格的 Markdown：�
 export async function readGeneratedFile(cwd: string, path: string): Promise<Buffer> {
   if (!path || isAbsolute(path) || /^[A-Za-z]:/.test(path) || path.includes('\\') || path.includes('\0')) throw new Error('附件必须使用本次任务目录内的相对路径。');
   const root = await realpath(cwd), target = await realpath(resolve(root, path)), rel = relative(root, target);
-  if (!rel || rel.startsWith('..' + '/') || rel === '..' || isAbsolute(rel)) throw new Error('附件超出了本次任务目录。');
+  if (!rel || rel.startsWith('..' + sep) || rel === '..' || isAbsolute(rel)) throw new Error('附件超出了本次任务目录。');
   const info = await stat(target);
   if (!info.isFile() || info.size === 0 || info.size > MAX_ATTACHMENT_BYTES) throw new Error(`附件“${basename(path)}”必须为非空文件且不超过 8 MiB。`);
   const bytes = await readFile(target);
