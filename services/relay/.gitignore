@@ -5,6 +5,12 @@ data/
 !.env.example
 *.log
 *.pem
+# Public loopback-only TLS fixtures required by the test suite.
+!test/fixtures/ca/ca.pem
+!test/fixtures/ca/server.pem
+!test/fixtures/ca/server-key.pem
+!test/fixtures/ca/expired-ca.pem
+!test/fixtures/ca/expired-ca-key.pem
 *.key
 *.p12
 *.pfx
