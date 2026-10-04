@@ -63,7 +63,7 @@ async function run(event) {
   await until(()=>js(`!!document.querySelector('.desktop-general-settings')`),'General Settings missing');
   assert.equal(await js(`!!document.querySelector('.desktop-remote-settings')`),false);
   await js(`(() => {const dialog=document.querySelector('.desktop-general-settings').closest('[role="dialog"]');Array.from(dialog.querySelectorAll('button')).find(b=>['关闭','关闭设置','Close','Close settings'].includes(b.getAttribute('aria-label')??b.textContent.trim())).click();})()`);
-  const click = text => js(`(() => {const b=Array.from(document.querySelectorAll('button')).find(b=>${JSON.stringify([text].flat())}.includes(b.textContent.trim()));if(!b||b.disabled)throw Error('Button unavailable: '+${JSON.stringify(text)});b.click();})()`);
+  const click = text => js(`(() => {const labels=${JSON.stringify([text].flat())};const b=Array.from(document.querySelectorAll('button')).find(b=>labels.includes(b.textContent.trim())||labels.includes(b.getAttribute('aria-label')));if(!b||b.disabled)throw Error('Button unavailable: '+${JSON.stringify(text)});b.click();})()`);
   const fill = (selector,value) => js(`(async()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(r=>requestAnimationFrame(r));})()`);
   await click(['插件','Plugins']);
   await until(()=>js(`!!document.querySelector('[data-plugin-package="dsh-p2p-collab"] button')`),'Collaboration plugin missing');
