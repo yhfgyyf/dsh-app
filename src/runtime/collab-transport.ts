@@ -3,7 +3,7 @@ import { request as httpsRequest } from 'node:https';
 import type { RemoteCredentials } from '../shared/remote-access.ts';
 
 export type CollabGrant = { origin: string; ca?: string; token: string; expiresAt: number };
-export type CollabBroker = { grant(): Promise<CollabGrant> };
+export type CollabBroker = { isRegistered(): boolean; grant(): Promise<CollabGrant> };
 
 /** Bounded native requests with the relay's pinned CA and no redirects or renderer credentials. */
 export function collabJson(url: string, token: string, body?: unknown, ca?: string, signal?: AbortSignal): Promise<any> {
@@ -36,9 +36,9 @@ export function collabJson(url: string, token: string, body?: unknown, ca?: stri
 export function createCollabBroker(credentials: () => RemoteCredentials | undefined): CollabBroker {
   let cached: CollabGrant | undefined, owner: RemoteCredentials | undefined;
   let pending: Promise<CollabGrant> | undefined, generation = 0;
-  return { async grant() {
+  return { isRegistered: () => !!credentials(), async grant() {
     const current = credentials();
-    if (!current) throw new Error('请先在远程连接设置中注册中继，再使用 P2P 协作。');
+    if (!current) { cached = undefined; pending = undefined; owner = undefined; generation++; throw new Error('请先在插件 → dsh-p2p-collab 详情中注册中继，再开启协作空间。'); }
     if (owner?.relay !== current.relay || owner?.deviceId !== current.deviceId || owner?.deviceToken !== current.deviceToken || owner?.relayCa !== current.relayCa) { cached = undefined; pending = undefined; owner = current; generation++; }
     if (cached && cached.expiresAt > Date.now() + 45000) return cached;
     const started = generation;
@@ -46,7 +46,8 @@ export function createCollabBroker(credentials: () => RemoteCredentials | undefi
       const value = await collabJson(current.relay + '/v1/collab-token', current.deviceToken, { deviceId: current.deviceId }, current.relayCa);
       if (typeof value.token !== 'string' || value.token.length > 2048 || typeof value.expiresAt !== 'number' || value.expiresAt <= Date.now()) throw new Error('中继协作凭据无效，请检查中继版本。');
       const grant: CollabGrant = { origin: current.relay, ca: current.relayCa, token: value.token, expiresAt: value.expiresAt };
-      if (generation !== started) throw new Error('中继配置已变化，请重试。');
+      const latest = credentials();
+      if (generation !== started || !latest || latest.relay !== current.relay || latest.deviceId !== current.deviceId || latest.deviceToken !== current.deviceToken || latest.relayCa !== current.relayCa) throw new Error('中继配置已变化，请重试。');
       cached = grant;
       return grant;
     })().finally(() => { if (generation === started) pending = undefined; });

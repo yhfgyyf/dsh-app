@@ -8,6 +8,10 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## dsh-p2p-collab 0.1.3 (unreleased)
+
+Phone remote control now lives in **Plugins → dsh-p2p-collab**, with relay registration, QR pairing and phone unbinding in the plugin detail page. Configuration and LAN pairing remain available while the plugin is disabled. The collaboration workspace appears only when the plugin is enabled and the relay is registered, and closes when registration is removed. Existing phone connections and background behavior are preserved.
+
 ## v0.1.32: mobile previews, downloads, sharing, terminals and voice input
 
 Android 0.12.5-dsh.4 previews Office files as PDFs converted on the computer, animates GIFs, and plays media from bounded private cache downloads. Original files can be saved to the phone or shared through Android's system chooser. Phones with control access can use the computer's interactive terminal. Finish a voice recording to transcribe it on the computer and automatically send the text; cancellation, navigation and backgrounding retire the recording.

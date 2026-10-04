@@ -102,7 +102,7 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /><RemoteAccessSettings /></div>;
+  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
 }
 
 /** Route menu actions to their owners; search still uses a version-pinned UI control. */
@@ -131,6 +131,8 @@ export async function apply(ctx: DesktopContext) {
   installPluginMarketplace(ctx);
   installPluginSecurityReview(ctx);
   installSessionDelete(ctx);
+  // Configuration stays available while the collaboration workspace is disabled.
+  ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: 'dsh-p2p-collab' }, RemoteAccessSettings));
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };

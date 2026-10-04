@@ -10,12 +10,12 @@ import type { CollabPublishMode } from '../src/shared/collab.ts';
 
 async function fixture(mode: CollabPublishMode) {
   const home = await mkdtemp(join(tmpdir(), 'collab-publishing-')), taskId = randomUUID();
-  const client = new CollabClient(home, { grant: async () => { throw new Error('Fixture never connects'); } }); await client.restore();
+  const client = new CollabClient(home, { isRegistered: () => true, grant: async () => { throw new Error('Fixture never connects'); } }); await client.restore();
   client.data.settings.publishMode = mode;
   const uploads = new Map<string, any>(), replies = new Map<string, any>();
   let created = 0, posts = 0, loseReply = false, cwd = '', prompt = '', live = true;
   const api = async (path: string, body?: any): Promise<any> => {
-    if (path === 'tasks/' + taskId) return { task: { id: taskId, title: 'Fixture', description: 'Explain 42', acceptance: '', revision: 1, status: 'open' }, replies: [], attachments: [] };
+    if (path === 'tasks/' + taskId) return { task: { id: taskId, title: 'Fixture', description: 'Explain 42', acceptance: '', revision: 1, specRevision: 1, status: 'open' }, replies: [], attachments: [], attempts: [], validations: [] };
     if (path === 'attachments') { uploads.set(body.operationId, body); return { id: body.operationId }; }
     if (path.endsWith('/replies')) {
       posts++; if (replies.has(body.operationId)) assert.deepEqual(body, replies.get(body.operationId)); else replies.set(body.operationId, structuredClone(body));
@@ -31,6 +31,7 @@ async function fixture(mode: CollabPublishMode) {
       prompt = args.content[0].text;
       await writeFile(join(cwd, 'result.txt'), '42');
       await writeFile(join(cwd, 'submission.json'), JSON.stringify({ body: '# Answer\n\n`42`', verification: 'Fixture assertion passed', limitations: 'No production execution', files: ['result.txt'] }));
+      await writeFile(join(cwd, 'continuation.json'), JSON.stringify({ action: 'ready', summary: '42 verified', nextStep: '', wakeOn: [], decisions: [], contribution: { summary: 'New independently checked answer and result file' } }));
     },
     inspect: async (id: string) => ({ meta: { id }, inheritedEventCount: 0, events: [{ type: 'turn/start', data: { turn: 1 } }, { type: 'assistant/message', data: { turn: 1, message: { content: [{ type: 'text', text: 'Final 42' }] } } }, ...(!live ? [{ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }] : [])] }),
   }, sessionPersistence: { flush: async () => {}, list: async () => [] } };
@@ -65,7 +66,7 @@ test('automatic publishing snapshots the chosen mode and retries a lost response
     const duplicate = await f.rpc('reply', { operationId: randomUUID(), taskId: f.taskId, kind: 'message', body: 'Do not duplicate the unconfirmed post', runId, reportSnapshot: unconfirmed.reportSnapshot });
     assert.equal(duplicate.ok, false); assert.equal(f.counts().posts, 1);
     await f.rpc('run', { runId }); assert.equal(f.counts().posts, 1, 'Read polling must not repeatedly retry a failed publish');
-    const restored = new CollabClient(f.home, { grant: async () => { throw new Error(); } }); await restored.restore(); restored.api = f.api;
+    const restored = new CollabClient(f.home, { isRegistered: () => true, grant: async () => { throw new Error(); } }); await restored.restore(); restored.api = f.api;
     const host = new CollabHost(restored, f.ctx, () => undefined, f.info);
     const retry = () => host.handle('publish-run', { args: { runId } }, new AbortController().signal);
     await retry(); await retry();
@@ -75,12 +76,15 @@ test('automatic publishing snapshots the chosen mode and retries a lost response
   } finally { await f.cleanup(); }
 });
 
-test('manual mode never starts AI, and a cancelled automatic run never publishes', async () => {
+test('manual publishing allows AI generation, and a cancelled automatic run never publishes', async () => {
   const f = await fixture('manual'), runId = randomUUID();
   try {
-    assert.equal((await f.rpc('start', { operationId: runId, taskId: f.taskId, mode: 'reply' })).ok, false); assert.equal(f.counts().created, 0);
-    f.client.data.settings.publishMode = 'auto'; await f.rpc('start', { operationId: runId, taskId: f.taskId, mode: 'reply' }); await f.rpc('cancel', { runId }); await f.rpc('run', { runId });
-    assert.equal(f.client.data.runs[runId].status, 'stopped'); assert.equal(f.replies.size, 0); assert.equal(f.uploads.size, 0);
+    assert.equal((await f.rpc('start', { operationId: runId, taskId: f.taskId, mode: 'reply' })).ok, true); assert.equal(f.counts().created, 1);
+    f.settle(); await f.rpc('run', { runId });
+    assert.ok(f.client.data.runs[runId].submission); assert.equal(f.replies.size, 0); assert.equal(f.uploads.size, 0);
+    const cancelledId = randomUUID();
+    f.client.data.settings.publishMode = 'auto'; await f.rpc('start', { operationId: cancelledId, taskId: f.taskId, mode: 'reply' }); await f.rpc('cancel', { runId: cancelledId }); await f.rpc('run', { runId: cancelledId });
+    assert.equal(f.client.data.runs[cancelledId].status, 'stopped'); assert.equal(f.replies.size, 0); assert.equal(f.uploads.size, 0);
   } finally { await f.cleanup(); }
 });
 

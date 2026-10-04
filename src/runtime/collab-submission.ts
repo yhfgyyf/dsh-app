@@ -7,6 +7,14 @@ import type { CollabGeneratedFile, CollabSubmission } from '../shared/collab.ts'
 export const COLLAB_ANSWER_FORMAT = `使用 GitHub Issue 风格的 Markdown：先直接回答结论，再按需要写步骤、实际验证及结果、限制。使用清晰的小标题、列表、表格、行内代码；多行代码使用带语言名称的围栏代码块。引用资料提供有说明文字的 HTTPS 链接，不编造链接或未执行的检查。附件在正文中说明文件名、用途和验证情况，不把本机绝对路径当成别人可访问的下载链接。
 在当前工作目录写入 UTF-8 submission.json，结构为 {"body":"Markdown 正文","verification":"实际验证及结果；未验证就明确写未验证","limitations":"限制与未验证部分","files":["相对于当前工作目录的产物路径"]}。正文最多 49152 字符，验证最多 16000 字符，限制最多 8000 字符。files 只列本任务确实生成、需要共享的文件，最多 8 个，每个不超过 8 MiB，禁止绝对路径或目录外文件。无附件时写空数组；超过限制的文件仅在已有可访问下载地址时提供链接，不擅自上传到第三方。最后一条回答也应为可直接发布的 Markdown 正文。发布由协作空间处理，不要自行调用消息或上传接口。`;
 
+/** Usage reports, operation IDs and attachment order do not make an unchanged contribution new. */
+export function collabContributionDigest(value: { kind: 'message' | 'solution'; body: string; verification?: string; limitations?: string; files: readonly { name: string; sha256: string }[] }) {
+  const normalized = (text: string | undefined) => (text ?? '').replace(/\r\n/g, '\n').trim();
+  return createHash('sha256').update(JSON.stringify({ kind: value.kind, body: normalized(value.body),
+    ...(value.kind === 'solution' ? { verification: normalized(value.verification), limitations: normalized(value.limitations) } : {}),
+    files: value.files.map(({ name, sha256 }) => ({ name, sha256 })).sort((a, b) => a.name.localeCompare(b.name) || a.sha256.localeCompare(b.sha256)) })).digest('hex');
+}
+
 export async function readGeneratedFile(cwd: string, path: string): Promise<Buffer> {
   if (!path || isAbsolute(path) || /^[A-Za-z]:/.test(path) || path.includes('\\') || path.includes('\0')) throw new Error('附件必须使用本次任务目录内的相对路径。');
   const root = await realpath(cwd), target = await realpath(resolve(root, path)), rel = relative(root, target);

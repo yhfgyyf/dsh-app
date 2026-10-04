@@ -8,7 +8,7 @@ export type CollabPeer = { id: string; nickname: string; createdAt: number };
 export type CollabAttachment = { id: string; name: string; size: number; sha256: string };
 export type CollabTask = {
   id: string; authorId: string; title: string; description: string; acceptance: string; tags: string[];
-  status: TaskStatus; revision: number; createdAt: number; updatedAt: number; acceptedReplyId: string | null;
+  status: TaskStatus; revision: number; specRevision: number; createdAt: number; updatedAt: number; acceptedReplyId: string | null;
   replyCount: number; solutionCount: number; following: boolean;
 };
 export type UsageCounts = {
@@ -24,12 +24,26 @@ export type ExecutionReport = {
 export type CollabSolution = { verification: string; limitations: string; report: ExecutionReport | null };
 export type CollabReply = {
   id: string; taskId: string; authorId: string; actor: CollabActor; kind: 'message' | 'solution';
-  body: string; baseRevision: number; replaces: string | null; createdAt: number;
+  body: string; baseRevision: number; replaces: string | null; supersededBy?: string | null; attemptId: string | null; createdAt: number;
   solution: CollabSolution | null; attachments: CollabAttachment[];
 };
+export type CollabCandidates = { items: CollabReply[]; hasMore: boolean; total: number };
 export type CollabParticipation = { peerId: string; status: 'working' | 'waiting' | 'submitted' | 'withdrawn'; updatedAt: number };
-export type CollabDetail = { task: CollabTask; peers: CollabPeer[]; replies: CollabReply[]; attachments: CollabAttachment[]; participants: CollabParticipation[]; cursor: number; replyOffset: number; hasMore: boolean };
-export type CollabEvent = { id: number; taskId: string; actorId: string; kind: string; at: number };
+export type CollabAttempt = {
+  id: string; taskId: string; peerId: string; baseRevision: number;
+  status: 'working' | 'waiting' | 'ready' | 'paused' | 'budget' | 'submitted' | 'withdrawn' | 'completed' | 'error';
+  direction: string; nextStep: string; waitReason: string; createdAt: number; updatedAt: number;
+};
+export type CollabValidation = {
+  id: string; taskId: string; replyId: string; authorId: string; baseRevision: number; candidateDigest: string;
+  outcome: 'passed' | 'failed' | 'inconclusive'; method: string; environment: string; evidence: string; createdAt: number;
+};
+export type CollabAcceptance = {
+  id: string; taskId: string; replyId: string; authorId: string; validationId: string; baseRevision: number;
+  candidateDigest: string; evidence: string; createdAt: number;
+};
+export type CollabDetail = { task: CollabTask; peers: CollabPeer[]; replies: CollabReply[]; attachments: CollabAttachment[]; participants: CollabParticipation[]; attempts: CollabAttempt[]; validations: CollabValidation[]; decision: CollabAcceptance | null; cursor: number; replyOffset: number; hasMore: boolean };
+export type CollabEvent = { id: number; taskId: string; actorId: string; kind: string; subjectId: string | null; sourceAttemptId?: string | null; at: number };
 export type CollabInboxItem = CollabEvent & { read: boolean; title: string };
 export type CollabIdentity = { deviceId: string; kind: 'desktop' | 'mobile'; bindingId?: string; role: 'viewer' | 'control'; expiresAt: number };
 

@@ -87,10 +87,9 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-browser-use-settings { margin-top: 16px; }
 .desktop-browser-use-note { margin: 6px 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .desktop-browser-use-actions { display: flex; align-items: center; gap: 14px; }
-.desktop-settings-button, .desktop-browser-use-connect, .desktop-remote-panel button { border: none; background: var(--dsw-alias-bg-module-platform); border-radius: var(--dsw-radius-md); min-width: 90px; max-width: 280px; height: 36px; padding: 0 14px; font: inherit; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); cursor: pointer; }
-.desktop-settings-button:hover, .desktop-browser-use-connect:hover, .desktop-remote-panel button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.desktop-settings-button:focus-visible, .desktop-browser-use-connect:focus-visible, .desktop-remote-panel button:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
-.desktop-remote-panel button:disabled { opacity: .5; cursor: default; }
+.desktop-settings-button, .desktop-browser-use-connect { border: none; background: var(--dsw-alias-bg-module-platform); border-radius: var(--dsw-radius-md); min-width: 90px; max-width: 280px; height: 36px; padding: 0 14px; font: inherit; font-size: 14px; line-height: 22px; color: var(--dsw-alias-label-primary); cursor: pointer; }
+.desktop-settings-button:hover, .desktop-browser-use-connect:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.desktop-settings-button:focus-visible, .desktop-browser-use-connect:focus-visible { outline: 2px solid var(--dsw-alias-label-primary); outline-offset: 3px; }
 .desktop-browser-use-credentials { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--dsw-alias-border-main, #8885); border-radius: 8px; font-size: 12px; }
 .desktop-browser-use-credentials p { margin: 0; color: var(--dsw-alias-label-secondary); }
 .desktop-browser-use-credentials input { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #8886; border-radius: 5px; color: inherit; background: transparent; }
@@ -99,15 +98,20 @@ html[data-dsh-desktop] :focus-visible { outline: 2px solid var(--dsw-alias-label
 .desktop-browser-use-actions button:disabled, .desktop-browser-use-credential-actions button:disabled { opacity: .5; cursor: default; }
 .desktop-titlebar .desktop-computer-stop { color: #e34c4c; font-size: 12px; }
 
-.desktop-remote-panel { display: grid; gap: 14px; padding: 18px 0; max-width: 640px; }
+.desktop-remote-panel { display: grid; gap: 16px; }
 .desktop-remote-panel p { margin: 0; }
-.desktop-remote-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.desktop-remote-section { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px; }
+.desktop-remote-section h4 { margin: 0; font-size: 14px; font-weight: 600; }
+.desktop-remote-status { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 .desktop-remote-status span, .desktop-remote-note, .desktop-remote-device span { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 .desktop-remote-panel form { display: grid; gap: 10px; }
-.desktop-remote-panel label { display: flex; align-items: center; gap: 10px; }
-.desktop-remote-panel input:not([type=checkbox]) { flex: 1; min-width: 100px; padding: 8px; border: 1px solid var(--border-color, #8886); border-radius: 8px; background: transparent; color: inherit; }
+.desktop-remote-panel label { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 12px; font-size: 13px; }
+.desktop-remote-panel input { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); color: inherit; font: inherit; }
+.desktop-remote-panel input:disabled { color: var(--dsw-alias-label-secondary); }
+.desktop-remote-panel input:focus-visible { outline: 2px solid var(--dsw-alias-focus-ring, #5b83d4); outline-offset: 2px; }
 .desktop-remote-panel form > button { justify-self: start; }
 .desktop-remote-actions, .desktop-remote-device { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .desktop-remote-pair img { max-width: 100%; height: auto; border-radius: 8px; }
+.desktop-remote-pair { display: grid; justify-items: start; gap: 10px; }
 .desktop-remote-device { justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l2); }
 .desktop-remote-device > div { display: grid; gap: 4px; }

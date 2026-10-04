@@ -2,11 +2,12 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { collabJson, type CollabBroker, type CollabGrant } from './collab-transport.ts';
-import { idField, numberField, record, textField, type CollabPeer } from '../../services/relay/src/collab-types.ts';
-import { DEFAULT_COLLAB_SETTINGS, type CollabRun, type CollabSettings, type CollabState } from '../shared/collab.ts';
+import { idField, numberField, record, textField, type CollabEvent, type CollabPeer } from '../../services/relay/src/collab-types.ts';
+import { DEFAULT_COLLAB_SETTINGS, type CollabLocalAttempt, type CollabRun, type CollabSettings, type CollabState } from '../shared/collab.ts';
 
 export type CollabLocalData = { version: 1; peerId: string; nickname: string; cursor: number; origin?: string; createdAt: number;
-  settings: CollabSettings; runs: Record<string, CollabRun>; drafts: Record<string, unknown> };
+  settings: CollabSettings; runs: Record<string, CollabRun>; drafts: Record<string, unknown>; attempts: Record<string, CollabLocalAttempt> };
+const semanticEvents = new Set(['task.updated', 'reply.created', 'solution.submitted', 'validation.created', 'solution.accepted']);
 export class CollabClient {
   data!: CollabLocalData;
   private readonly file: string;
@@ -33,13 +34,21 @@ export class CollabClient {
       record(value.runs); record(value.drafts); record(value.settings);
       this.data = value as CollabLocalData;
       this.data.settings.publishMode ??= 'review';
+      this.data.settings.executionMode ??= 'manual';
+      this.data.attempts ??= {};
+      record(this.data.attempts);
+      for (const attempt of Object.values(this.data.attempts)) if (attempt.publicUpdate && attempt.publicUpdate.payload.direction !== (attempt.publicDirection ?? '')) {
+        // A legacy pending operation may already have reached the relay. Never reuse its ID with changed content.
+        const operationId = randomUUID();
+        attempt.publicUpdate = { operationId, payload: { ...attempt.publicUpdate.payload, operationId, direction: attempt.publicDirection ?? '' } };
+      }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       const adjectives = ['青竹', '远山', '晴空', '星河', '晨风', '银杏'];
       const animals = ['鲸鱼', '海豚', '白鹭', '云雀', '松鼠', '水獭'];
       const id = randomUUID();
       this.data = { version: 1, peerId: id, nickname: adjectives[parseInt(id.slice(0, 2), 16) % adjectives.length] + animals[parseInt(id.slice(2, 4), 16) % animals.length],
-        cursor: 0, createdAt: Date.now(), settings: { ...DEFAULT_COLLAB_SETTINGS }, runs: {}, drafts: {} };
+        cursor: 0, createdAt: Date.now(), settings: { ...DEFAULT_COLLAB_SETTINGS }, runs: {}, drafts: {}, attempts: {} };
       await this.save();
     }
   }
@@ -52,9 +61,33 @@ export class CollabClient {
     this.writing = write.catch(() => {}); return write;
   }
   state(): CollabState {
-    return { peer: { id: this.data.peerId, nickname: this.data.nickname, createdAt: this.data.createdAt }, syncing: !!this.syncing,
+    return { peer: { id: this.data.peerId, nickname: this.data.nickname, createdAt: this.data.createdAt }, registered: this.broker.isRegistered(), syncing: !!this.syncing,
       origin: this.data.origin, unread: this.unread, cursor: this.data.cursor, lastSyncAt: this.lastSyncAt, settings: { ...this.data.settings },
-      runs: Object.values(this.data.runs).sort((a, b) => b.startedAt - a.startedAt).slice(0, 200).map(({ output: _output, report: _report, submission: _submission, publication, ...run }) => ({ ...run, ...(publication ? { publication: { ...publication, payload: undefined } } : {}) })) };
+      attempts: Object.values(this.data.attempts).sort((a, b) => b.updatedAt - a.updatedAt).map(attempt => structuredClone(attempt)),
+      runs: Object.values(this.data.runs).sort((a, b) => b.startedAt - a.startedAt).slice(0, 200).map(({ output: _output, report: _report, submission: _submission, inputContributionDigests: _digests, publication, ...run }) => ({ ...run, ...(publication ? { publication: { ...publication, payload: undefined } } : {}) })) };
+  }
+  async identity(signal?: AbortSignal) {
+    const requestSignal = signal ? AbortSignal.any([signal, this.requests.signal]) : this.requests.signal;
+    requestSignal.throwIfAborted();
+    const local = { localPeerId: this.data.peerId, localNickname: this.data.nickname, origin: this.data.origin };
+    let grant: CollabGrant;
+    try { grant = await this.broker.grant(); }
+    catch { requestSignal.throwIfAborted(); return { ...local, remoteError: { code: 'identity_grant_failed' } }; }
+    requestSignal.throwIfAborted();
+    if (this.data.origin && grant.origin !== this.data.origin) throw new Error('已切换中继；请先导出原协作身份，再明确重置协作配置。');
+    const diagnostic = { ...local, origin: grant.origin };
+    try {
+      // Diagnosis must work even when join would conflict, and must never repair or persist identity implicitly.
+      const value = await collabJson(grant.origin + '/collab/v1/me', grant.token, undefined, grant.ca, requestSignal);
+      const peer = record(record(value).peer);
+      return { ...diagnostic, serverPeer: { id: idField(peer.id), nickname: textField(peer.nickname, 48), createdAt: numberField(peer.createdAt) } };
+    } catch (error) {
+      requestSignal.throwIfAborted();
+      const remote = error as { code?: unknown; status?: unknown };
+      const code = typeof remote?.code === 'string' && ['peer_not_joined', 'identity_conflict', 'peer_suspended'].includes(remote.code) ? remote.code : 'identity_lookup_failed';
+      const status = typeof remote?.status === 'number' && Number.isInteger(remote.status) && remote.status >= 100 && remote.status <= 599 ? remote.status : undefined;
+      return { ...diagnostic, remoteError: { code, ...(status === undefined ? {} : { status }) } };
+    }
   }
   async api(path: string, body?: unknown, signal?: AbortSignal) {
     const requestSignal = signal ? AbortSignal.any([signal, this.requests.signal]) : this.requests.signal;
@@ -99,7 +132,39 @@ export class CollabClient {
       while (this.syncAgain && !this.stopped) {
         this.syncAgain = false;
         const value = await this.api('sync?after=' + this.data.cursor);
-        this.data.cursor = numberField(value.cursor); this.unread = numberField(value.unread); this.lastSyncAt = Date.now();
+        const cursor = numberField(value.cursor);
+        const events: CollabEvent[] = (Array.isArray(value.events) ? value.events : []).map((raw: unknown) => {
+          const event = record(raw);
+          return { id: numberField(event.id, 1), taskId: idField(event.taskId), actorId: idField(event.actorId), kind: textField(event.kind, 80), at: numberField(event.at), subjectId: event.subjectId ? idField(event.subjectId) : null,
+            sourceAttemptId: event.sourceAttemptId ? idField(event.sourceAttemptId) : null };
+        });
+        for (const attempt of Object.values(this.data.attempts)) {
+          if (['withdrawn', 'completed'].includes(attempt.status)) continue;
+          if (value.reset) {
+            // A restored/replaced relay journal cannot prove what the model has reviewed.
+            attempt.desiredState = 'paused'; attempt.status = 'paused';
+            attempt.waitReason = '中继事件历史已重置，请核对最新任务后手动恢复。';
+            attempt.syncError = attempt.waitReason;
+            // Sequence numbers can be reused by the replacement journal. Keep the old
+            // evidence separately so it neither suppresses nor impersonates new events.
+            (attempt.eventArchive ??= []).push({ at: Date.now(), reason: attempt.waitReason, receivedCursor: attempt.receivedCursor,
+              reviewedCursor: attempt.reviewedCursor, pendingEvents: attempt.pendingEvents, decisions: attempt.decisions });
+            attempt.pendingEvents = []; attempt.decisions = [];
+            attempt.eventEpoch = (attempt.eventEpoch ?? 0) + 1;
+            attempt.receivedCursor = cursor; attempt.reviewedCursor = cursor;
+            continue;
+          }
+          const known = new Set(attempt.pendingEvents.map(event => event.id));
+          const ownReplies = new Set(attempt.runIds.flatMap(id => { const run = this.data.runs[id]; return [run?.publication?.replyId, run?.submittedReplyId].filter(Boolean); }));
+          for (const event of events) {
+            if (event.taskId !== attempt.taskId || event.id <= attempt.receivedCursor || event.id <= attempt.reviewedCursor || known.has(event.id) || !semanticEvents.has(event.kind)) continue;
+            if (['reply.created', 'solution.submitted'].includes(event.kind) && (event.sourceAttemptId === attempt.id || (event.actorId === this.data.peerId && ownReplies.has(event.subjectId ?? '')))) continue;
+            attempt.pendingEvents.push(event); known.add(event.id);
+          }
+          attempt.receivedCursor = Math.max(attempt.receivedCursor, cursor);
+        }
+        // Persist receipt and the inbox together; reading the UI never advances reviewedCursor.
+        this.data.cursor = cursor; this.unread = numberField(value.unread); this.lastSyncAt = Date.now();
         await this.save();
         if (value.hasMore) this.syncAgain = true;
       }

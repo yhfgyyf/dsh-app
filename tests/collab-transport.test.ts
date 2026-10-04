@@ -2,6 +2,30 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type ServerResponse } from 'node:http';
 import { createCollabBroker } from '../src/runtime/collab-transport.ts';
+import type { RemoteCredentials } from '../src/shared/remote-access.ts';
+
+test('registration gates grants and revocation rejects a grant already in flight', async () => {
+  let credentials: RemoteCredentials | undefined, respond: ServerResponse | undefined, requests = 0;
+  const server = createServer((_req, res) => { requests++; respond = res; });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const broker = createCollabBroker(() => credentials);
+  try {
+    assert.equal(broker.isRegistered(), false);
+    await assert.rejects(broker.grant(), /插件 → dsh-p2p-collab/);
+    assert.equal(requests, 0);
+    credentials = { relay: `http://127.0.0.1:${(server.address() as any).port}`, deviceId: 'fixture-device', deviceToken: 'fixture-token', bindings: [] };
+    assert.equal(broker.isRegistered(), true);
+    const pending = assert.rejects(broker.grant(), /中继配置已变化/);
+    for (let i = 0; !respond && i < 100; i++) await new Promise(resolve => setTimeout(resolve, 5));
+    assert.ok(respond);
+    credentials = undefined;
+    assert.equal(broker.isRegistered(), false);
+    respond.end(JSON.stringify({ token: 'revoked-fixture-grant', expiresAt: Date.now() + 300000 }));
+    await pending;
+    await assert.rejects(broker.grant(), /注册中继/);
+    assert.equal(requests, 1);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
 
 test('grant caching compares credential values and a superseded request cannot clear the current generation', async () => {
   const requests: { deviceId: string; response: ServerResponse }[] = [];

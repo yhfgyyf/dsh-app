@@ -18,8 +18,8 @@ export async function buildCollabPlugin(root = fileURLToPath(new URL('..', impor
       banner: 'window.__ModuleLoader__.load({id:"dsh-p2p-collab",factory:(require)=>{const module={exports:{}};const exports=module.exports;',
       footer: 'return module.exports;}});',
     } } } });
-  await writeFile(resolve(output, 'package.json'), JSON.stringify({ name: 'dsh-p2p-collab', version: '0.1.2', private: true, type: 'module',
-    description: 'P2P 协作：浏览任务、讨论、本机求解和共享解决方案', main: 'index.js', exports: { '.': './index.js', './client': './client.js', './package.json': './package.json' },
+  await writeFile(resolve(output, 'package.json'), JSON.stringify({ name: 'dsh-p2p-collab', version: '0.1.5', private: true, type: 'module',
+    description: '协作空间与手机远程控制：中继注册、扫码绑定、任务讨论和共享解决方案', main: 'index.js', exports: { '.': './index.js', './client': './client.js', './package.json': './package.json' },
     dshDesktopVersion: version, keywords: ['dsh-plugin'], dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: [
       '@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-layout', '@deepseek-ai/dsh-client-ui-sidebar', '@deepseek-ai/dsh-client-ui-workspace', '@deepseek-ai/dsh-client-ui-primitives',
     ] } } }, null, 2));

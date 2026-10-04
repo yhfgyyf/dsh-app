@@ -7,7 +7,7 @@ import { createPrivateRelay } from '../src/private-server.js';
 import { CollabStore } from '../src/collab-store.js';
 import { createCollabServer, relayAuthorizer } from '../src/collab-server.js';
 
-export async function collaborationFixture(options: { rejectCollaborationWebSocket?: boolean } = {}) {
+export async function collaborationFixture(options: { rejectCollaborationWebSocket?: boolean; legacy?: boolean } = {}) {
   const listen = async (server: Server) => { server.listen(0, '127.0.0.1'); await once(server, 'listening'); return `http://127.0.0.1:${(server.address() as any).port}`; };
   const secret = 'isolated-collaboration-fixture-secret';
   const relayStore = new PrivateStore(':memory:'), store = new CollabStore(':memory:');
@@ -18,21 +18,70 @@ export async function collaborationFixture(options: { rejectCollaborationWebSock
   const relayOrigin = await listen(relay.server);
   const collaboration = createCollabServer(store, relayAuthorizer(relayOrigin, secret));
   const collabOrigin = await listen(collaboration.server);
-  const stats = { collaborationUpgrades: 0, attachmentUploads: 0 };
+  const stats = { collaborationUpgrades: 0, attachmentUploads: 0, legacy: options.legacy === true,
+    legacyRequests: [] as { method: string; path: string }[], legacyViolations: [] as { method: string; path: string; reason: string }[],
+    legacyResponses: { detail: 0, sync: 0, inbox: 0 } };
   let replyFromPeer: (() => Promise<unknown>) | undefined, dropNextReplyResponse = false;
   const gateway = createServer((req, res) => {
     if (req.url === '/__fixture/status') { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ ...stats, attachments: store.db.prepare('SELECT COUNT(*) AS count FROM collab_attachments').get() })); return; }
     if (req.url === '/__fixture/drop-next-reply' && req.method === 'POST') { req.resume(); dropNextReplyResponse = true; res.end('{}'); return; }
     if (req.url === '/__fixture/peer-reply' && req.method === 'POST' && replyFromPeer) { req.resume(); void replyFromPeer().then(value => res.end(JSON.stringify(value)), () => { res.writeHead(500); res.end('{}'); }); return; }
+    const path = new URL(req.url!, 'http://localhost').pathname;
+    const rejectLegacy = (reason: string) => {
+      stats.legacyViolations.push({ method: req.method!, path, reason }); req.resume();
+      res.writeHead(404, { 'content-type': 'application/json' }); res.end('{"error":"not_found"}');
+    };
+    if (options.legacy && path.startsWith('/collab/v1/')) {
+      stats.legacyRequests.push({ method: req.method!, path });
+      if (/^\/collab\/v1\/tasks\/[^/]+\/(?:candidates|attempts|validations|accept)$/.test(path)) { rejectLegacy('unsupported-endpoint'); return; }
+    }
     if (req.url === '/collab/v1/attachments' && req.method === 'POST') stats.attachmentUploads++;
     const dropReply = dropNextReplyResponse && req.method === 'POST' && /\/collab\/v1\/tasks\/[^/]+\/replies$/.test(req.url!);
     if (dropReply) dropNextReplyResponse = false;
-    const target = new URL(req.url!, req.url!.startsWith('/collab/') ? collabOrigin : relayOrigin);
-    const upstream = request(target, { method: req.method, headers: req.headers }, reply => {
-      if (dropReply && reply.statusCode === 200) { reply.resume(); res.writeHead(503, { 'content-type': 'application/json' }); res.end('{"error":"fixture_response_lost"}'); return; }
-      res.writeHead(reply.statusCode!, reply.headers); reply.pipe(res);
-    });
-    upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); }); req.pipe(upstream);
+    const forward = (body?: Buffer) => {
+      const target = new URL(req.url!, req.url!.startsWith('/collab/') ? collabOrigin : relayOrigin);
+      const upstream = request(target, { method: req.method, headers: req.headers }, reply => {
+        if (dropReply && reply.statusCode === 200) { reply.resume(); res.writeHead(503, { 'content-type': 'application/json' }); res.end('{"error":"fixture_response_lost"}'); return; }
+        if (options.legacy && req.method === 'GET' && reply.statusCode === 200 && path.startsWith('/collab/v1/')) {
+          const chunks: Buffer[] = [];
+          reply.on('data', chunk => chunks.push(Buffer.from(chunk)));
+          reply.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+          reply.on('end', () => {
+            try {
+              const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+              if (/^\/collab\/v1\/tasks\/[^/]+$/.test(path)) {
+                delete value.task.specRevision;
+                for (const field of ['attempts', 'validations', 'decision', 'replyOffset']) delete value[field];
+                for (const item of value.replies) for (const field of ['attemptId', 'replaces', 'supersededBy']) delete item[field];
+                stats.legacyResponses.detail++;
+              } else if (path === '/collab/v1/sync' || path === '/collab/v1/inbox') {
+                for (const item of value.events ?? value.items ?? []) { delete item.subjectId; delete item.sourceAttemptId; }
+                stats.legacyResponses[path === '/collab/v1/sync' ? 'sync' : 'inbox']++;
+              } else if (path === '/collab/v1/tasks') {
+                for (const item of value.tasks) delete item.specRevision;
+              } else if (/^\/collab\/v1\/tasks\/[^/]+\/history$/.test(path)) {
+                for (const item of value.revisions) delete item.specRevision;
+              }
+              const output = JSON.stringify(value), headers = { ...reply.headers, 'content-length': Buffer.byteLength(output) };
+              delete headers['transfer-encoding']; res.writeHead(reply.statusCode!, headers); res.end(output);
+            } catch { if (!res.headersSent) res.writeHead(502); res.end(); }
+          });
+          return;
+        }
+        res.writeHead(reply.statusCode!, reply.headers); reply.pipe(res);
+      });
+      upstream.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
+      if (body === undefined) req.pipe(upstream); else upstream.end(body);
+    };
+    if (options.legacy && req.method === 'POST' && (path === '/collab/v1/inbox/read' || /^\/collab\/v1\/tasks\/[^/]+\/replies$/.test(path))) {
+      void (async () => {
+        const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk));
+        const body = Buffer.concat(chunks), value = JSON.parse(body.toString('utf8'));
+        if (path === '/collab/v1/inbox/read' && Object.hasOwn(value, 'eventIds')) { rejectLegacy('eventIds-read'); return; }
+        if (value.replaces) { rejectLegacy('candidate-revision'); return; }
+        forward(body);
+      })().catch(() => { if (!res.headersSent) res.writeHead(400); res.end('{}'); });
+    } else forward();
   });
   gateway.on('upgrade', (req, socket, head) => {
     if (req.url === '/collab/v1/events') {
@@ -67,7 +116,7 @@ export async function collaborationFixture(options: { rejectCollaborationWebSock
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const fixture = await collaborationFixture({ rejectCollaborationWebSocket: process.env.DSH_COLLAB_FIXTURE_REJECT_WS === '1' });
+  const fixture = await collaborationFixture({ rejectCollaborationWebSocket: process.env.DSH_COLLAB_FIXTURE_REJECT_WS === '1', legacy: process.env.DSH_COLLAB_FIXTURE_LEGACY === '1' });
   console.log(JSON.stringify({ origin: fixture.origin, code: fixture.code, taskId: fixture.task.id }));
   process.stdin.resume(); process.stdin.once('end', () => { void fixture.close(); });
 }

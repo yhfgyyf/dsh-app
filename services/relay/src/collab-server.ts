@@ -66,7 +66,7 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
       if (!url.pathname.startsWith('/collab/v1/')) throw new CollabError(404, 'not_found');
       const identity = await authorize(bearer(req));
       const method = req.method, parts = url.pathname.slice('/collab/v1/'.length).split('/');
-      if (parts.length > 3 || parts.some(p => !/^[A-Za-z0-9_-]+$/.test(p))) throw new CollabError(404, 'not_found');
+      if (parts.length > 4 || parts.some(p => !/^[A-Za-z0-9_-]+$/.test(p))) throw new CollabError(404, 'not_found');
       let body: unknown = {};
       if (method === 'POST') {
         rate('write:' + identity.deviceId, 180);
@@ -90,14 +90,19 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
         else { write(); result = store.createTask(peer, body); }
       } else if (parts[0] === 'tasks' && parts[1]) {
         const id = idField(parts[1]);
-        if (parts.length === 2 && method === 'GET') result = store.detail(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000));
+        if (parts.length === 2 && method === 'GET') result = store.detail(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000), query.subjectId === undefined ? undefined : idField(query.subjectId));
+        else if (parts.length === 3 && parts[2] === 'candidates' && method === 'GET') result = store.candidates(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000));
         else if (parts.length === 3 && parts[2] === 'history' && method === 'GET') result = store.history(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000));
+        else if (parts.length === 4 && parts[2] === 'replies' && method === 'GET') result = store.reply(peer, id, idField(parts[3]));
         else {
           write(); if (method !== 'POST') throw new CollabError(405, 'method_not_allowed');
+          if (parts.length > 3) throw new CollabError(404, 'not_found');
           if (parts.length === 2) result = store.updateTask(peer, id, body);
           else if (parts[2] === 'replies') result = store.addReply(peer, id, body);
           else if (parts[2] === 'follow') result = store.setFollow(peer, id, body);
           else if (parts[2] === 'participate') result = store.participate(peer, id, body);
+          else if (parts[2] === 'attempts') result = store.attempt(peer, id, body);
+          else if (parts[2] === 'validations') result = store.validate(peer, id, body);
           else if (parts[2] === 'accept') result = store.accept(peer, id, body);
           else throw new CollabError(404, 'not_found');
         }
