@@ -99,7 +99,14 @@ async function run(event) {
   assert.equal(await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]').getAttribute('aria-checked')`), 'false');
   await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role="switch"]').click()`);
   await until(async () => (await rpc('pluginManager/listBundles')).find(b=>b.name==='dsh-p2p-collab').enabled,'Plugin did not enable');
-  await until(async () => (await rpc('state',{},'/desktop-collab')).registered===false,'Unregistered state missing');
+  // Enabled is persisted before the async plugin activation registers its RPC route.
+  await until(() => js(`(async()=>{
+    const r=await fetch('/desktop-collab/state',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method:'state',payload:{args:{}}})});
+    if(r.status===404)return false;
+    if(!r.ok)throw Error('Collaboration state HTTP '+r.status);
+    const body=await r.json();if(!body.result.ok)throw Error(JSON.stringify(body.result.error));
+    return body.result.value.registered===false;
+  })()`),'Unregistered state missing');
   assert.equal(await js(`Array.from(document.querySelectorAll('button')).some(b=>b.textContent.trim()==='协作空间')`),false);
   await assert.rejects(rpc('catalog',{},'/desktop-collab'),/注册中继/);
   const identityBeforeRegistration=(await rpc('state',{},'/desktop-collab')).peer.id;

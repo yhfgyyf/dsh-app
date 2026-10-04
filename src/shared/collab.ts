@@ -41,9 +41,10 @@ export function collabSettings(maxTokens: unknown, maxMinutes: unknown, publishM
   if (executionMode === 'continuous' && maxTokens === 0 && maxMinutes === 0) throw new Error('持续探索至少需要一项有限的 Token 或时间预算。');
   return { maxTokens, maxMinutes, publishMode: publishMode as CollabPublishMode, executionMode: executionMode as CollabExecutionMode };
 }
+export type CollabRecoveryState = { supported: boolean | null; ready: boolean };
 export type CollabState = {
   peer: CollabPeer; registered: boolean; syncing: boolean; origin?: string;
   unread: number; cursor: number; lastSyncAt?: number; settings: CollabSettings; runs: Omit<CollabRun, 'output' | 'report' | 'submission'>[];
-  attempts: CollabLocalAttempt[];
+  attempts: CollabLocalAttempt[]; recovery: CollabRecoveryState;
 };
 export type CollabRpcResult<T = any> = { ok: true; value: T } | { ok: false; error: { code: string; message: string; details: object } };

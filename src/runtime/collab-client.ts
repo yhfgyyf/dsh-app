@@ -1,9 +1,10 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { link, lstat, mkdir, open, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { collabJson, type CollabBroker, type CollabGrant } from './collab-transport.ts';
 import { idField, numberField, record, textField, type CollabEvent, type CollabPeer } from '../../services/relay/src/collab-types.ts';
-import { DEFAULT_COLLAB_SETTINGS, type CollabLocalAttempt, type CollabRun, type CollabSettings, type CollabState } from '../shared/collab.ts';
+import { DEFAULT_COLLAB_SETTINGS, type CollabLocalAttempt, type CollabRecoveryState, type CollabRun, type CollabSettings, type CollabState } from '../shared/collab.ts';
 
 export type CollabLocalData = { version: 1; peerId: string; nickname: string; cursor: number; origin?: string; createdAt: number;
   settings: CollabSettings; runs: Record<string, CollabRun>; drafts: Record<string, unknown>; attempts: Record<string, CollabLocalAttempt> };
@@ -15,8 +16,11 @@ export class CollabClient {
   private unread = 0;
   private lastSyncAt?: number;
   private requests = new AbortController();
-  private joinedOrigin?: string;
-  private joining?: Promise<void>;
+  private joined?: { key: string; token: string; recovery: CollabRecoveryState };
+  private joining?: { key: string; token: string; signal: AbortSignal; promise: Promise<void> };
+  private recovery: CollabRecoveryState = { supported: null, ready: false };
+  private recoverySecret?: string;
+  private loadingRecovery?: Promise<string>;
   private stopped = true;
   private syncing?: Promise<void>;
   private syncAgain = false;
@@ -62,20 +66,20 @@ export class CollabClient {
   }
   state(): CollabState {
     return { peer: { id: this.data.peerId, nickname: this.data.nickname, createdAt: this.data.createdAt }, registered: this.broker.isRegistered(), syncing: !!this.syncing,
-      origin: this.data.origin, unread: this.unread, cursor: this.data.cursor, lastSyncAt: this.lastSyncAt, settings: { ...this.data.settings },
+      origin: this.data.origin, recovery: { ...this.recovery }, unread: this.unread, cursor: this.data.cursor, lastSyncAt: this.lastSyncAt, settings: { ...this.data.settings },
       attempts: Object.values(this.data.attempts).sort((a, b) => b.updatedAt - a.updatedAt).map(attempt => structuredClone(attempt)),
       runs: Object.values(this.data.runs).sort((a, b) => b.startedAt - a.startedAt).slice(0, 200).map(({ output: _output, report: _report, submission: _submission, inputContributionDigests: _digests, publication, ...run }) => ({ ...run, ...(publication ? { publication: { ...publication, payload: undefined } } : {}) })) };
   }
   async identity(signal?: AbortSignal) {
     const requestSignal = signal ? AbortSignal.any([signal, this.requests.signal]) : this.requests.signal;
     requestSignal.throwIfAborted();
-    const local = { localPeerId: this.data.peerId, localNickname: this.data.nickname, origin: this.data.origin };
+    const local = { localPeerId: this.data.peerId, localNickname: this.data.nickname, origin: this.data.origin, recovery: { ...this.recovery } };
     let grant: CollabGrant;
     try { grant = await this.broker.grant(); }
     catch { requestSignal.throwIfAborted(); return { ...local, remoteError: { code: 'identity_grant_failed' } }; }
     requestSignal.throwIfAborted();
     if (this.data.origin && grant.origin !== this.data.origin) throw new Error('已切换中继；请先导出原协作身份，再明确重置协作配置。');
-    const diagnostic = { ...local, origin: grant.origin };
+    const diagnostic = { ...local, origin: grant.origin, recovery: this.joined?.key === this.registrationKey(grant) ? { ...this.joined.recovery } : { supported: null, ready: false } };
     try {
       // Diagnosis must work even when join would conflict, and must never repair or persist identity implicitly.
       const value = await collabJson(grant.origin + '/collab/v1/me', grant.token, undefined, grant.ca, requestSignal);
@@ -95,7 +99,7 @@ export class CollabClient {
     const grant = await this.broker.grant();
     requestSignal.throwIfAborted();
     if (this.data.origin && grant.origin !== this.data.origin) throw new Error('已切换中继；请先导出原协作身份，再明确重置协作配置。');
-    await this.ensureIdentity(grant);
+    await this.ensureIdentity(grant, requestSignal);
     requestSignal.throwIfAborted();
     const value = await this.withGrant(grant, path, body, requestSignal);
     // A confirmed write must not become a failure because the subsequent inbox refresh failed.
@@ -106,24 +110,83 @@ export class CollabClient {
     if (!/^[A-Za-z0-9_/?=&%.-]+$/.test(path) || path.includes('..') || path.startsWith('/')) throw new Error('无效的协作操作。');
     return collabJson(grant.origin + '/collab/v1/' + path, grant.token, body, grant.ca, signal);
   }
-  start() { if (!this.stopped) return; this.stopped = false; this.requests = new AbortController(); this.joinedOrigin = undefined; }
+  start() { if (!this.stopped) return; this.stopped = false; this.requests = new AbortController(); this.joined = undefined; this.recovery = { supported: null, ready: false }; }
   async stop() {
     this.stopped = true; this.requests.abort();
-    await this.syncing?.catch(() => {}); await this.joining?.catch(() => {}); await this.writing;
+    await this.syncing?.catch(() => {}); await this.joining?.promise.catch(() => {}); await this.loadingRecovery?.catch(() => {}); await this.writing;
   }
-  private ensureIdentity(grant: CollabGrant): Promise<void> {
-    if (this.joinedOrigin === grant.origin) return Promise.resolve();
-    if (this.joining) return this.joining;
-    this.joining = (async () => {
+  private registrationKey(grant: CollabGrant) { return JSON.stringify([grant.origin, grant.deviceId ?? grant.token]); }
+  private async loadRecoverySecret(): Promise<string> {
+    if (this.recoverySecret) return this.recoverySecret;
+    if (this.loadingRecovery) return this.loadingRecovery;
+    const loading = (async () => {
+      const folder = join(this.home, 'collaboration'), file = join(folder, 'recovery.json');
+      const syncDirectory = async () => {
+        // Windows does not support opening directories with these portable Node file APIs.
+        if (process.platform === 'win32') return;
+        const directory = await open(folder, 'r');
+        try { await directory.sync(); } finally { await directory.close(); }
+      };
+      const read = async () => {
+        if ((await lstat(file)).isSymbolicLink()) throw new Error('协作恢复凭据无效，原文件已保留。');
+        const handle = await open(file, process.platform === 'win32' ? 'r' : constants.O_RDONLY | constants.O_NOFOLLOW);
+        try {
+          const info = await handle.stat();
+          if (!info.isFile() || info.size > 4096) throw new Error('协作恢复凭据无效，原文件已保留。');
+          let value: Record<string, unknown>;
+          try { value = record(JSON.parse(await handle.readFile('utf8'))); }
+          catch { throw new Error('协作恢复凭据无效，原文件已保留。'); }
+          const secret = value.recoverySecret;
+          if (value.version !== 1 || value.peerId !== this.data.peerId || typeof secret !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(secret) || Buffer.from(secret, 'base64url').toString('base64url') !== secret) throw new Error('协作恢复凭据无效，原文件已保留。');
+          if (process.platform !== 'win32') { if ((info.mode & 0o777) !== 0o600) await handle.chmod(0o600); await handle.sync(); }
+          // Also sync a concurrently published key before trusting its directory entry.
+          await syncDirectory(); return secret;
+        } finally { await handle.close(); }
+      };
+      try { return await read(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      const secret = randomBytes(32).toString('base64url'), temporary = file + '.' + randomUUID() + '.tmp';
+      try {
+        const handle = await open(temporary, 'wx', 0o600);
+        try { await handle.writeFile(JSON.stringify({ version: 1, peerId: this.data.peerId, recoverySecret: secret })); await handle.sync(); }
+        finally { await handle.close(); }
+        // Publish without replacing another client's key. No request can expose a key before this succeeds.
+        try { await link(temporary, file); await syncDirectory(); return secret; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; return await read(); }
+      } finally { await rm(temporary, { force: true }); }
+    })();
+    this.loadingRecovery = loading;
+    try { this.recoverySecret = await loading; return this.recoverySecret; }
+    finally { if (this.loadingRecovery === loading) this.loadingRecovery = undefined; }
+  }
+  private async ensureIdentity(grant: CollabGrant, requestSignal: AbortSignal): Promise<void> {
+    const key = this.registrationKey(grant);
+    while (true) {
+      requestSignal.throwIfAborted();
+      if (this.data.origin && grant.origin !== this.data.origin) throw new Error('已切换中继；请先导出原协作身份，再明确重置协作配置。');
+      if (this.joined?.key === key && (this.joined.recovery.ready || this.joined.token === grant.token)) return;
       const signal = this.requests.signal;
-      const peer = await this.withGrant(grant, 'join', { id: this.data.peerId, nickname: this.data.nickname }, signal) as CollabPeer;
-      if (peer.id !== this.data.peerId) throw new Error('协作节点身份不一致。');
-      this.data.origin = grant.origin;
-      if (peer.nickname !== this.data.nickname) await this.withGrant(grant, 'me', { nickname: this.data.nickname }, signal);
-      await this.save();
-      signal.throwIfAborted(); this.joinedOrigin = grant.origin;
-    })().finally(() => { this.joining = undefined; });
-    return this.joining;
+      if (this.joining) {
+        if (this.joining.key === key && this.joining.token === grant.token && this.joining.signal === signal) return this.joining.promise;
+        // Another registration's result cannot authorize this device or poison its retry.
+        await this.joining.promise.catch(() => {}); continue;
+      }
+      this.recovery = { supported: null, ready: false };
+      const promise = (async () => {
+        const recoverySecret = await this.loadRecoverySecret(); signal.throwIfAborted();
+        const peer = await this.withGrant(grant, 'join', { id: this.data.peerId, nickname: this.data.nickname, recoverySecret }, signal) as CollabPeer & { recovery?: { supported?: unknown; ready?: unknown } };
+        signal.throwIfAborted();
+        if (peer.id !== this.data.peerId) throw new Error('协作节点身份不一致。');
+        this.data.origin = grant.origin;
+        if (peer.nickname !== this.data.nickname) await this.withGrant(grant, 'me', { nickname: this.data.nickname }, signal);
+        await this.save(); signal.throwIfAborted();
+        const supported = peer.recovery?.supported === true;
+        this.recovery = { supported, ready: supported && peer.recovery?.ready === true };
+        this.joined = { key, token: grant.token, recovery: { ...this.recovery } };
+      })().finally(() => { if (this.joining?.promise === promise) this.joining = undefined; });
+      this.joining = { key, token: grant.token, signal, promise };
+      return promise;
+    }
   }
   sync(): Promise<void> {
     this.syncAgain = true;

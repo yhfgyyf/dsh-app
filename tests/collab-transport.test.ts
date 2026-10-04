@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type ServerResponse } from 'node:http';
-import { createCollabBroker } from '../src/runtime/collab-transport.ts';
+import { collabJson, createCollabBroker } from '../src/runtime/collab-transport.ts';
 import type { RemoteCredentials } from '../src/shared/remote-access.ts';
+
+function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
 
 test('registration gates grants and revocation rejects a grant already in flight', async () => {
   let credentials: RemoteCredentials | undefined, respond: ServerResponse | undefined, requests = 0;
@@ -44,5 +46,61 @@ test('grant caching compares credential values and a superseded request cannot c
     assert.deepEqual(await same, await current);
     assert.deepEqual(await broker.grant(), await current);
     assert.equal(requests.length, 2);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+test('in-place credential changes cannot mutate an in-flight grant or reuse its cache', async () => {
+  const entered = deferred();
+  let response: ServerResponse | undefined, requests = 0;
+  const server = createServer((_request, res) => {
+    requests++;
+    if (requests === 1) { response = res; entered.resolve(); }
+    else res.end(JSON.stringify({ token: 'new-grant', expiresAt: Date.now() + 300000 }));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const credentials: RemoteCredentials = { relay: `http://127.0.0.1:${(server.address() as any).port}`, deviceId: 'old-device', deviceToken: 'old-token', bindings: [] };
+  const broker = createCollabBroker(() => credentials);
+  try {
+    const old = assert.rejects(broker.grant(), /中继配置已变化/); await entered.promise;
+    credentials.deviceId = 'new-device'; credentials.deviceToken = 'new-token';
+    response!.end(JSON.stringify({ token: 'old-grant', expiresAt: Date.now() + 300000 })); await old;
+    const current = await broker.grant(); assert.equal(current.deviceId, 'new-device'); assert.equal(current.token, 'new-grant');
+    assert.deepEqual(await broker.grant(), current); assert.equal(requests, 2);
+    credentials.deviceToken = 'rotated-token'; await broker.grant(); assert.equal(requests, 3);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+for (const status of [404, 405, 503]) test(`a non-JSON HTTP ${status} retains its status and reports unsupported only for a missing auth endpoint`, async () => {
+  const server = createServer((_request, response) => { response.writeHead(status); response.end('<html>private-server-text</html>'); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const relay = `http://127.0.0.1:${(server.address() as any).port}`;
+  const broker = createCollabBroker(() => ({ relay, deviceId: 'fixture-device', deviceToken: 'fixture-token', bindings: [] }));
+  try {
+    await assert.rejects(broker.grant(), (error: any) => {
+      assert.equal(error.status, status); assert.equal(error.code, status === 503 ? undefined : 'collaboration_not_supported');
+      assert.equal(error.message.includes('private-server-text'), false); return true;
+    });
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
+});
+
+test('a network failure is never reported as an unsupported relay', async () => {
+  const server = createServer(); await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const relay = `http://127.0.0.1:${(server.address() as any).port}`; await new Promise<void>(resolve => server.close(() => resolve()));
+  const broker = createCollabBroker(() => ({ relay, deviceId: 'fixture-device', deviceToken: 'fixture-token', bindings: [] }));
+  await assert.rejects(broker.grant(), (error: any) => { assert.notEqual(error.code, 'collaboration_not_supported'); return true; });
+});
+
+test('server errors cannot echo a recovery key or authorization token into public errors', async () => {
+  let code = 'fixturetoken';
+  const server = createServer((_request, response) => { response.writeHead(409); response.end(JSON.stringify({ error: code })); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const relay = `http://127.0.0.1:${(server.address() as any).port}`;
+  try {
+    for (const secret of ['fixturetoken', 'fixturesecret']) {
+      code = secret;
+      await assert.rejects(collabJson(relay + '/join', 'fixturetoken', { recoverySecret: 'fixturesecret' }), (error: any) => {
+        assert.equal(error.status, 409); assert.equal(error.code, undefined); assert.equal(error.message.includes(secret), false); return true;
+      });
+    }
   } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); }
 });

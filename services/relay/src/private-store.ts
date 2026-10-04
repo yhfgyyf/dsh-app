@@ -56,6 +56,9 @@ export class PrivateStore {
   device(id: string, secret: string) {
     return this.db.prepare('SELECT id, account, name FROM remote_devices WHERE id = ? AND token = ?').get(id, hash(secret)) as { id: string; account: string; name: string } | undefined;
   }
+  hasDevice(id: string): boolean {
+    return !!this.db.prepare('SELECT 1 FROM remote_devices WHERE id = ?').get(id);
+  }
   invite(device: string, qr = false) {
     return this.db.transaction(() => {
       this.cancel(device);

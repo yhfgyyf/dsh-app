@@ -7,21 +7,28 @@ import { CollabStore } from './collab-store.js';
 import { verifyCollabGrant, requireCollabSecret } from './collab-auth.js';
 import { CollabError, COLLAB_PROTOCOL, MAX_ATTACHMENT_BYTES, idField, numberField, record, type CollabIdentity, type CollabPeer } from './collab-types.js';
 
-export type CollabAuthorizer = (token: string) => Promise<CollabIdentity>;
+export type CollabAuthorizer = (token: string, requireUnregisteredDeviceId?: string) => Promise<CollabIdentity>;
 export function relayAuthorizer(origin: string, secret: string): CollabAuthorizer {
   requireCollabSecret(secret);
   const url = new URL(origin);
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('Invalid relay internal origin');
-  return async token => {
+  return async (token, requireUnregisteredDeviceId) => {
     const identity = verifyCollabGrant(token, secret);
+    if (requireUnregisteredDeviceId !== undefined && (identity.kind !== 'desktop' || identity.role !== 'control')) throw new CollabError(403, 'desktop_write_required');
     let res: Response;
-    try { res = await fetch(url.origin + '/v1/collab-validate', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: '{}' }); }
+    try { res = await fetch(url.origin + '/v1/collab-validate', { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(requireUnregisteredDeviceId === undefined ? {} : { requireUnregisteredDeviceId }) }); }
     catch { throw new CollabError(503, 'relay_auth_unavailable'); }
-    if (!res.ok) { await res.body?.cancel(); throw new CollabError(res.status === 401 || res.status === 403 ? 403 : 503, res.status === 403 ? 'access_revoked' : 'relay_auth_unavailable'); }
+    if (!res.ok) {
+      await res.body?.cancel();
+      if (requireUnregisteredDeviceId !== undefined && res.status === 409) throw new CollabError(409, 'identity_device_active');
+      throw new CollabError(res.status === 401 || res.status === 403 ? 403 : 503, res.status === 403 ? 'access_revoked' : 'relay_auth_unavailable');
+    }
     const body = await res.text();
     if (body.length > 4096) throw new CollabError(503, 'invalid_auth_response');
-    const checked = JSON.parse(body) as CollabIdentity;
+    const checked = JSON.parse(body) as CollabIdentity & { unregisteredDeviceId?: string };
     if (checked.deviceId !== identity.deviceId || checked.kind !== identity.kind || checked.bindingId !== identity.bindingId || checked.role !== identity.role || checked.expiresAt !== identity.expiresAt) throw new CollabError(403, 'identity_mismatch');
+    // Older validators ignore unknown request fields. An explicit matching receipt is mandatory.
+    if (requireUnregisteredDeviceId !== undefined && checked.unregisteredDeviceId !== requireUnregisteredDeviceId) throw new CollabError(503, 'identity_recovery_unsupported');
     return identity;
   };
 }
@@ -76,7 +83,11 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
         for await (const chunk of req) { size += chunk.length; if (size > max) throw new CollabError(413, 'request_too_large'); chunks.push(Buffer.from(chunk)); }
         try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw new CollabError(400, 'invalid_json'); }
       } else if (method !== 'GET') throw new CollabError(405, 'method_not_allowed');
-      if (parts[0] === 'join' && parts.length === 1 && method === 'POST') return reply(200, store.join(identity, body));
+      if (parts[0] === 'join' && parts.length === 1 && method === 'POST') {
+        const previous = store.recoveryDevice(identity, body);
+        if (previous !== undefined) await authorize(bearer(req), previous);
+        return reply(200, store.join(identity, body, previous));
+      }
       const peer = store.peer(identity);
       const beforeCursor = store.cursor(), beforeUnread = method === 'POST' ? store.unread(peer) : 0;
       const write = () => { if (identity.kind !== 'desktop' || identity.role !== 'control') throw new CollabError(403, 'desktop_write_required'); };

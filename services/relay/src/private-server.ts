@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path';
 import { PrivateStore, hash, token } from './private-store.js';
 import { parseClientEndpoints } from './client-endpoints.js';
 import { issueCollabGrant, verifyCollabGrant, requireCollabSecret } from './collab-auth.js';
+import { idField } from './collab-types.js';
 
 const FRAME_LIMIT = 256 * 1024;
 const BUFFER_LIMIT = 4 * 1024 * 1024;
@@ -69,10 +70,16 @@ export function createPrivateRelay(store: PrivateStore, origin: string, options:
             return reply(200, issueCollabGrant({ kind: 'desktop', deviceId: d.id, role: 'control' }, options.collabSecret));
           }
           const identity = verifyCollabGrant(bearer(req), options.collabSecret);
-          if (!store.db.prepare('SELECT 1 FROM remote_devices WHERE id = ?').get(identity.deviceId)) return reply(403, { error: 'device_unregistered' });
+          if (!store.hasDevice(identity.deviceId)) return reply(403, { error: 'device_unregistered' });
           if (identity.kind === 'mobile') {
             const b = store.db.prepare("SELECT role FROM remote_bindings WHERE id = ? AND device = ? AND state = 'approved'").get(identity.bindingId, identity.deviceId) as { role: string } | undefined;
             if (!b || b.role !== identity.role) return reply(403, { error: 'binding_revoked' });
+          }
+          if (body.requireUnregisteredDeviceId !== undefined) {
+            if (identity.kind !== 'desktop' || identity.role !== 'control') return reply(403, { error: 'desktop_write_required' });
+            const previous = idField(body.requireUnregisteredDeviceId);
+            if (store.hasDevice(previous)) return reply(409, { error: 'identity_device_active' });
+            return reply(200, { ...identity, unregisteredDeviceId: previous });
           }
           return reply(200, identity);
         } catch (error) { const status = (error as { status?: number }).status; return reply(status === 503 ? 503 : 401, { error: status === 503 ? 'collaboration_not_configured' : 'invalid_collaboration_grant' }); }

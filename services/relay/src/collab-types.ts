@@ -5,6 +5,7 @@ export const MAX_TEXT = 48 * 1024;
 export type TaskStatus = 'open' | 'review' | 'resolved' | 'closed';
 export type CollabActor = 'user' | 'dsh';
 export type CollabPeer = { id: string; nickname: string; createdAt: number };
+export type CollabJoinResult = CollabPeer & { recovery: { supported: true; ready: boolean } };
 export type CollabAttachment = { id: string; name: string; size: number; sha256: string };
 export type CollabTask = {
   id: string; authorId: string; title: string; description: string; acceptance: string; tags: string[];

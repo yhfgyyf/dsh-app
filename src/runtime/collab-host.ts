@@ -12,7 +12,7 @@ import { COLLAB_CONTINUATION_FORMAT, accountAttempt, budgetReason, downloadColla
 
 export const name = 'dsh-p2p-collab';
 export const inject = ['connection', 'sessionController', 'sessionPersistence', 'agents', 'desktopCollabBroker'];
-export const PLUGIN_VERSION = '0.1.5';
+export const PLUGIN_VERSION = '0.1.6';
 type HostContext = {
   connection: { rpc: { handle(channel: string, callback: (endpoint: string, payload: unknown, signal: AbortSignal) => Promise<CollabRpcResult>): () => unknown } };
   sessionController: { create(value: any): Promise<any>; prompt(value: any, signal: AbortSignal): Promise<any>; rename(value: any): Promise<any>; inspect(id: string): Promise<CollabSessionInspection>; cancel(value: any): Promise<any> };

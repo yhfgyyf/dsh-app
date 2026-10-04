@@ -1,11 +1,19 @@
 import Database from 'better-sqlite3';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import { CollabError, attachmentIds, idField, numberField, record, reportField, tagsField, textField, MAX_ATTACHMENT_BYTES,
-  type CollabAcceptance, type CollabAttachment, type CollabAttempt, type CollabCandidates, type CollabDetail, type CollabEvent, type CollabIdentity, type CollabInboxItem, type CollabPeer, type CollabReply, type CollabTask, type CollabValidation } from './collab-types.js';
+  type CollabAcceptance, type CollabAttachment, type CollabAttempt, type CollabCandidates, type CollabDetail, type CollabEvent, type CollabIdentity, type CollabInboxItem, type CollabJoinResult, type CollabPeer, type CollabReply, type CollabTask, type CollabValidation } from './collab-types.js';
 
-type PeerRow = CollabPeer & { device: string; banned: number };
+type PeerRow = CollabPeer & { device: string; banned: number; recoveryHash: string | null };
 type TaskRow = Omit<CollabTask, 'tags' | 'following'> & { tags: string; following: number; hidden: number };
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
+function recoveryHashField(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value) || Buffer.from(value, 'base64url').toString('base64url') !== value) throw new CollabError(400, 'invalid_recovery_secret');
+  return hash(value);
+}
+function sameRecoveryHash(stored: string | null, supplied: string | undefined): boolean {
+  return !!stored && !!supplied && /^[a-f0-9]{64}$/.test(stored) && timingSafeEqual(Buffer.from(stored, 'hex'), Buffer.from(supplied, 'hex'));
+}
 
 /** One writer owns this database. Attachment bytes participate in the same durable backup. */
 export class CollabStore {
@@ -36,6 +44,7 @@ export class CollabStore {
     `);
     this.db.transaction(() => {
       const hasColumn = (table: string, name: string) => (this.db.pragma(`table_info(${table})`) as { name: string }[]).some(c => c.name === name);
+      if (!hasColumn('collab_peers', 'recoveryHash')) this.db.exec('ALTER TABLE collab_peers ADD COLUMN recoveryHash TEXT');
       if (!hasColumn('collab_tasks', 'specRevision')) {
         this.db.exec('ALTER TABLE collab_tasks ADD COLUMN specRevision INTEGER NOT NULL DEFAULT 1; UPDATE collab_tasks SET specRevision = revision');
       }
@@ -50,17 +59,44 @@ export class CollabStore {
     if (row.banned) throw new CollabError(403, 'peer_suspended');
     return { id: row.id, nickname: row.nickname, createdAt: row.createdAt };
   }
-  join(identity: CollabIdentity, value: unknown): CollabPeer {
-    if (identity.kind !== 'desktop') return this.peer(identity);
+  private joiningPeer(identity: CollabIdentity, value: unknown) {
+    if (identity.kind !== 'desktop' || identity.role !== 'control') throw new CollabError(403, 'desktop_write_required');
     const body = record(value), id = idField(body.id);
     const nickname = textField(body.nickname, 48, true) || `青竹鲸鱼-${id.slice(0, 4)}`;
+    const recoveryHash = recoveryHashField(body.recoverySecret);
+    const rows = this.db.prepare('SELECT * FROM collab_peers WHERE device = ? OR id = ?').all(identity.deviceId, id) as PeerRow[];
+    if (rows.some(p => p.id !== id)) throw new CollabError(409, 'identity_conflict');
+    const peer = rows.find(p => p.id === id);
+    if (peer?.banned) throw new CollabError(403, 'peer_suspended');
+    const previous = peer && peer.device !== identity.deviceId ? peer.device : undefined;
+    if (previous !== undefined) {
+      if (!peer!.recoveryHash) throw new CollabError(409, 'identity_recovery_unavailable');
+      if (!recoveryHash) throw new CollabError(409, 'identity_recovery_required');
+      if (!sameRecoveryHash(peer!.recoveryHash, recoveryHash)) throw new CollabError(409, 'identity_recovery_invalid');
+    }
+    return { id, nickname, recoveryHash, peer, previous };
+  }
+  /** Read-only proof checks precede the relay lookup; no database transaction spans network I/O. */
+  recoveryDevice(identity: CollabIdentity, value: unknown): string | undefined {
+    return identity.kind === 'desktop' ? this.joiningPeer(identity, value).previous : undefined;
+  }
+  join(identity: CollabIdentity, value: unknown, unregisteredDeviceId?: string): CollabJoinResult {
+    if (identity.kind !== 'desktop') return { ...this.peer(identity), recovery: { supported: true, ready: false } };
     return this.db.transaction(() => {
-      const old = this.db.prepare('SELECT * FROM collab_peers WHERE device = ? OR id = ?').all(identity.deviceId, id) as PeerRow[];
-      if (old.some(p => p.device !== identity.deviceId || p.id !== id)) throw new CollabError(409, 'identity_conflict');
-      if (old.some(p => p.banned)) throw new CollabError(403, 'peer_suspended');
-      this.db.prepare('INSERT OR IGNORE INTO collab_peers (id, device, nickname, createdAt) VALUES (?, ?, ?, ?)').run(id, identity.deviceId, nickname, Date.now());
-      return this.peer(identity);
-    })();
+      const { id, nickname, recoveryHash, peer, previous } = this.joiningPeer(identity, value);
+      if (previous !== undefined) {
+        if (unregisteredDeviceId === undefined) throw new CollabError(503, 'identity_recovery_unsupported');
+        if (previous !== unregisteredDeviceId) throw new CollabError(409, 'identity_conflict');
+        const changed = this.db.prepare('UPDATE collab_peers SET device = ? WHERE id = ? AND device = ? AND recoveryHash = ? AND banned = 0').run(identity.deviceId, id, previous, recoveryHash);
+        if (changed.changes !== 1) throw new CollabError(409, 'identity_conflict');
+      } else if (!peer) {
+        this.db.prepare('INSERT INTO collab_peers (id, device, nickname, createdAt, recoveryHash) VALUES (?, ?, ?, ?, ?)').run(id, identity.deviceId, nickname, Date.now(), recoveryHash ?? null);
+      } else if (!peer.recoveryHash && recoveryHash) {
+        this.db.prepare('UPDATE collab_peers SET recoveryHash = ? WHERE id = ? AND device = ? AND recoveryHash IS NULL').run(recoveryHash, id, identity.deviceId);
+      }
+      const stored = this.db.prepare('SELECT recoveryHash FROM collab_peers WHERE id = ?').get(id) as { recoveryHash: string | null };
+      return { ...this.peer(identity), recovery: { supported: true as const, ready: sameRecoveryHash(stored.recoveryHash, recoveryHash) } };
+    }).immediate();
   }
   updateProfile(peer: CollabPeer, value: unknown) {
     const nickname = textField(record(value).nickname, 48);

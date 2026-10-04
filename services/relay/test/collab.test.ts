@@ -450,6 +450,7 @@ test('legacy SQLite migration retains replies, attachment bytes and revisions wh
       const migrated = new CollabStore(file), peer = { id: 'legacy-peer', nickname: 'Existing user', createdAt: 1 };
       try {
         const detail = migrated.detail(peer, 'legacy-task');
+        assert.equal((migrated.db.prepare('SELECT recoveryHash FROM collab_peers WHERE id = ?').get(peer.id) as any).recoveryHash, null);
         assert.equal(detail.task.status, 'open'); assert.equal(detail.task.revision, 7); assert.equal(detail.task.specRevision, 7);
         assert.equal(detail.replies[0].body, 'Existing candidate'); assert.equal(detail.replies[0].attemptId, null);
         assert.equal(detail.replies[0].attachments[0].name, 'existing.txt');

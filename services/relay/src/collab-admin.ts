@@ -3,12 +3,29 @@ import { existsSync, mkdirSync, chmodSync, linkSync, unlinkSync } from 'node:fs'
 import { dirname, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { idField, textField } from './collab-types.js';
+import { repairCollabIdentity } from './collab-identity-repair.js';
 
 process.umask(0o077);
 const [action, ...args] = process.argv.slice(2);
 const path = process.env.COLLAB_DB_PATH;
 if (!path || !isAbsolute(path) || !existsSync(path)) throw new Error('Set COLLAB_DB_PATH to the existing absolute collaboration database path.');
-if (!['backup', 'hide-task', 'show-task', 'ban-peer', 'unban-peer'].includes(action)) throw new Error('Usage: collab-admin backup <new-absolute-file> | hide-task|show-task|ban-peer|unban-peer <id> <reason>');
+if (!['backup', 'hide-task', 'show-task', 'ban-peer', 'unban-peer', 'diagnose-identity', 'repair-identity'].includes(action)) throw new Error('Usage: collab-admin backup <new-absolute-file> | hide-task|show-task|ban-peer|unban-peer <id> <reason> | diagnose-identity|repair-identity <peerId> <expectedOldDeviceId> <newDeviceId> [--expected-device-name <unique-registered-device-name>] [--dry-run | --apply --backup-dir <new-absolute-directory> --reason <reason>]; identity commands also require DB_PATH. Device name is only an extra guard, never ownership proof.');
+if (action === 'diagnose-identity' || action === 'repair-identity') {
+  const [peerId, expectedOldDeviceId, newDeviceId, ...options] = args;
+  const flags = new Map<string, string | true>();
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i];
+    if (!['--expected-device-name', '--apply', '--dry-run', '--backup-dir', '--reason'].includes(option) || flags.has(option)) throw new Error('Unknown or repeated identity repair option: ' + option);
+    if (option === '--apply' || option === '--dry-run') flags.set(option, true);
+    else { const value = options[++i]; if (!value || value.startsWith('--')) throw new Error('Missing value for ' + option); flags.set(option, value); }
+  }
+  if (flags.has('--apply') && (action === 'diagnose-identity' || flags.has('--dry-run'))) throw new Error('Apply cannot be combined with diagnosis or dry-run.');
+  const result = await repairCollabIdentity({ privateDbPath: process.env.DB_PATH ?? '', collabDbPath: path, peerId, expectedOldDeviceId, newDeviceId,
+    apply: flags.has('--apply'), expectedDeviceName: flags.get('--expected-device-name') as string | undefined,
+    backupDirectory: flags.get('--backup-dir') as string | undefined, reason: flags.get('--reason') as string | undefined });
+  console.log(JSON.stringify(result, null, 2));
+  if (result.status === 'blocked') process.exitCode = 1;
+} else {
 const db = new Database(path, { readonly: action === 'backup', fileMustExist: true });
 db.pragma('busy_timeout = 5000');
 try {
@@ -40,3 +57,4 @@ try {
     console.log('Applied ' + action + ' to ' + target + '; content retained.');
   }
 } finally { db.close(); }
+}

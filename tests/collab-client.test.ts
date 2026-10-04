@@ -2,13 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, writeFile, rename, stat, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CollabClient } from '../src/runtime/collab-client.ts';
 import { CollabHost, PLUGIN_VERSION } from '../src/runtime/collab-host.ts';
 import { randomUUID } from 'node:crypto';
 import { collabSettings, type CollabLocalAttempt } from '../src/shared/collab.ts';
+
+function deferred() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
 
 test('registration state follows native credentials without probing or losing the local identity and drafts', async () => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-collab-registration-'));
@@ -54,7 +56,7 @@ for (const scenario of ['matched', 'mismatch', 'peer_not_joined', 'identity_conf
       const host = new CollabHost(client, {} as any, () => undefined, { appVersion: 'test', runtimeVersion: 'test', pluginVersion: 'test', platform: 'test', arch: 'test' });
       const diagnostic = scenario === 'matched' || scenario === 'mismatch' ? { serverPeer: peer } : { remoteError: { code: scenario === 'unknown_error' ? 'identity_lookup_failed' : scenario, status: scenario === 'unknown_error' ? 500 : 409 } };
       assert.deepEqual(await host.handle('identity', { args: {} }, new AbortController().signal), { ok: true, value: {
-        localPeerId: before.peerId, localNickname: before.nickname, origin, ...diagnostic, pluginVersion: PLUGIN_VERSION,
+        localPeerId: before.peerId, localNickname: before.nickname, origin, recovery: { supported: null, ready: false }, ...diagnostic, pluginVersion: PLUGIN_VERSION,
       } });
       assert.deepEqual(requests, ['GET /collab/v1/me'], 'Identity diagnosis must not join, sync, rename or publish');
       assert.deepEqual(client.data, before);
@@ -84,7 +86,7 @@ test('identity diagnosis hides credential-grant errors without changing local re
   try {
     await client.restore(); client.start();
     const before = structuredClone(client.data), file = join(home, 'collaboration/profile.json'), bytesBefore = await readFile(file);
-    assert.deepEqual(await client.identity(), { localPeerId: before.peerId, localNickname: before.nickname, origin: undefined, remoteError: { code: 'identity_grant_failed' } });
+    assert.deepEqual(await client.identity(), { localPeerId: before.peerId, localNickname: before.nickname, origin: undefined, recovery: { supported: null, ready: false }, remoteError: { code: 'identity_grant_failed' } });
     assert.deepEqual(client.data, before); assert.deepEqual(await readFile(file), bytesBefore);
   } finally { await client.stop(); await rm(home, { recursive: true, force: true }); }
 });
@@ -209,4 +211,197 @@ test('collaboration reads and writes on demand over HTTP with WebSocket unavaila
     await client.sync(); assert.equal(writes, 1); assert.equal(joins, 1); assert.equal(upgrades, 0);
     assert.ok(paths.every(path => !path.includes('/events')));
   } finally { await client.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(home, { recursive: true, force: true }); }
+});
+
+async function identityFixture(onJoin: (body: any, token: string, response: import('node:http').ServerResponse) => void | Promise<void>) {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-collab-recovery-'));
+  const joined = new Set<string>(), requests: { path: string; token: string }[] = [];
+  const tokenDevices = new Map([['grant-one', 'device-one']]);
+  const server = createServer(async (request, response) => {
+    let raw = ''; for await (const chunk of request) raw += chunk;
+    const token = request.headers.authorization?.replace(/^Bearer /, '') ?? '';
+    requests.push({ path: request.url!, token }); response.setHeader('content-type', 'application/json');
+    if (request.url === '/collab/v1/join') { joined.add(tokenDevices.get(token)!); await onJoin(JSON.parse(raw), token, response); return; }
+    if (!joined.has(tokenDevices.get(token)!)) { response.writeHead(403); response.end('{"error":"peer_not_joined"}'); return; }
+    response.end('{"tasks":[]}');
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${(server.address() as any).port}`;
+  let deviceId = 'device-one', token = 'grant-one';
+  const broker = { isRegistered: () => true, grant: async () => ({ origin, deviceId, token, expiresAt: Date.now() + 300000 }) };
+  const client = new CollabClient(home, broker); await client.restore(); client.start();
+  return { home, origin, broker, client, requests, registration: (device: string, grant: string) => { deviceId = device; token = grant; tokenDevices.set(grant, device); },
+    close: async () => { await client.stop(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(home, { recursive: true, force: true }); } };
+}
+const joinedPeer = (body: any, recovery: unknown = { supported: true, ready: true }) => ({ id: body.id, nickname: body.nickname, createdAt: 1, ...(recovery === undefined ? {} : { recovery }) });
+
+test('a new registration on the same relay must join with its own device instead of reusing the old origin cache', async () => {
+  const joins: string[] = [];
+  const f = await identityFixture((body, token, response) => { joins.push(token); response.end(JSON.stringify(joinedPeer(body))); });
+  try {
+    await f.client.api('tasks'); f.registration('device-two', 'grant-two');
+    assert.deepEqual(await f.client.api('tasks'), { tasks: [] });
+    assert.deepEqual(joins, ['grant-one', 'grant-two']);
+  } finally { await f.close(); }
+});
+
+test('recovery keys are persisted with private permissions before joining, survive restart and never enter public state or profile data', async () => {
+  const keys: string[] = [], persisted: Promise<void>[] = [];
+  let home = '';
+  const f = await identityFixture((body, _token, response) => {
+    keys.push(body.recoverySecret);
+    const check = (async () => {
+      const file = join(home, 'collaboration/recovery.json'), stored = JSON.parse(await readFile(file, 'utf8'));
+      assert.equal(stored.peerId, body.id); assert.equal(stored.recoverySecret, body.recoverySecret);
+      assert.equal(Buffer.from(body.recoverySecret, 'base64url').length, 32);
+      assert.equal(Buffer.from(body.recoverySecret, 'base64url').toString('base64url'), body.recoverySecret);
+      if (process.platform !== 'win32') assert.equal((await stat(file)).mode & 0o777, 0o600);
+    })();
+    void check.catch(() => {}); persisted.push(check);
+    response.end(JSON.stringify(joinedPeer(body)));
+  });
+  home = f.home;
+  try {
+    await f.client.api('tasks'); await Promise.all(persisted);
+    assert.deepEqual(f.client.state().recovery, { supported: true, ready: true });
+    assert.equal(JSON.stringify(f.client.state()).includes(keys[0]), false);
+    assert.equal(JSON.stringify(f.client.data).includes(keys[0]), false);
+    assert.equal((await readFile(join(home, 'collaboration/profile.json'), 'utf8')).includes(keys[0]), false);
+    await f.client.stop(); const restored = new CollabClient(home, f.broker); await restored.restore(); restored.start();
+    try { await restored.api('tasks'); await Promise.all(persisted); assert.equal(keys.length, 2); assert.equal(keys[1], keys[0]); }
+    finally { await restored.stop(); }
+  } finally { await f.close(); }
+});
+
+test('an old relay is explicitly unsupported and a refreshed grant retries recovery enrollment after a server upgrade', async () => {
+  let upgraded = false, joins = 0; const keys: string[] = [];
+  const f = await identityFixture((body, _token, response) => {
+    joins++; keys.push(body.recoverySecret);
+    response.end(JSON.stringify(upgraded ? joinedPeer(body) : { id: body.id, nickname: body.nickname, createdAt: 1 }));
+  });
+  try {
+    await f.client.api('tasks'); await f.client.api('tasks');
+    assert.equal(joins, 1); assert.deepEqual(f.client.state().recovery, { supported: false, ready: false });
+    upgraded = true; f.registration('device-one', 'renewed-grant'); await f.client.api('tasks');
+    assert.equal(joins, 2); assert.equal(keys[0], keys[1]); assert.deepEqual(f.client.state().recovery, { supported: true, ready: true });
+    f.registration('device-one', 'another-grant'); await f.client.api('tasks'); assert.equal(joins, 2, 'A confirmed key needs no enrollment on every token refresh');
+  } finally { await f.close(); }
+});
+
+for (const firstFails of [false, true]) test(`a concurrent replacement registration waits for the old join but does not inherit its ${firstFails ? 'failure' : 'success'}`, async () => {
+  const entered = deferred(), release = deferred(), keys: string[] = [];
+  const f = await identityFixture(async (body, token, response) => {
+    keys.push(body.recoverySecret);
+    if (token === 'grant-one') {
+      entered.resolve(); await release.promise;
+      if (firstFails) { response.writeHead(409); response.end('{"error":"identity_conflict"}'); return; }
+    }
+    response.end(JSON.stringify(joinedPeer(body)));
+  });
+  try {
+    const first = f.client.api('tasks').then(value => ({ value }), error => ({ error })); await entered.promise;
+    f.registration('device-two', 'grant-two'); const second = f.client.api('tasks');
+    await new Promise<void>(resolve => setImmediate(resolve));
+    assert.equal(f.requests.filter(request => request.path.endsWith('/join')).length, 1);
+    release.resolve(); const old = await first;
+    assert.equal('error' in old, firstFails); assert.deepEqual(await second, { tasks: [] });
+    assert.deepEqual(f.requests.filter(request => request.path.endsWith('/join')).map(request => request.token), ['grant-one', 'grant-two']);
+    assert.equal(keys[0], keys[1]);
+  } finally { release.resolve(); await f.close(); }
+});
+
+test('a cancelled replacement registration does not start its queued join', async () => {
+  const entered = deferred(), release = deferred();
+  const f = await identityFixture(async (body, _token, response) => { entered.resolve(); await release.promise; response.end(JSON.stringify(joinedPeer(body))); });
+  try {
+    const first = f.client.api('tasks'); await entered.promise;
+    f.registration('device-two', 'grant-two'); const abort = new AbortController();
+    const second = assert.rejects(f.client.api('tasks', undefined, abort.signal), { name: 'AbortError' });
+    abort.abort(); release.resolve(); await first; await second;
+    assert.equal(f.requests.filter(request => request.path.endsWith('/join')).length, 1);
+  } finally { release.resolve(); await f.close(); }
+});
+
+test('a failed recovery-key write sends no join and a later retry must persist its key first', async () => {
+  const f = await identityFixture((body, _token, response) => { response.end(JSON.stringify(joinedPeer(body))); });
+  const folder = join(f.home, 'collaboration'), moved = join(f.home, 'temporarily-unavailable');
+  try {
+    await rename(folder, moved);
+    await assert.rejects(f.client.api('tasks'), { code: 'ENOENT' }); assert.equal(f.requests.length, 0);
+    await rename(moved, folder); await f.client.api('tasks');
+    const stored = JSON.parse(await readFile(join(folder, 'recovery.json'), 'utf8'));
+    assert.equal(stored.peerId, f.client.data.peerId); assert.equal(stored.recoverySecret.length, 43);
+    assert.equal(f.requests.filter(request => request.path.endsWith('/join')).length, 1);
+  } finally { await f.close(); }
+});
+
+test('a malformed existing recovery file is preserved and never replaced by a new key', async () => {
+  const f = await identityFixture((body, _token, response) => { response.end(JSON.stringify(joinedPeer(body))); });
+  try {
+    const file = join(f.home, 'collaboration/recovery.json'), damaged = '{"version":1,"recoverySecret":"damaged"}';
+    await writeFile(file, damaged, { mode: 0o600 });
+    await assert.rejects(f.client.api('tasks'), /恢复凭据无效/); await assert.rejects(f.client.api('tasks'), /恢复凭据无效/);
+    assert.equal(f.requests.length, 0); assert.equal(await readFile(file, 'utf8'), damaged);
+  } finally { await f.close(); }
+});
+
+test('an existing recovery file regains private POSIX permissions before a join', { skip: process.platform === 'win32' }, async () => {
+  const f = await identityFixture((body, _token, response) => { response.end(JSON.stringify(joinedPeer(body))); });
+  try {
+    await f.client.api('tasks'); await f.client.stop();
+    const file = join(f.home, 'collaboration/recovery.json'), before = await readFile(file);
+    await chmod(file, 0o644);
+    const second = new CollabClient(f.home, f.broker); await second.restore(); second.start();
+    try { await second.api('tasks'); assert.equal((await stat(file)).mode & 0o777, 0o600); assert.deepEqual(await readFile(file), before); }
+    finally { await second.stop(); }
+  } finally { await f.close(); }
+});
+
+test('a recovery-file symlink cannot redirect recovery enrollment', { skip: process.platform === 'win32' }, async () => {
+  const f = await identityFixture((body, _token, response) => { response.end(JSON.stringify(joinedPeer(body))); });
+  try {
+    const target = join(f.home, 'outside.json'); await writeFile(target, '{}');
+    await symlink(target, join(f.home, 'collaboration/recovery.json'));
+    await assert.rejects(f.client.api('tasks'), /恢复凭据无效/);
+    assert.equal(f.requests.length, 0); assert.equal(await readFile(target, 'utf8'), '{}');
+  } finally { await f.close(); }
+});
+
+test('concurrent clients for one profile publish and use one recovery key', async () => {
+  const keys: string[] = [];
+  const f = await identityFixture((body, _token, response) => { keys.push(body.recoverySecret); response.end(JSON.stringify(joinedPeer(body))); });
+  const second = new CollabClient(f.home, f.broker); await second.restore(); second.start();
+  try {
+    await Promise.all([f.client.api('tasks'), second.api('tasks')]);
+    assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]);
+    const stored = JSON.parse(await readFile(join(f.home, 'collaboration/recovery.json'), 'utf8'));
+    assert.equal(stored.recoverySecret, keys[0]);
+  } finally { await second.stop(); await f.close(); }
+});
+
+test('a lost join response and process restart reuse the persisted key and preserve local history', async () => {
+  const keys: string[] = [];
+  const f = await identityFixture((body, _token, response) => {
+    keys.push(body.recoverySecret); if (keys.length === 1) response.destroy(); else response.end(JSON.stringify(joinedPeer(body)));
+  });
+  try {
+    f.client.data.drafts.task = { body: 'Private work' }; f.client.data.cursor = 87; await f.client.save();
+    const before = structuredClone(f.client.data);
+    await assert.rejects(f.client.api('tasks')); await f.client.stop();
+    const second = new CollabClient(f.home, f.broker); await second.restore(); second.start();
+    try {
+      await second.api('tasks'); assert.deepEqual(keys, [keys[0], keys[0]]);
+      assert.deepEqual(second.data.drafts, before.drafts); assert.equal(second.data.peerId, before.peerId); assert.equal(second.data.cursor, before.cursor);
+    } finally { await second.stop(); }
+  } finally { await f.close(); }
+});
+
+test('a server that accepts normal join without matching recovery proof stays not ready', async () => {
+  const f = await identityFixture((body, _token, response) => { response.end(JSON.stringify(joinedPeer(body, { supported: true, ready: false }))); });
+  try {
+    await f.client.api('tasks'); assert.deepEqual(f.client.state().recovery, { supported: true, ready: false });
+    const diagnostic = await f.client.identity(); assert.deepEqual(diagnostic.recovery, { supported: true, ready: false });
+    const secret = JSON.parse(await readFile(join(f.home, 'collaboration/recovery.json'), 'utf8')).recoverySecret;
+    assert.equal(JSON.stringify(diagnostic).includes(secret), false);
+  } finally { await f.close(); }
 });

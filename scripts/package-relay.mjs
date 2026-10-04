@@ -24,8 +24,8 @@ for (const path of [
   'Dockerfile', 'compose.yml', 'compose.collaboration.yml', '.env.example',
   'src/private-server.ts', 'src/private-store.ts', 'src/private-admin.ts', 'src/client-endpoints.ts', 'src/registration-code.ts',
   'dist/private-server.js', 'dist/private-store.js', 'dist/private-admin.js', 'dist/client-endpoints.js', 'dist/registration-code.js',
-  ...['collab-types', 'collab-auth', 'collab-store', 'collab-server', 'collab-admin'].flatMap(name => [`src/${name}.ts`, `dist/${name}.js`]),
-  'test/collab.test.ts',
+  ...['collab-types', 'collab-auth', 'collab-store', 'collab-server', 'collab-admin', 'collab-identity-repair'].flatMap(name => [`src/${name}.ts`, `dist/${name}.js`]),
+  'test/collab.test.ts', 'test/collab-recovery.test.ts', 'test/admin-identity-repair.test.ts',
   'test/private-deployment.test.ts', 'test/private-routes.test.ts', 'test/private-upgrade.test.ts', 'test/private-registration-code.test.ts',
   'test/fixtures/ca/ca.pem', 'test/fixtures/ca/server.pem', 'test/fixtures/ca/expired-ca.pem',
   'test/fixtures/relay-0.1.30/private-server.js', 'test/fixtures/relay-0.1.30/private-store.js', 'test/fixtures/relay-0.1.30/PROVENANCE.json',
@@ -37,7 +37,7 @@ for (const entry of await readdir(join(relay, 'web'), { recursive: true, withFil
 }
 const pkg = JSON.parse(await readFile(join(relay, 'package.json'), 'utf8'));
 pkg.scripts = { build: 'tsc -p tsconfig.json', start: 'node dist/private-server.js', 'admin:private': 'node dist/private-admin.js',
-  'start:collaboration': 'node dist/collab-server.js', 'admin:collaboration': 'node dist/collab-admin.js', test: 'tsx --test test/private-*.test.ts test/collab.test.ts' };
+  'start:collaboration': 'node dist/collab-server.js', 'admin:collaboration': 'node dist/collab-admin.js', test: 'tsx --test test/private-*.test.ts test/collab*.test.ts test/admin-identity-repair.test.ts' };
 await save('package.json', JSON.stringify(pkg, null, 2) + '\n');
 await save('README.md', (await readFile(join(relay, 'deploy/README-UBUNTU.md'), 'utf8')).replaceAll('{{RELAY_VERSION}}', releaseVersion));
 await save('REMOTE-SOURCES.json', await readFile(join(root, 'REMOTE-SOURCES.json')));
