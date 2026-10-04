@@ -24,7 +24,11 @@ ipcMain.handle=(channel,listener)=> {handlers.set(channel,listener);return origi
 async function run(event) {
   const host = event.sender;
 
-  const js = code => host.executeJavaScript(code, true);
+  const js = async code => {
+    const result = await host.executeJavaScript(`(async()=>{try{return {ok:true,value:await (0,eval)(${JSON.stringify(code)})};}catch(error){return {ok:false,error:error?.stack??String(error)};}})()`, true);
+    if (!result.ok) throw new Error(result.error);
+    return result.value;
+  };
   const finishOnboarding = () => until(() => js(`(() => {
     const button = Array.from(document.querySelectorAll('button')).find(b =>
       ['继续', 'Continue', '稍后配置', 'Configure later'].includes(b.textContent));
