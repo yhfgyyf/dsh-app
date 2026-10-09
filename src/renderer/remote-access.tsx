@@ -40,7 +40,7 @@ export function RemoteAccessSettings() {
         {!state.registered && <><label>注册码<input type="password" autoComplete="off" value={code} maxLength={128} disabled={busy} onChange={e => setCode(e.target.value)} /></label>
           <Button type="submit" variant="outline" size="sm" disabled={busy || !code.trim() || !draft.relay.trim()}>注册电脑</Button></>}
       </form>
-      <p className="desktop-remote-note">{state.registered ? '中继已注册，启用此插件后可使用协作空间。' : '注册中继后，启用此插件即可开启协作空间。'}</p>
+      <p className="desktop-remote-note">{state.registered ? '中继已注册，手机可从其他网络连接此电脑。' : '注册中继后，手机可从其他网络连接电脑。'}</p>
       {state.registered && <div className="desktop-remote-actions">
         <Button variant="outline" size="sm" disabled={busy} onClick={() => setForget(!forget)}>解除注册</Button>
         {forget && <><span className="desktop-remote-note">中继访问和协作空间将停止，局域网绑定保留。</span><Button variant="outline" size="sm" disabled={busy} onClick={() => { setForget(false); void act({ type: 'unregister' }); }}>确认解除注册</Button></>}

@@ -18,8 +18,21 @@ export function parseRegistrationCode(value: unknown): { code: string; fingerpri
 
 /** Retrieve public certificates only. No HTTP request or credential is sent until the pinned CA is verified. */
 export async function retrieveRelayCa(origin: string, fingerprint: string): Promise<string> {
+  if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error('自动配置 CA 需要有效证书指纹。');
+  return retrievePinnedCa(origin, cert => cert.fingerprint256.replaceAll(':', '').toLowerCase() === fingerprint);
+}
+
+/** A renamed CA may retain its trusted key. A different key always requires explicit registration. */
+export async function renewRelayCa(origin: string, trustedCa: string): Promise<string> {
+  const trusted = new X509Certificate(trustedCa);
+  if (!trusted.ca || trusted.subject !== trusted.issuer || !trusted.verify(trusted.publicKey)) throw new Error('已保存的中继 CA 无效。');
+  const key = trusted.publicKey.export({ type: 'spki', format: 'der' });
+  return retrievePinnedCa(origin, cert => cert.publicKey.export({ type: 'spki', format: 'der' }).equals(key));
+}
+
+async function retrievePinnedCa(origin: string, matches: (cert: X509Certificate) => boolean): Promise<string> {
   const url = new URL(relayOrigin(origin));
-  if (url.protocol !== 'https:' || !/^[a-f0-9]{64}$/.test(fingerprint)) throw new Error('自动配置 CA 需要 HTTPS 中继和有效证书指纹。');
+  if (url.protocol !== 'https:') throw new Error('自动配置 CA 需要 HTTPS 中继。');
   const host = url.hostname.replace(/^\[|\]$/g, '');
   return new Promise((resolve, reject) => {
     const socket = connect({ host, port: Number(url.port) || 443, servername: isIP(host) ? undefined : host, rejectUnauthorized: false }, () => {
@@ -31,14 +44,14 @@ export async function retrieveRelayCa(origin: string, fingerprint: string): Prom
           const cert = new X509Certificate(peer.raw), actual = cert.fingerprint256.replaceAll(':', '').toLowerCase();
           if (seen.has(actual)) break;
           seen.add(actual);
-          if (actual === fingerprint) {
-            if (!cert.ca || !cert.verify(cert.publicKey)) throw new Error('注册码必须绑定中继的根 CA 证书。');
+          if (matches(cert)) {
+            if (!cert.ca || cert.subject !== cert.issuer || !cert.verify(cert.publicKey)) throw new Error('必须使用中继的根 CA 证书。');
             if (Date.parse(cert.validFrom) > Date.now() || Date.parse(cert.validTo) <= Date.now()) throw new Error('中继 CA 证书已过期或尚未生效。');
             resolve(cert.toString()); return;
           }
           peer = peer.issuerCertificate;
         }
-        throw new Error('中继证书链与注册码中的 CA 指纹不匹配，请确认完整注册码及服务端证书链。');
+        throw new Error('中继证书链与信任的 CA 不匹配，请确认 CA 指纹及服务端证书链。');
       } catch (error) { reject(error); }
       finally { socket.destroy(); }
     });
@@ -46,6 +59,14 @@ export async function retrieveRelayCa(origin: string, fingerprint: string): Prom
     socket.once('error', reject);
     socket.once('close', () => clearTimeout(timer));
   });
+}
+
+export function isUntrustedRelayCaError(error: unknown): boolean {
+  let cause: any = error;
+  for (let i = 0; i < 6 && cause; i++, cause = cause.cause) {
+    if (['SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'].includes(cause.code)) return true;
+  }
+  return false;
 }
 
 /** The CA applies only to this request. Normal hostname, chain and validity checks remain enabled. */
@@ -69,11 +90,9 @@ export function fetchWithRelayCa(url: string, headers: Record<string, string>, b
 }
 
 export function relayConnectionError(error: unknown): unknown {
+  if (isUntrustedRelayCaError(error)) return new Error('中继 CA 证书尚未受信任，请使用管理员生成的带 CA 指纹注册码，自动配置安全连接。');
   let cause: any = error;
   for (let i = 0; i < 6 && cause; i++, cause = cause.cause) {
-    if (['SELF_SIGNED_CERT_IN_CHAIN', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY'].includes(cause.code)) {
-      return new Error('中继 CA 证书尚未受信任，请使用管理员生成的带 CA 指纹注册码，自动配置安全连接。');
-    }
     if (cause.code === 'ERR_TLS_CERT_ALTNAME_INVALID') return new Error('中继证书与填写的 IP 或域名不匹配，请检查中继地址和服务端证书。');
     if (['CERT_HAS_EXPIRED', 'CERT_NOT_YET_VALID'].includes(cause.code)) return new Error('中继证书已过期或尚未生效，请检查系统时间和服务端证书。');
   }

@@ -101,8 +101,12 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
+  const [showConnections, setShowConnections] = useState(false);
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
+  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div>
+    <div className="desktop-settings-row"><div><strong>手机远程连接</strong><p>注册中继并扫码绑定手机。</p></div><button aria-expanded={showConnections} onClick={() => setShowConnections(!showConnections)}>管理连接</button></div>
+    {showConnections && <RemoteAccessSettings />}
+    <UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
 }
 
 /** Route menu actions to their owners; search still uses a version-pinned UI control. */

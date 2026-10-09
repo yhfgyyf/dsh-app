@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { runtimeManifest } from './runtime-manifest.ts';
+import { copyPackagedRuntime, verifyPackagedRuntime } from './package-runtime.ts';
 
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Build this installer on Windows x64.');
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -17,11 +18,12 @@ await mkdir(staging, { recursive: true });
 await cp(join(root, 'dist'), join(staging, 'dist'), { recursive: true });
 for (const name of ['README.md', 'THIRD_PARTY_NOTICES.md']) await cp(join(root, name), join(staging, name));
 await writeFile(join(staging, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, description: pkg.description, main: pkg.main, private: true }, null, 2));
-await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
+await copyPackagedRuntime(join(root, '.runtime'), runtime);
 assert.match(execFileSync(join(runtime, 'bin/node.exe'), ['--version'], { encoding: 'utf8' }), /^v24\./);
 const [app] = await packager({ extraResource: [runtime], dir: staging, name: 'DSH Desktop', executableName: 'DSH Desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'win32', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false, icon: join(root, 'assets/icon.ico'), appCopyright: 'Independent desktop client for DeepSeek Harness', win32metadata: { CompanyName: 'yhfgyyf', FileDescription: 'DSH Desktop', ProductName: 'DSH Desktop' } });
 const packagedRuntime = await runtimeManifest(join(app, 'resources/runtime'));
-assert.deepEqual(packagedRuntime, await runtimeManifest(join(root, '.runtime')), 'Packaged runtime differs from the tested runtime');
+await verifyPackagedRuntime(join(app, 'resources/runtime'));
+assert.deepEqual(packagedRuntime, await runtimeManifest(runtime), 'Packaged runtime differs from the prepared runtime');
 const iscc = process.env.ISCC_PATH ?? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Inno Setup 7', 'ISCC.exe');
 await new Promise<void>((resolve, reject) => {
   const child = spawn(iscc, [`/DAppVersion=${pkg.version}`, `/DSourceDir=${app}`, `/DOutputDir=${output}`, join(root, 'installer/windows.iss')], { stdio: 'inherit', windowsHide: true });

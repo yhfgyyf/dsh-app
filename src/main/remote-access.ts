@@ -1,9 +1,9 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, X509Certificate } from 'node:crypto';
 import { hostname } from 'node:os';
 import QRCode from 'qrcode/lib/server.js';
 import { defaultRemoteConfig, parseRemoteConfig, parseRemoteCredentials, parseRemoteRelayRoutes, phoneRelayOrigin, type RemoteRelayRoutes, type LocalRemoteAction, type LocalRemoteCredentials, type RemoteBinding, type RemoteCredentials, type RemoteState, type RemoteAction, type RemoteRuntimeConfig, type RemoteRuntimeState } from '../shared/remote-access.ts';
 import { RemoteCredentialsFile } from './remote-access-credentials.ts';
-import { fetchWithRelayCa, parseRegistrationCode, relayConnectionError, retrieveRelayCa } from './relay-ca.ts';
+import { fetchWithRelayCa, isUntrustedRelayCaError, parseRegistrationCode, relayConnectionError, renewRelayCa, retrieveRelayCa } from './relay-ca.ts';
 
 export class DesktopRemoteAccess {
   private config = { ...defaultRemoteConfig(), name: hostname().slice(0, 80) || 'DSH Desktop' };
@@ -83,7 +83,17 @@ export class DesktopRemoteAccess {
     const url = this.config.relay + '/v1/' + path;
     const response = await (ca ? fetchWithRelayCa(url, headers, payload, ca) : fetch(url, {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers, body: payload,
-    })).catch(error => { throw relayConnectionError(error); });
+    })).catch(async error => {
+      if (path !== 'register' && ca && this.credentials?.relayCa === ca && isUntrustedRelayCaError(error)) {
+        const renewedCa = await renewRelayCa(this.config.relay, ca);
+        // Verify the full chain and hostname before persisting the CA or sending credentials.
+        const response = await fetchWithRelayCa(url, headers, payload, renewedCa);
+        this.credentials.relayCa = renewedCa;
+        await this.save(); await this.apply();
+        return response;
+      }
+      throw relayConnectionError(error);
+    });
     const reader = response.body?.getReader();
     const chunks: Uint8Array[] = []; let size = 0;
     try {
@@ -207,6 +217,7 @@ export class DesktopRemoteAccess {
         const expiresAt = Math.min(Date.now() + 120000, result?.expiresAt ?? Infinity);
         const payload = JSON.stringify({ kind: 'dsh-desktop-pair', version: 2, computerId: this.local.deviceId, name: this.config.name, key, expiresAt,
           lan: { origins: this.lan.origins, inviteId: id }, ...(result ? { relay: { ...relay, deviceId: this.credentials!.deviceId,
+            ...(this.credentials!.relayCa ? { caFingerprint: new X509Certificate(this.credentials!.relayCa).fingerprint256.replaceAll(':', '').toLowerCase() } : {}),
             inviteId: result.inviteId, claimSecret: result.claimSecret } } : {}) });
         this.invitation = { id, inviteId: result?.inviteId, key, expiresAt, relay, qr: await QRCode.toDataURL(payload, { errorCorrectionLevel: 'M', width: 340 }) }; this.pending = [];
         await this.apply();

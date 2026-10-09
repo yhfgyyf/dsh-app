@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { runtimeManifest } from './runtime-manifest.ts';
+import { copyPackagedRuntime, verifyPackagedRuntime } from './package-runtime.ts';
 import { macSigningIdentity, machOFiles } from './macos-signing.ts';
 import { macSignature, verifyMacSigningContinuity } from '../src/main/macos-signature.ts';
 import { verifyComputerDriverBuild } from './build-computer-driver.ts';
@@ -38,7 +39,7 @@ const iconset = join(output, 'DSH.iconset');
 await run('swift', [join(root, 'scripts/make-icon.swift'), iconset]);
 await run('iconutil', ['-c', 'icns', iconset, '-o', join(output, 'DSH.icns')]);
 const runtime = join(output, 'runtime');
-await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
+await copyPackagedRuntime(join(root, '.runtime'), runtime);
 const nativeFiles = developerId ? await machOFiles(runtime) : new Set<string>();
 const nodeEntitlements = join(output, 'node-entitlements.plist');
 if (developerId) {
@@ -76,7 +77,7 @@ if (developerId) {
   assert.ok(signature.timestamp, 'Formal app lacks a secure signing timestamp');
 } else console.warn('macOS: ad-hoc signing changes the permission identity between builds. This local test build is not ready for public distribution.');
 const continuity = values['previous-app'] ? await verifyMacSigningContinuity(values['previous-app'], app) : undefined;
-const sourceRuntime = await runtimeManifest(join(root, '.runtime'));
+const sourceRuntime = await runtimeManifest(runtime);
 const packagedRuntime = await runtimeManifest(join(app, 'Contents/Resources/runtime'));
 if (!developerId) assert.deepEqual(packagedRuntime, sourceRuntime, 'Packaged runtime differs from the tested runtime');
 else {
@@ -92,6 +93,7 @@ await run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', app, archive]
 const extracted = join(output, 'verification');
 await run('ditto', ['-x', '-k', archive, extracted]);
 const extractedApp = join(extracted, 'DSH Desktop.app');
+await verifyPackagedRuntime(join(extractedApp, 'Contents/Resources/runtime'));
 await run('codesign', ['--verify', '--deep', '--strict', '--verbose=2', extractedApp]);
 assert.deepEqual(await runtimeManifest(join(extractedApp, 'Contents/Resources/runtime')), packagedRuntime, 'Archived runtime differs from the packaged runtime');
 assert.deepEqual(await readFile(join(extractedApp, 'Contents/Resources/app.asar')), await readFile(join(app, 'Contents/Resources/app.asar')), 'Archived app differs from the packaged app');

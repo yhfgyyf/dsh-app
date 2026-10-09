@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runtimeManifest } from './runtime-manifest.ts';
+import { copyPackagedRuntime, verifyPackagedRuntime } from './package-runtime.ts';
 
 if (process.platform !== 'linux' || process.arch !== 'x64') throw new Error('Build this package on Ubuntu amd64.');
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -22,10 +23,10 @@ await cp(join(root, 'dist'), join(staging, 'dist'), { recursive: true });
 for (const name of ['README.md', 'THIRD_PARTY_NOTICES.md']) await cp(join(root, name), join(staging, name));
 await writeFile(join(staging, 'package.json'), JSON.stringify({ name: pkg.name, version: pkg.version, description: pkg.description, main: pkg.main, private: true }, null, 2));
 const runtime = join(output, 'runtime');
-await cp(join(root, '.runtime'), runtime, { recursive: true, dereference: true });
+await copyPackagedRuntime(join(root, '.runtime'), runtime);
 const [app] = await packager({ dir: staging, extraResource: [runtime], name: 'DSH Desktop', executableName: 'dsh-desktop', appVersion: pkg.version, buildVersion: pkg.version, platform: 'linux', arch: 'x64', electronVersion: pkg.devDependencies.electron, out: output, asar: true, prune: false });
 const packagedRuntime = await runtimeManifest(join(app, 'resources/runtime'));
-assert.deepEqual(packagedRuntime, await runtimeManifest(join(root, '.runtime')), 'Packaged runtime differs from the tested runtime');
+assert.deepEqual(packagedRuntime, await runtimeManifest(runtime), 'Packaged runtime differs from the prepared runtime');
 const debroot = join(output, 'debroot');
 const payload = join(debroot, 'opt/dsh-desktop');
 await mkdir(join(debroot, 'opt'), { recursive: true });
@@ -70,6 +71,7 @@ const installer = join(output, `DSH-Desktop-${pkg.version}-Ubuntu-amd64.deb`);
 execFileSync('dpkg-deb', ['--root-owner-group', '--uniform-compression', '-Zxz', '-z6', '-b', debroot, installer], { stdio: 'inherit' });
 const extracted = join(output, 'verification');
 execFileSync('dpkg-deb', ['-x', installer, extracted]);
+await verifyPackagedRuntime(join(extracted, 'opt/dsh-desktop/resources/runtime'));
 for (const path of ['opt/dsh-desktop', 'opt/dsh-desktop/resources/runtime', 'opt/dsh-desktop/resources/runtime/bin']) {
   assert.equal((await stat(join(extracted, path))).mode & 0o777, 0o755, `Installed directory is not accessible: ${path}`);
 }

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { copyFile } from 'node:fs/promises';
+import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { RemoteBridge } from './remote/bridge.ts';
@@ -106,6 +106,13 @@ try {
     stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }),
   });
   initProfile(profileDir, ['@deepseek-ai/dsh-base', 'dsh-desktop-surface']);
+  const localPlugins = join(profileDir, 'local-plugins');
+  await mkdir(localPlugins, { recursive: true });
+  // Anonymous local modules must not inherit the named profile's package metadata.
+  // Exclusive creation preserves any existing user manifest, including during upgrades.
+  await writeFile(join(localPlugins, 'package.json'), '{\n  "private": true\n}\n', { flag: 'wx' }).catch(error => {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  });
   const profile = loadProfileDirectory('dsh-desktop', profileDir, installAnchor);
   reportSkippedBundles('dsh-desktop', profile);
   const profileContext = {

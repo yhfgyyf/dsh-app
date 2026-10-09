@@ -105,6 +105,10 @@ await build({ configFile: false, plugins: [{
 
 await cp(resolve(root, 'src/runtime/remote'), resolve(root, 'dist/runtime/remote'), { recursive: true });
 await cp(resolve(root, 'dist/runtime'), resolve(root, '.runtime/app'), { recursive: true });
+await mkdir(resolve(root, '.runtime/local-plugins'), { recursive: true });
+await writeFile(resolve(root, '.runtime/local-plugins/package.json'), '{\n  "private": true\n}\n', { flag: 'wx' }).catch(error => {
+  if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+});
 // Keep the built-in surface discoverable to Plugin Manager on every platform.
 const surfaceRoot = resolve(root, '.runtime/node_modules/dsh-desktop-surface');
 await cp(resolve(root, 'dist/runtime'), surfaceRoot, { recursive: true });

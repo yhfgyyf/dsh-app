@@ -8,10 +8,11 @@ import { X509Certificate } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import QRCode from 'qrcode/lib/server.js';
 import { DesktopRemoteAccess } from '../src/main/remote-access.ts';
 import { RemoteCredentialsFile } from '../src/main/remote-access-credentials.ts';
 import { RemoteBridge } from '../src/runtime/remote/bridge.ts';
-import { defaultRemoteConfig, type RemoteRuntimeConfig } from '../src/shared/remote-access.ts';
+import { defaultRemoteConfig, type RemoteCredentials, type RemoteRuntimeConfig } from '../src/shared/remote-access.ts';
 
 const WebSocket = createRequire(new URL('../.runtime/package.json', import.meta.url))('ws');
 const fixtureRoot = new URL('../services/relay/test/fixtures/ca/', import.meta.url);
@@ -20,15 +21,18 @@ const cert = await readFile(new URL('server.pem', fixtureRoot), 'utf8');
 const key = await readFile(new URL('server-key.pem', fixtureRoot), 'utf8');
 const expiredCa = await readFile(new URL('expired-ca.pem', fixtureRoot), 'utf8');
 const expiredKey = await readFile(new URL('expired-ca-key.pem', fixtureRoot), 'utf8');
+const oldRenewalCa = await readFile(new URL('renewal-old-ca.pem', fixtureRoot), 'utf8');
+const renewalCa = await readFile(new URL('renewal-ca.pem', fixtureRoot), 'utf8');
+const renewalCert = await readFile(new URL('renewal-server.pem', fixtureRoot), 'utf8');
 const fingerprint = new X509Certificate(ca).fingerprint256.replaceAll(':', '').toLowerCase();
 const code = 'c'.repeat(43), secureCode = `dshca1_${fingerprint}_${code}`;
 // This cipher tests the persistence boundary; authenticated encryption is covered separately.
 const cipher = { isEncryptionAvailable: () => true, encryptString: (s: string) => Buffer.from(s), decryptString: (b: Buffer) => b.toString() };
 
-async function fixture(options: { includeCa?: boolean; hostname?: string; expired?: boolean } = {}) {
+async function fixture(options: { includeCa?: boolean; hostname?: string; expired?: boolean; renewal?: boolean; credentials?: Omit<RemoteCredentials, 'relay'> } = {}) {
   const requests: { path: string; body: any; authorization?: string }[] = [];
   let invitationsAvailable = true;
-  const server = createServer({ key: options.expired ? expiredKey : key, cert: options.expired ? expiredCa : cert + (options.includeCa === false ? '' : ca) }, async (req, res) => {
+  const server = createServer({ key: options.expired ? expiredKey : key, cert: options.expired ? expiredCa : options.renewal ? renewalCert + renewalCa : cert + (options.includeCa === false ? '' : ca) }, async (req, res) => {
     const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk));
     const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
     requests.push({ path: req.url!, body, authorization: req.headers.authorization });
@@ -46,7 +50,7 @@ async function fixture(options: { includeCa?: boolean; hostname?: string; expire
   const origin = `https://${options.hostname ?? '127.0.0.1'}:${(server.address() as any).port}`;
   const directory = await mkdtemp(join(tmpdir(), 'dsh-relay-ca-'));
   const file = new RemoteCredentialsFile(directory, cipher);
-  await file.save({ ...defaultRemoteConfig(), relay: origin });
+  await file.save({ ...defaultRemoteConfig(), relay: origin }, options.credentials ? { ...options.credentials, relay: origin } : undefined);
   let hostConfig: RemoteRuntimeConfig = { enabled: false };
   const remote = new DesktopRemoteAccess(file, async config => { hostConfig = config; }, () => {});
   await remote.restore();
@@ -55,6 +59,53 @@ async function fixture(options: { includeCa?: boolean; hostname?: string; expire
     close: async () => { remote.stop(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); await rm(directory, { recursive: true, force: true }); },
   };
 }
+
+test('a CA common-name renewal preserves registration and bindings and updates the QR fingerprint', async () => {
+  const binding = { id: 'existing_binding', name: 'Existing phone', account: 'test', role: 'control' as const, key: 'k'.repeat(43), revoked: false };
+  const credentials = { relayCa: oldRenewalCa, deviceId: 'existing_desktop', deviceToken: 'existing_desktop_token', bindings: [binding] };
+  const f = await fixture({ renewal: true, credentials });
+  const generate = QRCode.toDataURL;
+  let qr: any;
+  QRCode.toDataURL = async (payload: string, options: any) => { qr = JSON.parse(payload); return generate(payload, options); };
+  try {
+    await f.remote.act({ type: 'pair' });
+    const saved = (await f.file.load()).credentials!;
+    assert.deepEqual({ ...saved, relayCa: oldRenewalCa }, { ...credentials, relay: f.origin });
+    assert.equal(new X509Certificate(saved.relayCa!).fingerprint256, new X509Certificate(renewalCa).fingerprint256);
+    assert.equal(f.config().credentials!.relayCa, saved.relayCa);
+    assert.equal(qr.relay.caFingerprint, new X509Certificate(renewalCa).fingerprint256.replaceAll(':', '').toLowerCase());
+    assert.equal(f.requests.length, 1, 'The failed handshake and certificate discovery send no HTTP request');
+    assert.equal(f.requests[0].path, '/v1/invite');
+    assert.equal(f.requests[0].authorization, `Bearer ${credentials.deviceToken}`);
+  } finally { QRCode.toDataURL = generate; await f.close(); }
+});
+
+test('CA renewal rejects changed keys, expiration and wrong hostnames without sending device credentials', async () => {
+  for (const options of [{}, { expired: true }, { renewal: true, hostname: 'localhost' }]) {
+    const f = await fixture({ ...options, credentials: { relayCa: oldRenewalCa, deviceId: 'existing_desktop', deviceToken: 'existing_desktop_token', bindings: [] } });
+    try {
+      await assert.rejects(() => f.remote.act({ type: 'pair' }));
+      assert.equal(f.requests.length, 0);
+      assert.equal((await f.file.load()).credentials!.relayCa, oldRenewalCa);
+      assert.equal(f.remote.state.registered, true);
+    } finally { await f.close(); }
+  }
+});
+
+test('phone pairing QR includes the registered CA fingerprint without embedding the certificate', async () => {
+  const f = await fixture();
+  const generate = QRCode.toDataURL;
+  let qr: any;
+  QRCode.toDataURL = async (payload: string, options: any) => { qr = JSON.parse(payload); return generate(payload, options); };
+  try {
+    await f.remote.act({ type: 'register', code: secureCode });
+    f.remote.update({ status: 'online', lan: { origins: [], connections: [] } });
+    await f.remote.act({ type: 'pair' });
+    assert.equal(qr.relay.caFingerprint, fingerprint);
+    assert.equal(qr.relay.origin, f.origin);
+    assert.ok(!JSON.stringify(qr).includes('BEGIN CERTIFICATE'));
+  } finally { QRCode.toDataURL = generate; await f.close(); }
+});
 
 test('a fingerprint-bearing code retrieves the private CA and restores verified HTTPS and WSS after restart', { timeout: 15000 }, async () => {
   const f = await fixture();

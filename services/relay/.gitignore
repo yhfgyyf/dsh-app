@@ -11,6 +11,9 @@ data/
 !test/fixtures/ca/server-key.pem
 !test/fixtures/ca/expired-ca.pem
 !test/fixtures/ca/expired-ca-key.pem
+!test/fixtures/ca/renewal-old-ca.pem
+!test/fixtures/ca/renewal-ca.pem
+!test/fixtures/ca/renewal-server.pem
 *.key
 *.p12
 *.pfx
