@@ -45,6 +45,9 @@ try {
     $ready = $corePid -and $application.MainWindowHandle -ne 0 -and (Test-Path $transport)
   } until ($ready -or (Get-Date) -gt $deadline)
   if (!$ready) { throw 'Installed application did not create its window and owned core' }
+  $profileManifest = Join-Path $env:DSH_DESKTOP_DATA_DIR 'core/profiles/desktop/local-plugins/package.json'
+  $profilePackage = Get-Content $profileManifest -Raw | ConvertFrom-Json
+  if ($profilePackage.private -ne $true -or @($profilePackage.PSObject.Properties).Count -ne 1) { throw 'Installed profile must create the anonymous local-plugins package manifest' }
   if (!$application.CloseMainWindow()) { throw 'Application window could not receive close request' }
   # Window close deliberately preserves the Host for phone connections.
   if ($application.WaitForExit(1000)) { throw 'Closing the window unexpectedly exited the background application' }
@@ -73,6 +76,6 @@ try {
 $uninstall = Start-Process -FilePath (Join-Path $install 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
 if ($uninstall.ExitCode -ne 0 -or (Test-Path $exe)) { throw 'Silent uninstall failed' }
 if (!(Test-Path $sentinel)) { throw 'Uninstall removed user data' }
-$report = @{ status = 'pass'; update = $updateReport; checks = @('silent per-user installation into a path with spaces', 'installed app.asar and complete runtime match package', 'restart icon completes an external update and retains a complete previous-app backup', 'updated app.asar and complete runtime match package', 'bundled Node runs without system Node', 'updated application automatically creates a native window and owned core', 'closing the window preserves the app and protected Host transport', 'reopening restores the same application window', 'explicit Quit through the real application menu releases its core', 'silent uninstall preserves user data') }
+$report = @{ status = 'pass'; update = $updateReport; checks = @('silent per-user installation into a path with spaces', 'installed app.asar and complete runtime match package', 'installed runtime excludes dsh-p2p-collab and contains an anonymous local-plugins manifest', 'restart icon completes an external update and retains a complete previous-app backup', 'updated app.asar and complete runtime match package', 'bundled Node runs without system Node', 'updated application automatically creates a native window and owned core', 'installed app initializes an anonymous local-plugins manifest in its active profile', 'closing the window preserves the app and protected Host transport', 'reopening restores the same application window', 'explicit Quit through the real application menu releases its core', 'silent uninstall preserves user data') }
 $report | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $root '.test-data/windows-installer-report.json')
 $report | ConvertTo-Json -Depth 4 | Write-Output
