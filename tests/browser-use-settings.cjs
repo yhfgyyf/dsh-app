@@ -72,26 +72,26 @@ async function run(event) {
   // credential onboarding that the provider contributes.
   await finishOnboarding();
   // A profile without workspaces legitimately stays at the workspace chooser.
-  // The account menu mounts before the initial session. Its later blank-session
-  // onboarding transition can close Settings even when native onboarding renders
-  // nothing. Wait for the live composer above and let that React commit finish.
+  // The first blank-session onboarding step can arrive after its composer. The
+  // upstream coordinator then closes Settings even when native onboarding renders
+  // nothing. Reopen through the actual account menu if that startup transition wins.
   await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-  const openedDirectly = await js(`(() => {
-    const trigger = document.querySelector('button.VOzbGW_trigger');
-    if (trigger) { trigger.click(); return true; }
-    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
-    return false;
-  })()`);
-  if (!openedDirectly) await until(() => js(`(() => {
+  const selector = '.desktop-browser-use-settings [role="switch"]';
+  await until(() => js(`(() => {
+    const foreground = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]')).at(-1);
+    if (foreground?.dataset.shortcutModal === 'settings'
+      && document.querySelector(${JSON.stringify(selector)})) return true;
     const settings = Array.from(document.querySelectorAll('button[role="menuitem"]')).find(button =>
       Array.from(button.querySelectorAll('span')).some(span => ['设置', 'Settings'].includes(span.textContent)));
-    if (!settings) return false;
-    settings.click(); return true;
-  })()`), 'Settings entry missing from the account menu');
-  const selector = '.desktop-browser-use-settings [role="switch"]';
-  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
-  await until(() => js(`Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
-    .at(-1)?.dataset.shortcutModal === 'settings'`), 'Settings did not become the foreground dialog');
+    if (settings) { settings.click(); return false; }
+    if (foreground || document.getElementById('root')?.inert) return false;
+    window.__browserSettingsOpenAttempts = (window.__browserSettingsOpenAttempts ?? 0) + 1;
+    const trigger = document.querySelector('button.VOzbGW_trigger');
+    if (trigger) { trigger.click(); return false; }
+    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
+    return false;
+  })()`), 'Settings did not become the foreground dialog');
+  report.settingsOpenAttempts = await js('window.__browserSettingsOpenAttempts');
   await js(`(() => {
     window.__browserSettingsTransitions = [];
     const record = () => {
