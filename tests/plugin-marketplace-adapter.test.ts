@@ -66,6 +66,7 @@ test('Settings marketplace and sidebar share the official controller with only o
         usePluginManager: (select: any) => select(face.hooks.pluginManager.getSnapshot()),
         useConfigurations: (select: any) => select([]),
         useConfigLedger: (select: any) => select(face.hooks.configLedger.getSnapshot()),
+        usePluginTabs: (select: any) => select(face.hooks.pluginTabs.getSnapshot()),
         renderSlot: (name: string, props: any) => { slots.push({ name, props }); return null; },
         renderFactorySlot: (name: string, props: any) => element(factories.get(name).component, props),
       });

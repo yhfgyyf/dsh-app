@@ -32,3 +32,4 @@ mobile/android/**/build/
 mobile/android/.gradle/
 mobile/android/local.properties
 services/relay/data/
+!services/relay/test/fixtures/ca/renewal-*.pem

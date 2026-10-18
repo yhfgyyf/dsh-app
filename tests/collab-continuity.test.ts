@@ -18,8 +18,8 @@ async function fixture() {
   const home = await mkdtemp(join(tmpdir(), 'collab-continuity-')), taskId = randomUUID();
   const client = new CollabClient(home, { isRegistered: () => true, grant: async () => { throw new Error('Fixture must not connect'); } });
   await client.restore(); client.start();
-  client.data.settings = { maxTokens: 5000, maxMinutes: 60, executionMode: 'continuous', publishMode: 'review' };
-  const task = { id: taskId, title: 'Public task title', description: 'Compare approaches', acceptance: 'Measured evidence', revision: 1, specRevision: 1, status: 'open', replyCount: 0 };
+  client.data.settings = { maxTokens: 5000, maxMinutes: 60, executionMode: 'continuous', publishMode: 'auto' };
+  const task = { id: taskId, authorId: 'other-peer', title: 'Public task title', description: 'Compare approaches', acceptance: 'Measured evidence', revision: 1, specRevision: 1, status: 'open', replyCount: 0 };
   const publicUpdates: any[] = [], publications: any[] = [], events: CollabEvent[] = [], replies: any[] = [], validations: any[] = [], calls: string[] = [];
   const attachmentData = new Map<string, Buffer>(), downloaded: string[] = [];
   const artifact = (name: string, bytes: Buffer) => {
@@ -27,6 +27,7 @@ async function fixture() {
     return { id, name, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
   };
   const sessions = new Map<string, { runId: string; cwd: string; status: 'running' | 'idle'; events: any[] }>();
+  const headers: any[] = [], completions: any[] = [];
   let offline = false;
   client.api = async (path: string, body?: any) => {
     if (offline) throw new Error('Offline fixture');
@@ -40,6 +41,7 @@ async function fixture() {
       return { events: events.filter(event => event.id > after), cursor: events.at(-1)?.id ?? 0, unread: events.length, hasMore: false };
     }
     if (path === `tasks/${taskId}/attempts`) { publicUpdates.push(structuredClone(body)); return body; }
+    if (path === `tasks/${taskId}/complete`) { completions.push(structuredClone(body)); task.status = 'resolved'; return { ...task }; }
     if (path === `tasks/${taskId}/replies` && body) { publications.push(structuredClone(body)); return { id: randomUUID() }; }
     if (path.startsWith(`tasks/${taskId}/replies/`)) {
       const reply = replies.find(reply => reply.id === path.split('/').at(-1));
@@ -48,7 +50,7 @@ async function fixture() {
     }
     if (path.startsWith(`tasks/${taskId}`)) {
       const offset = Number(path.split('offset=')[1] ?? 0);
-      return { task: { ...task, replyCount: replies.length }, replies: replies.slice(offset, offset + 50), attachments: [], attempts: [], validations, decision: null, cursor: events.at(-1)?.id ?? 0, hasMore: offset + 50 < replies.length };
+      return { task: { ...task, replyCount: replies.length }, replies: replies.slice(offset, offset + 50), attachments: [], attempts: [], validations, decision: null, capabilities: { conversationWorkflow: 1 }, cursor: events.at(-1)?.id ?? 0, hasMore: offset + 50 < replies.length };
     }
     throw new Error('Unexpected fixture path: ' + path);
   };
@@ -58,14 +60,14 @@ async function fixture() {
       create: async ({ sessionId, cwd }: any) => { sessions.set(sessionId, { runId: '', cwd, status: 'running', events: [] }); },
       rename: async () => {},
       prompt: async ({ sessionId, requestId }: any) => {
-        calls.push(requestId); const session = sessions.get(sessionId)!; session.runId = requestId;
-        session.events = [{ type: 'turn/start', data: { turn: 1 } }, { type: 'step/start', data: { turn: 1, step: 0 } },
-          { type: 'assistant/message', data: { turn: 1, step: 0, message: { content: [{ type: 'text', text: 'Phase result' }] } } }];
-        await writeFile(join(session.cwd, 'submission.json'), JSON.stringify({ body: 'Public phase result', verification: 'Fixture measurement', limitations: 'No production execution', files: [] }));
+        calls.push(requestId); const session = sessions.get(sessionId)!; session.runId = requestId; session.status = 'running';
+        session.events.push({ type: 'turn/start', data: { turn: calls.length } }, { type: 'step/start', data: { turn: calls.length, step: 0 } },
+          { type: 'assistant/message', data: { turn: calls.length, step: 0, message: { content: [{ type: 'text', text: 'Phase result' }] } } });
+        await writeFile(join(home, 'collaboration/workspaces', requestId, 'submission.json'), JSON.stringify({ body: 'Public phase result', verification: 'Fixture measurement', limitations: 'No production execution', files: [] }));
       },
       inspect: async (id: string) => ({ meta: { id }, inheritedEventCount: 0, events: sessions.get(id)!.events }),
     },
-    sessionPersistence: { flush: async () => {}, list: async () => [] },
+    sessionPersistence: { flush: async () => {}, list: async () => headers },
   };
   const info = { appVersion: 'test', runtimeVersion: 'test', pluginVersion: 'test', platform: 'test', arch: 'test' };
   const derive = () => ({ uncachedInputTokens: 200, outputTokens: 40, totalTokens: 240 });
@@ -75,7 +77,7 @@ async function fixture() {
   const settle = async (run: CollabRun, checkpoint?: CollabCheckpoint) => {
     const session = sessions.get(run.sessionId)!; session.status = 'idle';
     session.events.push({ type: 'step/end', data: { turn: 1, step: 0 } }, { type: 'turn/end', data: { turn: 1, reason: 'completed' } });
-    if (checkpoint) await writeFile(join(session.cwd, 'continuation.json'), JSON.stringify(checkpoint));
+    if (checkpoint) await writeFile(join(home, 'collaboration/workspaces', run.id, 'continuation.json'), JSON.stringify(checkpoint));
     const result = await rpc('run', { runId: run.id }); assert.equal(result.ok, true, JSON.stringify(result));
   };
   const enqueue = (kind = 'solution.submitted') => {
@@ -83,14 +85,15 @@ async function fixture() {
     events.push(event); replies.push({ id: replyId, taskId, authorId: 'other-peer', actor: 'user', kind: kind === 'solution.submitted' ? 'solution' : 'message', body: 'New measured counterexample', baseRevision: 1, replaces: null, createdAt: event.at, solution: null, attachments: [] });
     return event;
   };
-  return { home, taskId, task, client, calls, publicUpdates, publications, events, replies, validations, sessions, rpc, start, settle, enqueue, artifact, attachmentData, downloaded,
+  return { home, taskId, task, client, calls, publicUpdates, publications, events, replies, validations, sessions, headers, completions, rpc, start, settle, enqueue, artifact, attachmentData, downloaded,
+    workspace: (run: CollabRun) => join(home, 'collaboration/workspaces', run.id),
     tick: async () => { await (host as any).monitor(); },
     offline: (value: boolean) => { offline = value; },
     restart: async () => { await host.stop(); const restored = new CollabClient(home, { isRegistered: () => true, grant: async () => { throw new Error(); } }); await restored.restore(); restored.api = client.api; restored.start(); host = new CollabHost(restored, ctx, derive, info); return restored; },
     cleanup: async () => { await host.stop(); await rm(home, { recursive: true, force: true }); } };
 }
 
-test('continuous stages use new sessions, retain prior artifacts and pause a repeated step without new evidence', async () => {
+test('continuous rounds reuse one session, retain prior artifacts and pause a repeated step without new evidence', async () => {
   const f = await fixture();
   try {
     const first = await f.start(), attempt = f.client.data.attempts[first.attemptId!];
@@ -98,12 +101,15 @@ test('continuous stages use new sessions, retain prior artifacts and pause a rep
     assert.equal(JSON.stringify(f.publicUpdates).includes('Private local'), false, 'Private instructions must not escape in public attempt metadata');
     await f.settle(first, continuing()); await f.tick();
     assert.equal(f.calls.length, 2); assert.equal(attempt.runIds.length, 2);
-    const second = f.client.data.runs[attempt.activeRunId!]; assert.notEqual(second.sessionId, first.sessionId);
-    const request = JSON.parse(await readFile(join(f.sessions.get(second.sessionId)!.cwd, 'task.json'), 'utf8'));
+    const second = f.client.data.runs[attempt.activeRunId!]; assert.equal(second.sessionId, first.sessionId);
+    const firstReport = structuredClone(first.report);
+    const request = JSON.parse(await readFile(join(f.workspace(second), 'task.json'), 'utf8'));
     assert.equal(request.previousRuns[0].id, first.id); assert.equal(request.remainingTokens, 4760);
     await f.settle(second, continuing()); await f.tick();
     assert.equal(f.calls.length, 2); assert.equal(attempt.status, 'paused'); assert.match(attempt.waitReason, /空转/);
     assert.equal(attempt.usedTokens, 480); await f.rpc('run', { runId: second.id }); assert.equal(attempt.usedTokens, 480);
+    await f.rpc('run', { runId: first.id }); assert.deepEqual(first.report, firstReport, 'Reading a prior round cannot absorb later usage or output');
+    assert.equal(f.sessions.size, 1);
   } finally { await f.cleanup(); }
 });
 
@@ -116,7 +122,7 @@ test('only matching wait conditions wake an attempt and all supplied events requ
     const solution = f.enqueue(); await f.client.sync(); await f.tick();
     assert.equal(f.calls.length, 2); const second = f.client.data.runs[attempt.activeRunId!];
     assert.deepEqual(second.triggerEventIds, [note.id, solution.id]);
-    const request = JSON.parse(await readFile(join(f.sessions.get(second.sessionId)!.cwd, 'task.json'), 'utf8'));
+    const request = JSON.parse(await readFile(join(f.workspace(second), 'task.json'), 'utf8'));
     assert.ok(request.discussion.some((reply: any) => reply.id === solution.subjectId && reply.authorId === 'other-peer' && reply.body.includes('counterexample')));
     await f.settle(second, ready([{ eventId: note.id, decision: 'defer', reason: 'Needs more evidence' }, { eventId: solution.id, decision: 'verify', reason: 'Counterexample checked' }]));
     assert.equal(attempt.status, 'ready'); assert.equal(attempt.pendingEvents.length, 0); assert.equal(attempt.reviewedCursor, solution.id); assert.equal(attempt.decisions.length, 2);
@@ -156,7 +162,8 @@ test('missing checkpoints and task closure stop continuous work without inventin
   try {
     const missing = await f.start(); await f.settle(missing); await f.tick();
     assert.equal(f.client.data.attempts[missing.attemptId!].status, 'paused'); assert.equal(f.calls.length, 1);
-    const active = await f.start(); f.task.status = 'closed';
+    assert.equal((await f.rpc('attempt-resume', { attemptId: missing.attemptId, nextStep: 'Continue explicitly after inspecting the missing checkpoint' })).ok, true);
+    const active = f.client.data.runs[f.client.data.attempts[missing.attemptId!].activeRunId!]; f.task.status = 'closed';
     await f.tick(); assert.equal(f.calls.length, 2); assert.equal(f.client.data.runs[active.id].status, 'running', 'External task changes wait for the phase checkpoint');
     await f.settle(active, continuing()); await f.tick();
     assert.equal(f.client.data.attempts[active.attemptId!].status, 'completed'); assert.equal(f.calls.length, 2);
@@ -178,15 +185,15 @@ test('offline checkpoints do not launch a phase and a pause retains its exact pu
 });
 
 test('waiting and submitted attempts observe task completion without a matching wake condition or a model call', async () => {
+  for (const status of ['waiting', 'submitted'] as const) {
   const f = await fixture();
   try {
     const first = await f.start(), firstAttempt = f.client.data.attempts[first.attemptId!];
-    await f.settle(first, waiting()); firstAttempt.wakeOn = ['reply.created'];
-    const second = await f.start(), secondAttempt = f.client.data.attempts[second.attemptId!];
-    await f.settle(second, ready()); secondAttempt.status = 'submitted';
-    f.task.status = 'resolved'; f.enqueue('solution.accepted'); await f.client.sync(); await f.tick();
-    assert.equal(firstAttempt.status, 'completed'); assert.equal(secondAttempt.status, 'completed'); assert.equal(f.calls.length, 2);
+    await f.settle(first, status === 'waiting' ? waiting() : ready()); firstAttempt.wakeOn = ['reply.created']; firstAttempt.status = status;
+    f.task.status = 'resolved'; f.enqueue('task.completed'); await f.client.sync(); await f.tick();
+    assert.equal(firstAttempt.status, 'completed'); assert.equal(f.calls.length, 1);
   } finally { await f.cleanup(); }
+  }
 });
 
 test('new counterevidence reopens evaluation of a continuous candidate while preserving its original result', async () => {
@@ -197,7 +204,7 @@ test('new counterevidence reopens evaluation of a continuous candidate while pre
     const event = f.enqueue('reply.created'); await f.client.sync(); await f.tick();
     assert.equal(f.calls.length, 2); const second = f.client.data.runs[attempt.activeRunId!];
     assert.deepEqual(second.triggerEventIds, [event.id]); assert.equal(f.client.data.runs[first.id].checkpoint?.action, 'ready');
-    const input = JSON.parse(await readFile(join(f.sessions.get(second.sessionId)!.cwd, 'task.json'), 'utf8'));
+    const input = JSON.parse(await readFile(join(f.workspace(second), 'task.json'), 'utf8'));
     assert.match(input.instruction, /既有候选/);
     await f.settle(second, { ...waiting(), decisions: [{ eventId: event.id, decision: 'reject', reason: 'Does not change the measured case' }] });
     await f.tick(); assert.equal(f.calls.length, 2); assert.equal(attempt.status, 'waiting');
@@ -265,7 +272,7 @@ test('candidate artifacts enter the local inputs with verified bytes and contrib
   try {
     const source = f.enqueue(), bytes = Buffer.from('candidate artifact evidence\n'), file = f.artifact('measurement.csv', bytes);
     f.replies[0].attachments.push(file);
-    const run = await f.start(), cwd = f.sessions.get(run.sessionId)!.cwd;
+    const run = await f.start(), cwd = f.workspace(run);
     const request = JSON.parse(await readFile(join(cwd, 'task.json'), 'utf8'));
     const attachment = request.discussion.find((reply: any) => reply.id === source.subjectId).attachments[0];
     assert.equal(attachment.sourceReplyId, source.subjectId); assert.equal(attachment.sha256, file.sha256);
@@ -296,8 +303,9 @@ test('pending contribution artifacts take priority and skipped attachments carry
     prior.attachments = Array.from({ length: 8 }, (_, index) => f.artifact(`candidate-${index}.txt`, Buffer.from('candidate ' + index)));
     const first = await f.start(); await f.settle(first, { ...waiting(), wakeOn: ['reply.created'] }); f.downloaded.length = 0;
     const event = f.enqueue('reply.created'), urgent = f.artifact('counterexample.txt', Buffer.from('pending evidence'));
+    f.replies.at(-1)!.replyTo = prior.id;
     f.replies.at(-1)!.attachments.push(urgent); await f.client.sync(); await f.tick();
-    const attempt = f.client.data.attempts[first.attemptId!], run = f.client.data.runs[attempt.activeRunId!], cwd = f.sessions.get(run.sessionId)!.cwd;
+    const attempt = f.client.data.attempts[first.attemptId!], run = f.client.data.runs[attempt.activeRunId!], cwd = f.workspace(run);
     const request = JSON.parse(await readFile(join(cwd, 'task.json'), 'utf8'));
     assert.equal(f.downloaded.length, 8); assert.equal(f.downloaded[0], urgent.id);
     const pending = request.discussion.find((reply: any) => reply.id === event.subjectId).attachments[0]; assert.equal(pending.availability, 'downloaded');
@@ -323,14 +331,14 @@ test('validation events fetch their candidate beyond bounded pages and prioritiz
     f.validations.push({ id: validationId, taskId: f.taskId, replyId: candidate.id, authorId: 'other-peer', baseRevision: 1, candidateDigest: 'fixture-digest', outcome: 'failed', method: 'Rerun candidate', environment: 'Fixture', evidence: 'New counterexample', createdAt: Date.now() });
     const event: CollabEvent = { id: f.events.at(-1)!.id + 1, taskId: f.taskId, actorId: 'other-peer', kind: 'validation.created', subjectId: validationId, at: Date.now() };
     f.events.push(event); await f.client.sync(); await f.tick();
-    const attempt = f.client.data.attempts[first.attemptId!], review = f.client.data.runs[attempt.activeRunId!], cwd = f.sessions.get(review.sessionId)!.cwd;
+    const attempt = f.client.data.attempts[first.attemptId!], review = f.client.data.runs[attempt.activeRunId!], cwd = f.workspace(review);
     const request = JSON.parse(await readFile(join(cwd, 'task.json'), 'utf8'));
     const received = request.discussion.find((reply: any) => reply.id === candidate.id);
     assert.ok(received, 'The validation candidate is fetched directly although its discussion page is omitted');
-    assert.equal(f.downloaded[0], evidence.id); assert.equal(f.downloaded.length, 8);
+    assert.equal(f.downloaded[0], evidence.id); assert.equal(f.downloaded.length, 1, 'Unreferenced materials already read by this session are not downloaded again');
     assert.equal(received.attachments[0].sourceReplyId, candidate.id); assert.equal(received.attachments[0].availability, 'downloaded');
     assert.deepEqual(await readFile(join(cwd, received.attachments[0].path)), Buffer.from('candidate evidence'));
-    assert.equal(request.discussion.find((reply: any) => reply.id === earlier.id).attachments.filter((file: any) => file.availability === 'limit').length, 1);
+    assert.equal(request.discussion.find((reply: any) => reply.id === earlier.id), undefined);
     assert.deepEqual(review.triggerEventIds, [event.id]);
   } finally { await f.cleanup(); }
 });
@@ -341,7 +349,7 @@ test('only an explicit public direction is shared while local instructions remai
     const first = await f.start();
     assert.equal(f.publicUpdates.at(-1).direction, '');
     assert.notEqual(f.publicUpdates.at(-1).direction, f.task.title);
-    await f.rpc('attempt-pause', { attemptId: first.attemptId });
+    await f.rpc('attempt-withdraw', { attemptId: first.attemptId });
     const next = await f.start({ publicDirection: 'Reproduce on Linux independently' });
     assert.equal(f.publicUpdates.at(-1).direction, 'Reproduce on Linux independently');
     assert.match(f.client.data.attempts[next.attemptId!].direction, /Private local/);
@@ -380,7 +388,7 @@ test('automatic publishing suppresses repeated content and revisions replace the
     assert.equal(f.publications.length, 1); assert.match(duplicate.publicationSkipReason!, /重复/);
     const secondEvent = f.enqueue('reply.created'); await f.client.sync(); await f.tick();
     const revision = f.client.data.runs[attempt.activeRunId!];
-    await writeFile(join(f.sessions.get(revision.sessionId)!.cwd, 'submission.json'), JSON.stringify({ body: 'A changed candidate handles the counterexample', verification: 'Both measurements pass', limitations: '', files: [] }));
+    await writeFile(join(f.workspace(revision), 'submission.json'), JSON.stringify({ body: 'A changed candidate handles the counterexample', verification: 'Both measurements pass', limitations: '', files: [] }));
     await f.settle(revision, { ...ready([{ eventId: secondEvent.id, decision: 'verify', reason: 'Counterexample reproduced and fixed' }]), contribution: { summary: 'New fix and confirming measurements' } });
     assert.equal(f.publications.length, 2); assert.equal(f.publications[1].replaces, originalId);
     assert.equal(attempt.candidateReplyId, revision.publication!.replyId);
@@ -437,7 +445,7 @@ test('manual resume cannot change authorization or fork a candidate after a lost
     const originalId = attempt.candidateReplyId;
     const event = f.enqueue('reply.created'); await f.client.sync(); await f.tick();
     const revision = f.client.data.runs[attempt.activeRunId!];
-    await writeFile(join(f.sessions.get(revision.sessionId)!.cwd, 'submission.json'), JSON.stringify({ body: 'A changed candidate', verification: 'Counterexample passes', limitations: '', files: [] }));
+    await writeFile(join(f.workspace(revision), 'submission.json'), JSON.stringify({ body: 'A changed candidate', verification: 'Counterexample passes', limitations: '', files: [] }));
     const api = f.client.api.bind(f.client), committed = new Map<string, any>(); let lose = true;
     f.client.api = async (path, body: any) => {
       if (path.endsWith('/replies') && body) {
@@ -474,4 +482,123 @@ test('malformed contribution declarations cannot authorize automatic publishing'
     await writeFile(join(cwd, 'continuation.json'), JSON.stringify({ ...ready(), contribution: true }));
     await assert.rejects(readCheckpoint(cwd, []), /invalid_object/);
   } finally { await rm(cwd, { recursive: true, force: true }); }
+});
+
+test('review participation waits for explicit next-round approval and preserves a changed instruction', async () => {
+  const f = await fixture();
+  try {
+    const first = await f.start({ publishMode: 'review' }), attempt = f.client.data.attempts[first.attemptId!];
+    assert.equal((await f.rpc('attempt-configure', { attemptId: attempt.id, instruction: 'Only investigate the newly reported constraint', publishMode: 'review', executionMode: 'continuous' })).ok, true);
+    await f.settle(first, { ...continuing(), contribution: { summary: 'Useful first result' } });
+    const update = f.enqueue('reply.created'); await f.client.sync(); await f.tick();
+    assert.equal(f.calls.length, 1); assert.equal(f.publications.length, 0); assert.equal(attempt.status, 'waiting');
+    assert.equal((await f.rpc('start', { operationId: randomUUID(), taskId: f.taskId, mode: 'solve' })).ok, false, 'A new entry must not fork the same participation');
+    assert.equal((await f.rpc('attempt-resume', { attemptId: attempt.id })).ok, true);
+    const next = f.client.data.runs[attempt.activeRunId!], input = JSON.parse(await readFile(join(f.workspace(next), 'task.json'), 'utf8'));
+    assert.equal(next.sessionId, first.sessionId); assert.match(input.direction, /newly reported constraint/); assert.deepEqual(next.triggerEventIds, [update.id]);
+    assert.equal(first.publishMode, 'review'); assert.equal(first.submission?.body, 'Public phase result');
+  } finally { await f.cleanup(); }
+});
+
+test('incremental rounds include new discussion and its original reference without repeating unrelated old messages', async () => {
+  const f = await fixture();
+  try {
+    f.enqueue(); const parent = f.replies[0]; f.enqueue('reply.created'); const unrelated = f.replies[1];
+    const first = await f.start(); await f.settle(first, { ...waiting(), wakeOn: ['reply.created'] });
+    const question = f.enqueue('reply.created'); f.replies.at(-1)!.replyTo = parent.id;
+    await f.client.sync(); await f.tick();
+    const attempt = f.client.data.attempts[first.attemptId!], next = f.client.data.runs[attempt.activeRunId!];
+    const input = JSON.parse(await readFile(join(f.workspace(next), 'task.json'), 'utf8'));
+    assert.deepEqual(new Set(input.discussion.map((r: any) => r.id)), new Set([question.subjectId, parent.id]));
+    assert.equal(input.discussion.some((r: any) => r.id === unrelated.id), false);
+    assert.ok(input.discussion.every((r: any) => r.authorId === 'other-peer'));
+  } finally { await f.cleanup(); }
+});
+
+test('a closed task cancels an active round before it can publish or schedule further work', async () => {
+  const f = await fixture();
+  try {
+    const run = await f.start(), attempt = f.client.data.attempts[run.attemptId!];
+    f.task.status = 'resolved'; f.enqueue('task.completed'); await f.client.sync(); await f.tick();
+    assert.equal(attempt.status, 'completed'); assert.equal(f.sessions.get(run.sessionId)!.status, 'idle');
+    await f.tick(); assert.equal(f.calls.length, 1); assert.equal(f.publications.length, 0);
+  } finally { await f.cleanup(); }
+});
+
+test('an owner can complete from a grounded checkpoint while participants and review mode cannot auto-close', async () => {
+  for (const scenario of ['owner-auto', 'participant-auto', 'owner-review'] as const) {
+    const f = await fixture();
+    try {
+      if (scenario !== 'participant-auto') f.task.authorId = f.client.data.peerId;
+      const run = await f.start({ publishMode: scenario === 'owner-review' ? 'review' : 'auto' });
+      await f.settle(run, { ...ready(), completion: { summary: 'The requested analysis is complete; all stated constraints are addressed in the result.' } });
+      assert.equal(f.completions.length, scenario === 'owner-auto' ? 1 : 0);
+      if (scenario === 'owner-auto') {
+        assert.equal(run.completion?.status, 'completed'); assert.equal(f.client.data.attempts[run.attemptId!].status, 'completed');
+        await f.tick(); await f.rpc('run', { runId: run.id }); assert.equal(f.completions.length, 1);
+      }
+    } finally { await f.cleanup(); }
+  }
+});
+
+test('a changed task specification suppresses stale automatic contributions and completion', async () => {
+  const f = await fixture();
+  try {
+    f.task.authorId = f.client.data.peerId;
+    const run = await f.start(); f.task.specRevision = 2; f.task.revision = 2;
+    await f.settle(run, { ...ready(), contribution: { summary: 'An answer for the original requirement' }, completion: { summary: 'Original requirement addressed' } });
+    assert.equal(f.publications.length, 0); assert.equal(f.completions.length, 0);
+    assert.match(run.publicationSkipReason!, /要求已更新/); assert.match(run.completionSkipReason!, /要求已改变/);
+  } finally { await f.cleanup(); }
+});
+
+test('reused-session usage excludes old descendants and frozen reports exclude future descendants', async () => {
+  const f = await fixture();
+  const childEvents = () => [{ type: 'turn/start', data: { turn: 1 } }, { type: 'step/start', data: { turn: 1, step: 0 } }, { type: 'assistant/message', data: { turn: 1, step: 0, message: { content: [] } } }, { type: 'step/end', data: { turn: 1, step: 0 } }, { type: 'turn/end', data: { turn: 1, reason: 'completed' } }];
+  try {
+    const first = await f.start(), attempt = f.client.data.attempts[first.attemptId!], oldChild = randomUUID();
+    f.headers.push({ header: { id: oldChild, parentSession: first.sessionId, origin: 'subagent' } });
+    f.sessions.set(oldChild, { runId: first.id, cwd: f.workspace(first), status: 'idle', events: childEvents() });
+    await f.settle(first, continuing()); assert.equal(first.report?.usage.totals.totalTokens, 480);
+    const before = structuredClone(first.report); await f.tick();
+    const second = f.client.data.runs[attempt.activeRunId!], newChild = randomUUID();
+    f.headers.push({ header: { id: newChild, parentSession: first.sessionId, origin: 'subagent' } });
+    f.sessions.set(newChild, { runId: second.id, cwd: f.workspace(second), status: 'idle', events: childEvents() });
+    await f.settle(second, ready()); assert.equal(second.report?.usage.totals.totalTokens, 480); assert.equal(attempt.usedTokens, 960);
+    await f.rpc('run', { runId: first.id }); assert.deepEqual(first.report, before); assert.equal(attempt.usedTokens, 960);
+  } finally { await f.cleanup(); }
+});
+
+test('required reply references are fetched outside the bounded pages and missing references pause context consumption', async () => {
+  const taskId = randomUUID(), parentId = randomUUID(), childId = randomUUID();
+  const child: any = { id: childId, taskId, authorId: 'external-peer', kind: 'message', replyTo: parentId, body: 'This earlier proposal misses a constraint', attachments: [] };
+  const parent: any = { ...child, id: parentId, replyTo: null, body: 'Earlier proposal' };
+  const event: CollabEvent = { id: 1, taskId, actorId: 'external-peer', kind: 'reply.created', subjectId: childId, at: Date.now() };
+  const detail: any = { task: { id: taskId, revision: 1, specRevision: 1, replyCount: 1 }, replies: [child], hasMore: false, validations: [] };
+  const result = await taskSnapshot(async path => path.endsWith('/replies/' + parentId) ? parent : detail, taskId, [event]);
+  assert.deepEqual(new Set(result.replies.map(r => r.id)), new Set([parentId, childId])); assert.deepEqual(result.unavailableEventIds, []);
+  const missing = await taskSnapshot(async path => { if (path.includes('/replies/')) throw new Error('Unavailable'); return detail; }, taskId, [event]);
+  assert.deepEqual(missing.unavailableEventIds, [1]); assert.match(missing.discussionNotice, /引用/);
+});
+
+test('an uncertain owner completion retries the same operation and blocks another automatic round', async () => {
+  const f = await fixture();
+  try {
+    f.task.authorId = f.client.data.peerId;
+    const run = await f.start(), attempt = f.client.data.attempts[run.attemptId!], api = f.client.api;
+    let requests = 0; const committed = new Map<string, any>();
+    f.client.api = async (path, body: any) => {
+      if (!path.endsWith('/complete')) return api(path, body);
+      requests++;
+      if (!committed.has(body.operationId)) { committed.set(body.operationId, await api(path, body)); throw new Error('Response lost after completion committed'); }
+      return committed.get(body.operationId);
+    };
+    await f.settle(run, { ...ready(), completion: { summary: 'The requested deliverable is complete and attached to the task.' } });
+    assert.equal(run.completion?.status, 'error'); const operationId = run.completion!.operationId;
+    assert.equal((await f.rpc('attempt-resume', { attemptId: attempt.id, nextStep: 'Do not start another round' })).ok, false);
+    await f.tick(); assert.equal(requests, 1);
+    assert.equal((await f.rpc('publish-run', { runId: run.id })).ok, true);
+    assert.equal(run.completion?.status, 'completed'); assert.equal(run.completion!.operationId, operationId); assert.equal(f.completions.length, 1); assert.equal(requests, 2);
+    assert.equal(f.completions[0].taskRevision, 1);
+  } finally { await f.cleanup(); }
 });

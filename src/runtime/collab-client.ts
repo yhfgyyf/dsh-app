@@ -8,7 +8,7 @@ import { DEFAULT_COLLAB_SETTINGS, type CollabLocalAttempt, type CollabRecoverySt
 
 export type CollabLocalData = { version: 1; peerId: string; nickname: string; cursor: number; origin?: string; createdAt: number;
   settings: CollabSettings; runs: Record<string, CollabRun>; drafts: Record<string, unknown>; attempts: Record<string, CollabLocalAttempt> };
-const semanticEvents = new Set(['task.updated', 'reply.created', 'solution.submitted', 'validation.created', 'solution.accepted']);
+const semanticEvents = new Set(['task.updated', 'reply.created', 'solution.submitted', 'validation.created', 'solution.accepted', 'task.completed']);
 export class CollabClient {
   data!: CollabLocalData;
   private readonly file: string;

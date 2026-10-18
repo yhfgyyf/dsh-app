@@ -11,7 +11,7 @@ test('pinned DSH Gateway broadcasts approvals/questions and accepts exactly one 
     gateway.remoteEventClients = new Map(); gateway.pendingRemoteEvents = new Map();
     gateway.remoteEvents = { lifetime: new AbortController(), host: { home: '/fixture' } };
     const a = new AbortController(), b = new AbortController();
-    const desktop = gateway.openRemoteEvents({ args: {} }, a.signal), phone = gateway.openRemoteEvents({ args: {} }, b.signal);
+    const desktop = gateway.openRemoteEvents({ args: {} }, a.signal, { signal: a.signal, principal: { kind: 'owner' } }), phone = gateway.openRemoteEvents({ args: {} }, b.signal, { signal: b.signal, principal: { kind: 'owner' } });
     const d = (await desktop.next()).value, p = (await phone.next()).value;
     assert.notEqual(d.clientId, p.clientId);
     const agent = {}, decisions: unknown[] = [];

@@ -49,6 +49,10 @@ internal fun relayTimeLeft(deadline: Long): Long =
 /** No credential, redirect, cookie or application payload is needed to check an alias. */
 internal fun checkRelayIdentity(http: OkHttpClient, origin: String, routes: RelayRoutes?, timeoutMs: Long = 1500) {
     if (routes == null) return // Existing single-origin relays have no identity endpoint.
+    checkRelayHealth(http, origin, routes, timeoutMs)
+}
+
+internal fun checkRelayHealth(http: OkHttpClient, origin: String, routes: RelayRoutes?, timeoutMs: Long = 1500) {
     // A stale pooled socket may be retried for this read-only GET, never for a single-use claim.
     val client = http.newBuilder().followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(true).cookieJar(CookieJar.NO_COOKIES)
         .callTimeout(timeoutMs, TimeUnit.MILLISECONDS).build()
@@ -58,7 +62,7 @@ internal fun checkRelayIdentity(http: OkHttpClient, origin: String, routes: Rela
         require(bytes.size <= 4096)
         val health = Json.parseToJsonElement(bytes.toString(Charsets.UTF_8)).jsonObject
         require(health["ok"]?.jsonPrimitive?.booleanOrNull == true && health.text("protocol") == "dsh-desktop-remote-v1" &&
-            health.text("relayId") == routes.id) { "Relay identity does not match the scanned QR" }
+            (routes == null || health.text("relayId") == routes.id)) { "Relay identity does not match the scanned QR" }
     }
 }
 

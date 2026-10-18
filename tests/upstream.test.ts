@@ -31,7 +31,7 @@ test('Host graph changes and rebuilt code preserve the page-owned desktop shell'
   const evaluate = async (packageName: string, extra: object = {}) => {
     let exports: any;
     runInNewContext(await readFile(upstream + packageName + '/lib/client.js', 'utf8'), {
-      console, URL, queueMicrotask,
+      console, URL, queueMicrotask, TransformStream, TextDecoderStream, AbortController,
       document: { querySelectorAll: () => [], head: { querySelectorAll: () => [] } },
       window: { __ModuleLoader__: { load(entry: any) { exports = entry.factory((name: string) => { throw new Error('Unexpected bootstrap dependency: ' + name); }); } } },
       ...extra,

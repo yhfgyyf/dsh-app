@@ -23,3 +23,15 @@ test('generated attachments are explicit, bounded, inside the run, and unchanged
     await manifest(['answer.txt', 'answer.txt']); await assert.rejects(readSubmission(cwd, ''), /重复/);
   } finally { await rm(home, { recursive: true, force: true }); }
 });
+
+test('conversation submissions carry a message type and reply reference without requiring verification text', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'collab-message-type-'));
+  try {
+    const replyTo = 'message-reference-1234';
+    await writeFile(join(cwd, 'submission.json'), JSON.stringify({ messageType: 'discussion', replyTo, body: 'Does the revised limit apply to both cases?', verification: '', files: [] }));
+    const value = await readSubmission(cwd, 'fallback');
+    assert.equal(value.messageType, 'discussion'); assert.equal(value.replyTo, replyTo); assert.match(value.verification, /未提供/);
+    await writeFile(join(cwd, 'submission.json'), JSON.stringify({ messageType: 'verified', body: 'Unsupported label', files: [] }));
+    await assert.rejects(readSubmission(cwd, ''), /回复标签/);
+  } finally { await rm(cwd, { recursive: true, force: true }); }
+});

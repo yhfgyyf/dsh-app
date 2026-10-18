@@ -1,9 +1,11 @@
 /** Public collaboration protocol. This module is also bundled into the desktop plugin. */
 export const COLLAB_PROTOCOL = 'dsh-collab-v1';
+export const COLLAB_CAPABILITIES = { conversationWorkflow: 1 } as const;
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 export const MAX_TEXT = 48 * 1024;
 export type TaskStatus = 'open' | 'review' | 'resolved' | 'closed';
 export type CollabActor = 'user' | 'dsh';
+export type CollabMessageType = 'discussion' | 'progress' | 'solution';
 export type CollabPeer = { id: string; nickname: string; createdAt: number };
 export type CollabJoinResult = CollabPeer & { recovery: { supported: true; ready: boolean } };
 export type CollabAttachment = { id: string; name: string; size: number; sha256: string };
@@ -18,13 +20,14 @@ export type UsageCounts = {
 };
 export type ExecutionReport = {
   runId: string; startedAt: number; finishedAt: number;
-  client: { appVersion: string; runtimeVersion: string; pluginVersion: string; platform: string; arch: string };
+  client: { appVersion: string; runtimeVersion: string; pluginVersion: string; platform: string; arch: string; harness?: 'dsh' | 'codex'; usageUnit?: 'model-call' | 'turn' };
   usage: { status: 'complete' | 'partial' | 'unavailable'; source: 'client-runtime'; totals: UsageCounts;
     routes: ({ provider: string; model: string } & UsageCounts)[]; sessions: number; attempts: number };
 };
 export type CollabSolution = { verification: string; limitations: string; report: ExecutionReport | null };
 export type CollabReply = {
   id: string; taskId: string; authorId: string; actor: CollabActor; kind: 'message' | 'solution';
+  messageType: CollabMessageType; replyTo: string | null;
   body: string; baseRevision: number; replaces: string | null; supersededBy?: string | null; attemptId: string | null; createdAt: number;
   solution: CollabSolution | null; attachments: CollabAttachment[];
 };
@@ -43,7 +46,7 @@ export type CollabAcceptance = {
   id: string; taskId: string; replyId: string; authorId: string; validationId: string; baseRevision: number;
   candidateDigest: string; evidence: string; createdAt: number;
 };
-export type CollabDetail = { task: CollabTask; peers: CollabPeer[]; replies: CollabReply[]; attachments: CollabAttachment[]; participants: CollabParticipation[]; attempts: CollabAttempt[]; validations: CollabValidation[]; decision: CollabAcceptance | null; cursor: number; replyOffset: number; hasMore: boolean };
+export type CollabDetail = { task: CollabTask; peers: CollabPeer[]; replies: CollabReply[]; attachments: CollabAttachment[]; participants: CollabParticipation[]; attempts: CollabAttempt[]; validations: CollabValidation[]; decision: CollabAcceptance | null; capabilities: typeof COLLAB_CAPABILITIES; cursor: number; replyOffset: number; hasMore: boolean };
 export type CollabEvent = { id: number; taskId: string; actorId: string; kind: string; subjectId: string | null; sourceAttemptId?: string | null; at: number };
 export type CollabInboxItem = CollabEvent & { read: boolean; title: string };
 export type CollabIdentity = { deviceId: string; kind: 'desktop' | 'mobile'; bindingId?: string; role: 'viewer' | 'control'; expiresAt: number };
@@ -100,7 +103,9 @@ export function reportField(value: unknown): ExecutionReport | null {
   const totals = countsField(usage.totals);
   if (usage.status === 'complete' && (totals.uncachedInputTokens === null || totals.outputTokens === null || totals.totalTokens === null)) throw new CollabError(400, 'incomplete_usage');
   return { runId: idField(r.runId), startedAt, finishedAt,
-    client: { appVersion: textField(client.appVersion, 80), runtimeVersion: textField(client.runtimeVersion, 80), pluginVersion: textField(client.pluginVersion, 80), platform: textField(client.platform, 32), arch: textField(client.arch, 32) },
+    client: { appVersion: textField(client.appVersion, 80), runtimeVersion: textField(client.runtimeVersion, 80), pluginVersion: textField(client.pluginVersion, 80), platform: textField(client.platform, 32), arch: textField(client.arch, 32),
+      ...(['dsh', 'codex'].includes(client.harness as string) ? { harness: client.harness as 'dsh' | 'codex' } : {}),
+      ...(['model-call', 'turn'].includes(client.usageUnit as string) ? { usageUnit: client.usageUnit as 'model-call' | 'turn' } : {}) },
     usage: { status: usage.status as ExecutionReport['usage']['status'], source: 'client-runtime', totals,
       routes: usage.routes.map(v => { const route = record(v); return { provider: textField(route.provider, 160), model: textField(route.model, 160), ...countsField(route) }; }),
       sessions: numberField(usage.sessions, 1, 10000), attempts: numberField(usage.attempts, 0, 100000) } };

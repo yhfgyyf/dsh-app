@@ -1,0 +1,14 @@
+{
+  "name": "dsh-codex-collab",
+  "version": "0.1.0",
+  "description": "通过自有中继协作任务，并用手机控制独立的 Codex 会话。",
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Codex 协作",
+    "shortDescription": "协作任务、连续探索与手机远程控制",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["查看协作任务和我的参与进展。", "绑定手机以远程控制 Codex。"]
+  }
+}

@@ -25,11 +25,11 @@ for (const path of [
   'src/private-server.ts', 'src/private-store.ts', 'src/private-admin.ts', 'src/client-endpoints.ts', 'src/registration-code.ts',
   'dist/private-server.js', 'dist/private-store.js', 'dist/private-admin.js', 'dist/client-endpoints.js', 'dist/registration-code.js',
   ...['collab-types', 'collab-auth', 'collab-store', 'collab-server', 'collab-admin', 'collab-identity-repair'].flatMap(name => [`src/${name}.ts`, `dist/${name}.js`]),
-  'test/collab.test.ts', 'test/collab-recovery.test.ts', 'test/admin-identity-repair.test.ts',
+  'test/collab.test.ts', 'test/collab-recovery.test.ts', 'test/collaboration-upgrade.test.ts', 'test/admin-identity-repair.test.ts',
   'test/private-deployment.test.ts', 'test/private-routes.test.ts', 'test/private-upgrade.test.ts', 'test/private-registration-code.test.ts',
   'test/fixtures/ca/ca.pem', 'test/fixtures/ca/server.pem', 'test/fixtures/ca/expired-ca.pem',
   'test/fixtures/relay-0.1.30/private-server.js', 'test/fixtures/relay-0.1.30/private-store.js', 'test/fixtures/relay-0.1.30/PROVENANCE.json',
-  'deploy/upgrade.mjs', 'deploy/database-check.mjs', 'deploy/relay.env.example', 'deploy/dsh-relay.service', 'deploy/nginx.conf.example',
+  'deploy/upgrade.mjs', 'deploy/collaboration-upgrade.mjs', 'deploy/database-check.mjs', 'deploy/relay.env.example', 'deploy/dsh-relay.service', 'deploy/nginx.conf.example',
   'deploy/COLLABORATION.md', 'deploy/nginx.collaboration.conf.example',
 ]) await save(path, await readFile(join(relay, path)));
 for (const entry of await readdir(join(relay, 'web'), { recursive: true, withFileTypes: true })) {

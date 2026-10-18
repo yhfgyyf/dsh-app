@@ -4,11 +4,12 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { collaborationFixture } from '../services/relay/test/collab-fixture.ts';
 
-const data = resolve(process.env.DSH_CROSS_REPORT_DIR ?? '.test-data/collab-cross-host-20261003');
+await mkdir(resolve('.test-data'), { recursive: true });
+const data = process.env.DSH_CROSS_REPORT_DIR ? resolve(process.env.DSH_CROSS_REPORT_DIR) : await mkdtemp(resolve('.test-data/collab-cross-host-20261005-'));
 await mkdir(data, { recursive: true });
 const fixture = await collaborationFixture({ rejectCollaborationWebSocket: true });
 type Peer = 'mac' | 'ubuntu160';
@@ -71,19 +72,20 @@ try {
   assert.ok((ready.get('mac') as any).data.startsWith('/Users/'));
   assert.ok((ready.get('ubuntu160') as any).data.startsWith('/home/yyf/'));
   checks.push('Installed Mac and ubuntu160 Electron app copies loaded the updated code with separate test profiles and registered to the same isolated relay');
-  const task = await rpc('mac', 'create', { operationId: randomUUID(), title: '跨 Mac 与 Ubuntu 的候选验证', description: 'Compare independent results and verify the candidate artifact.', acceptance: 'The corrected artifact contains 43 and its SHA-256 matches.' });
+  const task = await rpc('mac', 'create', { operationId: randomUUID(), title: '跨 Mac 与 Ubuntu 的协作处理', description: 'Use shared messages to reach a result whose artifact contains 43 and whose SHA-256 matches.' });
   await rpc('ubuntu160', 'follow', { taskId: task.id, following: true });
-  await rpc('ubuntu160', 'reply', { taskId: task.id, operationId: randomUUID(), kind: 'message', body: 'UBUNTU_COMMENT_ONLY', baseRevision: 1 });
+  await rpc('ubuntu160', 'reply', { taskId: task.id, operationId: randomUUID(), kind: 'message', messageType: 'discussion', body: 'UBUNTU_COMMENT_ONLY', baseRevision: 1 });
   assert.equal((await rpc('ubuntu160', 'catalog', { view: 'participating' })).tasks.length, 0);
   assert.equal((await stats('ubuntu160')).modelCalls, 0);
   checks.push('Following and commenting across hosts invoke no model and do not register an exploration');
 
-  await plans('ubuntu160', [{ action: 'ready', summary: 'Initial candidate with reproducible result 42.', body: 'UBUNTU_CANDIDATE_V1', contribution: true, files: [{ name: 'result.txt', text: '42\n' }] }]);
+  await plans('ubuntu160', [{ action: 'ready', summary: 'Initial candidate with reproducible result 42.', body: 'UBUNTU_CANDIDATE_V1', messageType: 'solution', contribution: true, files: [{ name: 'result.txt', text: '42\n' }] }]);
   const first = await rpc('ubuntu160', 'start', { operationId: randomUUID(), taskId: task.id, mode: 'solve', executionMode: 'continuous', publishMode: 'auto', maxTokens: 4000, maxMinutes: 10, publicDirection: 'Ubuntu 独立实现', instruction: 'PRIVATE_UBUNTU_INSTRUCTION' });
   await settled('ubuntu160', first.attemptId, 'submitted');
   const initial = (await rpc('mac', 'candidates', { taskId: task.id })).items[0];
   assert.equal(initial.body, 'UBUNTU_CANDIDATE_V1');
   const publicDetail = await rpc('mac', 'detail', { taskId: task.id });
+  assert.equal(publicDetail.capabilities.conversationWorkflow, 1); assert.equal(initial.messageType, 'solution');
   assert.equal(publicDetail.attempts[0].direction, 'Ubuntu 独立实现');
   assert.ok(!JSON.stringify(publicDetail).includes('PRIVATE_UBUNTU_INSTRUCTION'));
 
@@ -96,17 +98,27 @@ try {
   assert.equal((await rpc('mac', 'detail', { taskId: task.id })).task.replyCount, 2);
   checks.push('The Mac app reads the Ubuntu candidate artifact with verified bytes and source reply; private instructions stay private and a no-change review posts nothing');
 
-  await plans('ubuntu160', [{ action: 'ready', summary: 'Counterexample changes the answer to 43.', body: 'UBUNTU_CANDIDATE_V2', contribution: true, files: [{ name: 'result.txt', text: '43\n' }] }]);
-  await rpc('mac', 'reply', { taskId: task.id, operationId: randomUUID(), kind: 'message', body: 'MAC_COUNTEREXAMPLE: expected 43', baseRevision: 1 });
+  await plans('ubuntu160', [{ action: 'ready', summary: 'Counterexample changes the answer to 43.', body: 'UBUNTU_CANDIDATE_V2', messageType: 'solution', replyTo: initial.id, contribution: true, files: [{ name: 'result.txt', text: '43\n' }] }]);
+  const counterexample = await rpc('mac', 'reply', { taskId: task.id, operationId: randomUUID(), kind: 'message', messageType: 'progress', replyTo: initial.id, body: 'MAC_COUNTEREXAMPLE: expected 43', baseRevision: 1 });
   await wait(async () => { const result = await rpc('mac', 'candidates', { taskId: task.id }); return result.items[0]?.body === 'UBUNTU_CANDIDATE_V2' && result; }, 'The Ubuntu app did not revise its candidate');
   const candidates = await rpc('mac', 'candidates', { taskId: task.id });
   assert.equal(candidates.total, 1); const revised = candidates.items[0]; assert.equal(revised.replaces, initial.id);
+  assert.equal(revised.replyTo, initial.id);
+  const ubuntuAttempt = await settled('ubuntu160', first.attemptId, 'submitted');
+  const ubuntuRounds = await Promise.all(ubuntuAttempt.runIds.map((runId: string) => rpc('ubuntu160', 'run', { runId })));
+  assert.equal(ubuntuRounds.length, 2); assert.equal(ubuntuRounds[0].sessionId, ubuntuRounds[1].sessionId);
+  assert.equal(ubuntuRounds[0].sessionId, ubuntuAttempt.sessionId);
+  assert.equal(ubuntuRounds[0].output, 'UBUNTU_CANDIDATE_V1'); assert.equal(ubuntuRounds[1].output, 'UBUNTU_CANDIDATE_V2');
+  assert.ok(ubuntuRounds[1].eventStarts[ubuntuAttempt.sessionId] >= ubuntuRounds[0].eventEnds[ubuntuAttempt.sessionId]);
+  assert.deepEqual(ubuntuRounds.map((round: any) => round.report.usage.totals.totalTokens), [160, 160]);
+  const secondInputs = await command('ubuntu160', { type: 'evidence', runId: ubuntuRounds[1].id });
+  assert.equal(secondInputs.conversationContinues, true); assert.ok(secondInputs.discussionIds.includes(counterexample.id));
   await wait(async () => { const value = await attempt('mac', macRun.attemptId); return value.status === 'waiting' && !value.pendingEvents.length && value; }, 'Mac review did not settle after new evidence');
   const count = (await rpc('mac', 'detail', { taskId: task.id })).task.replyCount;
   assert.equal(count, 4);
   await new Promise(r => setTimeout(r, 7000));
   assert.equal((await rpc('ubuntu160', 'detail', { taskId: task.id })).task.replyCount, count);
-  checks.push('A cross-host counterexample creates a linked candidate revision; the index keeps one current candidate and local no-change reviews do not produce a message loop');
+  checks.push('A cross-host progress reply quotes the initial solution and leads to a linked revision in the same Ubuntu session; round outputs and 160-token reports stay isolated, while no-change reviews produce no message loop');
 
   await rpc('mac', 'attempt-pause', { attemptId: macRun.attemptId });
   await rpc('ubuntu160', 'attempt-pause', { attemptId: first.attemptId });
@@ -117,6 +129,11 @@ try {
   for (let index = 0; index < 53; index++) lastReply = await fixture.call(2, `tasks/${task.id}/replies`, { operationId: randomUUID(), actor: 'user', kind: 'message', body: `PAGE_TWO_EVIDENCE_${index}`, baseRevision: 1 });
   const focused = await rpc('ubuntu160', 'detail', { taskId: task.id, subjectId: lastReply.id });
   assert.equal(focused.replyOffset, 50); assert.ok(focused.replies.some((reply: any) => reply.id === lastReply.id));
+  const solutionMessages = await rpc('ubuntu160', 'detail', { taskId: task.id, messageType: 'solution' });
+  assert.deepEqual(solutionMessages.replies.map((reply: any) => reply.id), [initial.id, revised.id]);
+  assert.equal(solutionMessages.hasMore, false); assert.equal(solutionMessages.replyOffset, 0);
+  const quoted = await rpc('ubuntu160', 'detail', { taskId: task.id, messageType: 'progress', subjectId: initial.id });
+  assert.ok(quoted.replies.some((reply: any) => reply.id === initial.id));
   const unreadBefore = (await state('ubuntu160')).unread;
   const inboxBefore = await rpc('ubuntu160', 'inbox');
   const targetEvent = inboxBefore.items.find((item: any) => item.subjectId === lastReply.id);
@@ -138,11 +155,16 @@ try {
 
   const bytes = Buffer.from((await rpc('mac', 'download', { id: revised.attachments[0].id })).data, 'base64');
   assert.equal(bytes.toString(), '43\n'); assert.equal(createHash('sha256').update(bytes).digest('hex'), revised.attachments[0].sha256);
-  const validation = await rpc('mac', 'validate', { taskId: task.id, operationId: randomUUID(), replyId: revised.id, baseRevision: 1, outcome: 'passed', method: 'Read candidate bytes and compare SHA-256 and expected value', environment: 'Mac app / Ubuntu app, isolated relay, deterministic model', evidence: 'Verified UTF-8 bytes 43\\n and matching SHA-256' });
   const detail = await rpc('mac', 'detail', { taskId: task.id });
-  assert.equal((await rpc('mac', 'accept', { taskId: task.id, operationId: randomUUID(), replyId: revised.id, revision: detail.task.revision, validationId: validation.id })).status, 'resolved');
-  assert.equal((await rpc('ubuntu160', 'detail', { taskId: task.id })).task.status, 'resolved');
-  checks.push('The task author on Mac verifies the revised Ubuntu artifact, records validation, and accepts it; the Ubuntu app observes the resolved task');
+  const completion = { taskId: task.id, operationId: randomUUID(), baseRevision: detail.task.specRevision, taskRevision: detail.task.revision, summary: 'Verified the shared UTF-8 artifact contains 43\\n and its SHA-256 matches; the requested result is reached.' };
+  await assert.rejects(rpc('ubuntu160', 'complete', completion), /author_required/);
+  assert.equal((await rpc('mac', 'complete', completion)).status, 'resolved');
+  assert.equal((await rpc('mac', 'complete', completion)).status, 'resolved');
+  const completed = await rpc('ubuntu160', 'detail', { taskId: task.id, messageType: 'progress' });
+  assert.equal(completed.task.status, 'resolved'); assert.equal(completed.task.acceptedReplyId, null); assert.equal(completed.validations.length, 0);
+  assert.equal(completed.replies.filter((reply: any) => reply.body.includes(completion.summary)).length, 1);
+  assert.equal(fixture.stats.collaborationUpgrades, 0);
+  checks.push('The Mac task author completes after checking the Ubuntu artifact, with one public summary and no separate validation record; a participant is denied, retries are idempotent and the other app observes completion');
   for (const peer of ['mac', 'ubuntu160'] as const) await command(peer, { type: 'capture' });
 } catch (error) { failure = error instanceof Error ? error.stack : String(error); process.exitCode = 1; }
 finally {

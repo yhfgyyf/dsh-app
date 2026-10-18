@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { CollabStore } from './collab-store.js';
 import { verifyCollabGrant, requireCollabSecret } from './collab-auth.js';
-import { CollabError, COLLAB_PROTOCOL, MAX_ATTACHMENT_BYTES, idField, numberField, record, type CollabIdentity, type CollabPeer } from './collab-types.js';
+import { CollabError, COLLAB_CAPABILITIES, COLLAB_PROTOCOL, MAX_ATTACHMENT_BYTES, idField, numberField, record, type CollabIdentity, type CollabPeer } from './collab-types.js';
 
 export type CollabAuthorizer = (token: string, requireUnregisteredDeviceId?: string) => Promise<CollabIdentity>;
 export function relayAuthorizer(origin: string, secret: string): CollabAuthorizer {
@@ -68,7 +68,7 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
     try {
       rate('ip:' + req.socket.remoteAddress, 2400);
       if (req.headers.origin) throw new CollabError(403, 'native_client_required');
-      if (req.url === '/health' && req.method === 'GET') return reply(200, { ok: true, protocol: COLLAB_PROTOCOL });
+      if (req.url === '/health' && req.method === 'GET') return reply(200, { ok: true, protocol: COLLAB_PROTOCOL, capabilities: COLLAB_CAPABILITIES });
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (!url.pathname.startsWith('/collab/v1/')) throw new CollabError(404, 'not_found');
       const identity = await authorize(bearer(req));
@@ -94,14 +94,14 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
       const query = Object.fromEntries(url.searchParams);
       let result: unknown;
       if (parts[0] === 'me' && parts.length === 1) {
-        if (method === 'GET') result = { peer, protocol: COLLAB_PROTOCOL, unread: store.unread(peer) };
+        if (method === 'GET') result = { peer, protocol: COLLAB_PROTOCOL, capabilities: COLLAB_CAPABILITIES, unread: store.unread(peer) };
         else { write(); result = store.updateProfile(peer, body); }
       } else if (parts[0] === 'tasks' && parts.length === 1) {
         if (method === 'GET') result = store.catalog(peer, { ...query, offset: Number(query.offset ?? 0) });
         else { write(); result = store.createTask(peer, body); }
       } else if (parts[0] === 'tasks' && parts[1]) {
         const id = idField(parts[1]);
-        if (parts.length === 2 && method === 'GET') result = store.detail(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000), query.subjectId === undefined ? undefined : idField(query.subjectId));
+        if (parts.length === 2 && method === 'GET') result = store.detail(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000), query.subjectId === undefined ? undefined : idField(query.subjectId), query.messageType);
         else if (parts.length === 3 && parts[2] === 'candidates' && method === 'GET') result = store.candidates(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000));
         else if (parts.length === 3 && parts[2] === 'history' && method === 'GET') result = store.history(peer, id, numberField(Number(query.offset ?? 0), 0, 1000000));
         else if (parts.length === 4 && parts[2] === 'replies' && method === 'GET') result = store.reply(peer, id, idField(parts[3]));
@@ -115,6 +115,7 @@ export function createCollabServer(store: CollabStore, authorize: CollabAuthoriz
           else if (parts[2] === 'attempts') result = store.attempt(peer, id, body);
           else if (parts[2] === 'validations') result = store.validate(peer, id, body);
           else if (parts[2] === 'accept') result = store.accept(peer, id, body);
+          else if (parts[2] === 'complete') result = store.complete(peer, id, body);
           else throw new CollabError(404, 'not_found');
         }
       } else if (parts[0] === 'sync' && parts.length === 1 && method === 'GET') result = store.sync(peer, numberField(Number(query.after ?? 0)));

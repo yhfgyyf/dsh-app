@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 const runtime = process.env.DSH_OVERLAY_TEST_RUNTIME ?? fileURLToPath(new URL('../.runtime/node_modules', import.meta.url));
 const host = (await import(pathToFileURL(join(runtime, '@deepseek-ai/dsh-api-session-controller/lib/typert.host.js')).href)).TYPERT;
@@ -13,7 +14,8 @@ test('session deletion and MP4 receipts retain the alpha.2 lazy RPC codec contra
   let module: { factory: (require: unknown) => { apply: (ctx: unknown) => Promise<unknown> } };
   new Function('window', source)({ __ModuleLoader__: { load: (value: typeof module) => { module = value; } } });
   const contributions: typeof host[] = [];
-  await module!.factory(() => { throw new Error('Unexpected browser dependency'); }).apply({ remote: {
+  const require = createRequire(join(runtime, 'codec-test.cjs'));
+  await module!.factory((name: string) => { assert.equal(name, 'zod'); return require(name); }).apply({ remote: {
     $mount: async (value: typeof host) => { contributions.push(value); return () => {}; },
   } });
   const browser = contributions.find(value => value.package === '@deepseek-ai/dsh-api-session-controller');

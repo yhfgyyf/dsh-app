@@ -33,7 +33,7 @@ export async function collaborationFixture(options: { rejectCollaborationWebSock
     };
     if (options.legacy && path.startsWith('/collab/v1/')) {
       stats.legacyRequests.push({ method: req.method!, path });
-      if (/^\/collab\/v1\/tasks\/[^/]+\/(?:candidates|attempts|validations|accept)$/.test(path)) { rejectLegacy('unsupported-endpoint'); return; }
+      if (/^\/collab\/v1\/tasks\/[^/]+\/(?:candidates|attempts|validations|accept|complete)$/.test(path)) { rejectLegacy('unsupported-endpoint'); return; }
     }
     if (req.url === '/collab/v1/attachments' && req.method === 'POST') stats.attachmentUploads++;
     const dropReply = dropNextReplyResponse && req.method === 'POST' && /\/collab\/v1\/tasks\/[^/]+\/replies$/.test(req.url!);
@@ -49,10 +49,11 @@ export async function collaborationFixture(options: { rejectCollaborationWebSock
           reply.on('end', () => {
             try {
               const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+              delete value.capabilities;
               if (/^\/collab\/v1\/tasks\/[^/]+$/.test(path)) {
                 delete value.task.specRevision;
                 for (const field of ['attempts', 'validations', 'decision', 'replyOffset']) delete value[field];
-                for (const item of value.replies) for (const field of ['attemptId', 'replaces', 'supersededBy']) delete item[field];
+                for (const item of value.replies) for (const field of ['attemptId', 'replaces', 'supersededBy', 'messageType', 'replyTo']) delete item[field];
                 stats.legacyResponses.detail++;
               } else if (path === '/collab/v1/sync' || path === '/collab/v1/inbox') {
                 for (const item of value.events ?? value.items ?? []) { delete item.subjectId; delete item.sourceAttemptId; }

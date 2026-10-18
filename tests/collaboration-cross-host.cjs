@@ -5,6 +5,7 @@ const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
 const { join, resolve, isAbsolute } = require('node:path');
 const { createServer } = require('node:http');
 const { randomUUID } = require('node:crypto');
+const assert = require('node:assert/strict');
 
 const peer = process.env.DSH_CROSS_PEER;
 const controller = process.env.DSH_CROSS_CONTROLLER;
@@ -27,6 +28,7 @@ const model = createServer(async (req, res) => {
     const run = Object.values(profile.runs).sort((a, b) => b.startedAt - a.startedAt)[0];
     const cwd = join(data, 'core/collaboration/workspaces', run.id);
     const task = JSON.parse(readFileSync(join(cwd, 'task.json')));
+    assert.equal(task.roundDirectory, cwd);
     const plan = plans.shift() || { action: 'wait', summary: 'No new evidence; keep this review local.', contribution: false };
     const answer = plan.body || plan.summary;
     const files = plan.files || [];
@@ -34,17 +36,18 @@ const model = createServer(async (req, res) => {
       if (!/^[A-Za-z0-9_.-]+$/.test(file.name)) throw new Error('Invalid fixture artifact');
       writeFileSync(join(cwd, file.name), file.text);
     }
-    writeFileSync(join(cwd, 'submission.json'), JSON.stringify({ body: answer, verification: 'Deterministic cross-host fixture', limitations: 'No external model was invoked', files: files.map(f => f.name) }));
+    writeFileSync(join(cwd, 'submission.json'), JSON.stringify({ body: answer, verification: 'Deterministic cross-host fixture', limitations: 'No external model was invoked', files: files.map(f => f.name), ...(plan.messageType ? { messageType: plan.messageType } : {}), ...(plan.replyTo ? { replyTo: plan.replyTo } : {}) }));
     writeFileSync(join(cwd, 'continuation.json'), JSON.stringify({ action: plan.action, summary: plan.summary,
       nextStep: plan.action === 'wait' ? 'Check new evidence when another contribution arrives.' : plan.action === 'continue' ? 'Run the next bounded experiment.' : '',
       wakeOn: plan.action === 'wait' ? ['reply.created', 'solution.submitted', 'validation.created'] : [],
       decisions: (task.pendingEvents || []).map(event => ({ eventId: event.id, decision: plan.contribution ? 'verify' : 'reject', reason: plan.summary })),
       ...(plan.contribution ? { contribution: { summary: plan.summary } } : {}) }));
-    const message = { id: randomUUID(), type: 'message', role: 'assistant', model: input.model, content: [{ type: 'text', text: answer }], stop_reason: 'end_turn', usage: { input_tokens: 128, output_tokens: 32 } };
+    const usage = { input_tokens: 128, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 32 };
+    const message = { id: randomUUID(), type: 'message', role: 'assistant', model: input.model, content: [{ type: 'text', text: answer }], stop_reason: 'end_turn', usage };
     if (!input.stream) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(message)); return; }
     res.writeHead(200, { 'content-type': 'text/event-stream' });
     const emit = (type, value) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...value })}\n\n`);
-    emit('message_start', { message: { ...message, content: [], stop_reason: null, usage: { input_tokens: 128, output_tokens: 0 } } });
+    emit('message_start', { message: { ...message, content: [], stop_reason: null, usage: { ...usage, output_tokens: 0 } } });
     emit('content_block_start', { index: 0, content_block: { type: 'text', text: '' } });
     emit('content_block_delta', { index: 0, delta: { type: 'text_delta', text: answer } });
     emit('content_block_stop', { index: 0 }); emit('message_delta', { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 32 } }); emit('message_stop', {}); res.end();
@@ -71,7 +74,7 @@ async function execute(command) {
     if (!/^[A-Za-z0-9_-]{8,128}$/.test(command.runId)) throw new Error('Invalid run id');
     const cwd = join(data, 'core/collaboration/workspaces', command.runId);
     const task = JSON.parse(readFileSync(join(cwd, 'task.json')));
-    return { attachments: task.discussion.flatMap(reply => reply.attachments.map(file => ({ ...file, ...(file.path?.startsWith('inputs/') && !file.path.includes('..') ? { text: readFileSync(join(cwd, file.path), 'utf8') } : {}) }))) };
+    return { roundDirectory: task.roundDirectory, conversationContinues: task.conversationContinues, discussionIds: task.discussion.map(reply => reply.id), attachments: task.discussion.flatMap(reply => reply.attachments.map(file => ({ ...file, ...(file.path?.startsWith('inputs/') && !file.path.includes('..') ? { text: readFileSync(join(cwd, file.path), 'utf8') } : {}) }))) };
   }
   if (command.type === 'inbox-latest') {
     if (!await js(`!!document.querySelector('[data-testid="collab-page"]')`)) await click('协作空间');

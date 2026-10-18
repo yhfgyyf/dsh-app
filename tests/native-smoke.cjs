@@ -29,6 +29,7 @@ function finish() {
   app.quit();
 }
 process.on('exit', () => {
+  if (!report.ready) report.failures.push('Desktop never reached ready');
   try { process.kill(report.corePid, 0); } catch { report.coreStopped = true; }
   if (!report.coreStopped) report.failures.push('Owned DSH process remained after App quit');
   writeFileSync(join(data, 'report.json'), JSON.stringify(report, null, 2));

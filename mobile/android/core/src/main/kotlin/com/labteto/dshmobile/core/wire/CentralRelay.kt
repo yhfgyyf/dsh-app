@@ -64,6 +64,7 @@ data class CentralPairCode(
     val computerId: String = deviceId, val lanOrigins: List<String> = emptyList(),
     val localInviteId: String? = null, val version: Int = 1,
     val relayRoutes: RelayRoutes? = null,
+    val relayCaFingerprint: String? = null,
 ) {
     companion object {
         fun parse(value: String): CentralPairCode? = runCatching {
@@ -89,9 +90,13 @@ data class CentralPairCode(
             val origin = relay?.let { centralOrigin(it.text("origin")) } ?: ""
             val routes = RelayRoutes.decode(relay?.get("routes"))
             require(routes == null || routes.endpoints.any { it.origin == origin })
+            val caField = relay?.get("caFingerprint")?.jsonPrimitive
+            require(caField == null || caField.isString)
+            val caFingerprint = caField?.content?.lowercase()
+            require(caFingerprint == null || (origin.startsWith("https://") && caFingerprint.matches(Regex("[a-f0-9]{64}"))))
             CentralPairCode(origin, relay?.text("deviceId") ?: "", name,
                 relay?.text("inviteId") ?: "", relay?.text("claimSecret") ?: "", o.text("key"), expires,
-                computer, origins, localInvite, version, routes)
+                computer, origins, localInvite, version, routes, caFingerprint)
         }.getOrNull()
     }
 }
@@ -269,6 +274,13 @@ suspend fun pairDesktop(http: OkHttpClient, qr: CentralPairCode, name: String): 
     require(qr.version == 2) { "Refresh the QR code in the desktop app" }
     require(qr.expiresAt > System.currentTimeMillis()) { "Pairing code expired" }
     require(name.isNotBlank() && name.length <= 80)
+    // Prepare relay trust before a LAN claim so moving away from Wi-Fi does not reveal a missing CA.
+    val relayCheck = if (qr.relay.isNotEmpty()) withContext(Dispatchers.IO) {
+        runCatching { selectPairingRelay(http, qr) }
+    } else null
+    relayCheck?.exceptionOrNull()?.let {
+        if (it is RelayCaRequiredException || it is RelayCaPinMissingException || it is RelayCaVerificationException) throw it
+    }
     for (origin in qr.lanOrigins.filter(::onLocalNetwork)) {
         val result = withContext(Dispatchers.IO) {
             runCatching {
@@ -287,11 +299,7 @@ suspend fun pairDesktop(http: OkHttpClient, qr: CentralPairCode, name: String): 
     }
     require(qr.relay.isNotEmpty()) { "Connect the phone and computer to the same Wi-Fi and refresh the QR code" }
     // Probe without credentials, then claim once. A lost receipt must not replay the one-use claim at another entry.
-    val relay = withContext(Dispatchers.IO) {
-        relayOrigins(qr.relay, qr.relayRoutes).firstOrNull { candidate ->
-            runCatching { checkRelayIdentity(http, candidate, qr.relayRoutes) }.isSuccess
-        } ?: throw IOException("No reachable relay matches the scanned QR")
-    }
+    val relay = checkNotNull(relayCheck).getOrThrow()
     val result = withContext(Dispatchers.IO) { centralPost(http, relay, "claim-qr",
         remoteObject("inviteId" to qr.inviteId, "claimSecret" to qr.claimSecret, "name" to name)) }
     require(result.text("deviceId") == qr.deviceId)

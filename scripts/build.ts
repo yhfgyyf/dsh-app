@@ -65,7 +65,8 @@ await writeFile(resolve(root, 'dist/renderer/theme.css'), await readFile(resolve
 for (const [packagePath, files] of [
   ['qrcode', ['license']], ['pngjs', ['LICENSE']], ['dijkstrajs', ['LICENSE.md']], ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
   ['echarts', ['LICENSE', 'NOTICE', 'licenses']], ['zrender', ['LICENSE']],
-  ['echarts/node_modules/tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
+  ['tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
+  ['@tanstack/react-virtual', ['LICENSE']], ['@tanstack/virtual-core', ['LICENSE']], ['zod', ['LICENSE']],
   ['jszip', ['LICENSE.markdown']], ['pako', ['LICENSE']], ['lie', ['license.md']], ['immediate', ['LICENSE.txt']],
   ['readable-stream', ['LICENSE']], ['core-util-is', ['LICENSE']], ['inherits', ['LICENSE']], ['isarray', ['README.md']],
   ['process-nextick-args', ['license.md']], ['safe-buffer', ['LICENSE']], ['string_decoder', ['LICENSE']],

@@ -13,7 +13,7 @@ const data = await mkdtemp(join(root, '.test-data/collaboration-'));
 const home = join(data, 'home'), state = join(data, 'state'); await mkdir(home); await mkdir(state);
 const fixture = await collaborationFixture({ rejectCollaborationWebSocket: true });
 let modelCalls = 0;
-type ModelPlan = { action: 'continue' | 'wait' | 'ready'; summary: string; nextStep?: string; hold?: Promise<void> };
+type ModelPlan = { action: 'continue' | 'wait' | 'ready'; summary: string; nextStep?: string; body?: string; completion?: string; hold?: Promise<void> };
 const modelPlans = new Map<string, ModelPlan[]>(), modelInputs: { taskId: string; runId: string; text: string }[] = [];
 const model = createServer(async (req, res) => {
   if (req.url?.endsWith('/models')) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify({ data: [{ id: 'deepseek-flash', object: 'model' }] })); return; }
@@ -27,10 +27,13 @@ const model = createServer(async (req, res) => {
   modelInputs.push({ taskId: current.taskId, runId: current.id, text: JSON.stringify(input) });
   if (plan.hold) await plan.hold;
   const cwd = join(state, 'collaboration/workspaces', current.id);
+  const request = JSON.parse(await readFile(join(cwd, 'task.json'), 'utf8'));
+  assert.equal(request.roundDirectory, cwd, 'Each round must name its own output directory');
   await writeFile(join(cwd, 'continuation.json'), JSON.stringify({ action: plan.action, summary: plan.summary, nextStep: plan.nextStep ?? '',
     wakeOn: plan.action === 'wait' ? ['reply.created', 'solution.submitted', 'task.updated'] : [],
-    decisions: (current.triggerEventIds ?? []).map((eventId: number) => ({ eventId, decision: 'verify', reason: 'Evaluate the new counterexample in this isolated stage.' })) }));
-  const answer = 'COLLAB_SOLVED_OK：输入与缓存分开统计；已通过本地夹具验证。';
+    decisions: (current.triggerEventIds ?? []).map((eventId: number) => ({ eventId, decision: 'verify', reason: 'Evaluate the new counterexample in this isolated stage.' })),
+    ...(plan.completion ? { completion: { summary: plan.completion } } : {}) }));
+  const answer = plan.body ?? 'COLLAB_SOLVED_OK：输入与缓存分开统计；已通过本地夹具验证。';
   const usage = { input_tokens: 128, cache_read_input_tokens: 64, cache_creation_input_tokens: 16, output_tokens: 32 };
   const message = { id: randomUUID(), type: 'message', role: 'assistant', model: input.model, content: [{ type: 'text', text: answer }], stop_reason: 'end_turn', usage };
   if (!input.stream) { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(message)); return; }
@@ -69,6 +72,7 @@ try {
   const enabled = await client!.rpc('pluginManager/setBundleEnabled', { name: 'dsh-p2p-collab', enabled: true });
   await writeFile(join(data, 'enabled.json'), JSON.stringify(enabled, null, 2));
   const rpc = <T = any>(method: string, args: object = {}) => client!.rpc(method, args, false, '/desktop-collab') as Promise<T>;
+  await wait(async () => { try { return await rpc('state'); } catch { return false; } }, 'Collaboration plugin did not finish activating');
   const stateValue = await rpc('sync');
   assert.ok((await runtime.graph()).entries.some(e => e.id === 'dsh-p2p-collab'));
   checks.push('Plugin is initially disabled, discoverable, and enabled live through the production plugin manager');
@@ -86,15 +90,17 @@ try {
   assert.equal(completed.report.usage.status, 'complete');
   assert.deepEqual(completed.report.usage.totals, { uncachedInputTokens: 128, cacheReadTokens: 64, cacheWriteTokens: 16, outputTokens: 32, reasoningTokens: null, totalTokens: 240 });
   assert.equal((await fixture.call(0, 'tasks/' + taskId)).replies.length, 0, 'Solve must never upload automatically');
-  const submission = { operationId: randomUUID(), taskId, kind: 'solution', body: completed.output, baseRevision: 1, runId, reportSnapshot: completed.reportSnapshot, solution: { verification: 'Deterministic local model fixture passed', limitations: 'No external model or device test' } };
+  const submission = { operationId: randomUUID(), taskId, kind: 'solution', messageType: 'solution', body: completed.output, baseRevision: 1, runId, reportSnapshot: completed.reportSnapshot, solution: { verification: 'Deterministic local model fixture passed', limitations: 'No external model or device test' } };
   const reply = await rpc('reply', submission); assert.equal((await rpc('reply', submission)).id, reply.id);
   const detail = await fixture.call(0, 'tasks/' + taskId); assert.equal(detail.replies.length, 1); assert.equal(detail.replies[0].actor, 'dsh');
+  assert.equal(detail.capabilities.conversationWorkflow, 1); assert.equal(detail.replies[0].messageType, 'solution');
   assert.equal(detail.task.status, 'open', 'A candidate must not end open exploration');
-  const validation = await fixture.call(0, `tasks/${taskId}/validations`, { operationId: randomUUID(), replyId: reply.id, baseRevision: detail.task.specRevision,
-    outcome: 'passed', method: 'Assert exact token totals', environment: 'Isolated local deterministic model', evidence: '128 + 64 + 16 + 32 = 240 verified from runtime report' });
-  assert.equal((await fixture.call(0, `tasks/${taskId}/accept`, { operationId: randomUUID(), revision: detail.task.revision, replyId: reply.id, validationId: validation.id })).status, 'resolved');
-  await rpc('sync'); assert.ok((await rpc('state')).unread > 0, 'Author acceptance did not reach subscribed desktop');
-  checks.push('Browse/follow use no model; explicit solve invokes one mock call; exact usage is 240; a reviewed candidate keeps the task open and author accepts only with attached validation');
+  await assert.rejects(rpc('complete', { taskId, operationId: randomUUID(), baseRevision: detail.task.specRevision, summary: 'A participant cannot close this task.' }), /author_required/);
+  assert.equal((await fixture.call(0, `tasks/${taskId}/complete`, { operationId: randomUUID(), baseRevision: detail.task.specRevision, taskRevision: detail.task.revision, summary: 'Verified 128 + 64 + 16 + 32 = 240 from the runtime report.' })).status, 'resolved');
+  const resolvedDetail = await fixture.call(0, 'tasks/' + taskId);
+  assert.equal(resolvedDetail.validations.length, 0); assert.equal(resolvedDetail.task.acceptedReplyId, null);
+  await rpc('sync'); assert.ok((await rpc('state')).unread > 0, 'Author completion did not reach subscribed desktop');
+  checks.push('Browse/follow use no model; a reviewed solution preserves exact 240-token usage and leaves the task open; only its author completes with a public summary and no required validation record');
   client!.close(); client = undefined; await runtime.stop(); await start();
   const restored = await rpc('sync');
   assert.equal(restored.peer.id, stateValue.peer.id); assert.equal((await rpc('detail', { taskId })).task.status, 'resolved');
@@ -105,7 +111,37 @@ try {
   const localAttempt = async (id: string) => (await rpc('state')).attempts.find((attempt: any) => attempt.id === id);
   const awaitAttempt = (id: string, status: string) => wait(async () => { const a = await localAttempt(id); return a?.status === status && a; }, `Attempt never entered ${status}`);
   const peerReply = (id: string, body: string, attachments: string[] = []) => fixture.call(2, `tasks/${id}/replies`, { operationId: randomUUID(), actor: 'user', kind: 'message', body, baseRevision: 1, attachments });
-  await rpc('profile', { nickname: stateValue.peer.nickname, maxTokens: 2000, maxMinutes: 10, publishMode: 'manual', executionMode: 'continuous' });
+  const assertRounds = async (attempt: any) => {
+    const rounds = await Promise.all(attempt.runIds.map((runId: string) => rpc('run', { runId })));
+    assert.equal(new Set(rounds.map(round => round.sessionId)).size, 1, 'An attempt must continue in one local session');
+    assert.equal(rounds[0].sessionId, attempt.sessionId);
+    for (const [index, round] of rounds.entries()) {
+      assert.equal(round.report.usage.totals.totalTokens, 240, 'A later round must not recount prior usage');
+      assert.ok(round.eventEnds[round.sessionId] > round.eventStarts[round.sessionId]);
+      if (index) assert.ok(round.eventStarts[round.sessionId] >= rounds[index - 1].eventEnds[round.sessionId]);
+    }
+    return rounds;
+  };
+  await rpc('profile', { nickname: stateValue.peer.nickname, maxTokens: 2000, maxMinutes: 10, publishMode: 'review', executionMode: 'continuous' });
+  const reviewTask = await createTask('审核模式由用户开始下一轮'), reviewStart = modelCalls;
+  modelPlans.set(reviewTask.id, [{ action: 'continue', summary: 'First review round finished.', nextStep: 'Review the new evidence.', body: 'REVIEW_ROUND_ONE_ONLY' }, { action: 'ready', summary: 'Explicit second review finished.', body: 'REVIEW_ROUND_TWO_ONLY' }]);
+  const reviewRun = await rpc('start', { operationId: randomUUID(), taskId: reviewTask.id, mode: 'solve', executionMode: 'continuous', publishMode: 'review' });
+  await awaitAttempt(reviewRun.attemptId, 'waiting');
+  const firstReview = await rpc('run', { runId: reviewRun.id });
+  await peerReply(reviewTask.id, 'REVIEW_PENDING_MESSAGE'); await rpc('sync'); await new Promise(resolve => setTimeout(resolve, 3500));
+  assert.equal(modelCalls, reviewStart + 1); assert.equal((await localAttempt(reviewRun.attemptId)).runIds.length, 1);
+  await assert.rejects(rpc('start', { operationId: randomUUID(), taskId: reviewTask.id, mode: 'solve' }), /已经参与|当前参与/);
+  await rpc('attempt-resume', { attemptId: reviewRun.attemptId, nextStep: 'Review the pending message now.' });
+  const reviewed = await awaitAttempt(reviewRun.attemptId, 'ready'), reviewRounds = await assertRounds(reviewed);
+  assert.equal(reviewRounds.length, 2); assert.equal(reviewed.usedTokens, 480);
+  assert.match(reviewRounds[1].output, /REVIEW_ROUND_TWO_ONLY/); assert.doesNotMatch(reviewRounds[1].output, /REVIEW_ROUND_ONE_ONLY/);
+  assert.equal(reviewRounds[0].reportSnapshot, firstReview.reportSnapshot); assert.equal(reviewRounds[0].output, firstReview.output);
+  const reviewRequest = JSON.parse(await readFile(join(state, 'collaboration/workspaces', reviewRounds[1].id, 'task.json'), 'utf8'));
+  assert.equal(reviewRequest.conversationContinues, true); assert.equal(reviewRequest.discussion.length, 1);
+  assert.equal(reviewRequest.discussion[0].body, 'REVIEW_PENDING_MESSAGE');
+  assert.equal((await fixture.call(0, 'tasks/' + reviewTask.id)).replies.length, 1, 'Review output stays local until the user publishes it');
+  checks.push('Review mode waits for an explicit next round despite queued messages; duplicate participation is refused; both rounds use one session with distinct output, exact 240-token ranges and stable earlier reports');
+  await rpc('profile', { nickname: stateValue.peer.nickname, maxTokens: 2000, maxMinutes: 10, publishMode: 'auto', executionMode: 'continuous' });
 
   // Evidence arrives while the model is active. Only the next completed-run checkpoint may consume it.
   const activeTask = await createTask('运行中收到反证'), activeStart = modelCalls;
@@ -124,6 +160,7 @@ try {
   } finally { release(); }
   const ready = await awaitAttempt(activeRun.attemptId, 'ready');
   assert.equal(ready.runIds.length, 2); assert.equal(modelCalls, activeStart + 2); assert.equal(ready.usedTokens, 480);
+  await assertRounds(ready);
   assert.ok(ready.decisions.length); assert.equal(ready.pendingEvents.length, 0);
   assert.match(modelInputs.find(i => i.runId === ready.runIds[1])!.text, /COUNTEREXAMPLE_DURING_ACTIVE_RUN/);
   const evidenceRequest = JSON.parse(await readFile(join(state, 'collaboration/workspaces', ready.runIds[1], 'task.json'), 'utf8'));
@@ -131,15 +168,16 @@ try {
   assert.ok(evidenceFile.path, 'A supplied contribution artifact must be readable in the next stage');
   assert.equal(await readFile(join(state, 'collaboration/workspaces', ready.runIds[1], evidenceFile.path), 'utf8'), 'COUNTEREXAMPLE_ARTIFACT_BYTES\n');
   assert.ok(!modelInputs.find(i => i.runId === ready.runIds[1])!.text.includes(fixture.tokens[1]), 'Relay credentials must remain outside model context');
-  assert.equal((await fixture.call(0, 'tasks/' + activeTask.id)).replies.length, 1, 'Manual publication must keep both AI stages local');
-  checks.push('Active-stage counterevidence and its checked artifact reach a second independent run at a checkpoint without relay credentials; decisions and cumulative 480 tokens persist; manual publication uploads no AI result');
+  assert.equal((await fixture.call(0, 'tasks/' + activeTask.id)).replies.length, 1, 'An automatic review without a material contribution must stay local');
+  checks.push('Active-round counterevidence and its checked artifact reach the next round in the same session without relay credentials; decisions and cumulative 480 tokens persist; no material contribution means no automatic message');
   await peerReply(activeTask.id, 'COUNTEREXAMPLE_AFTER_CANDIDATE_READY'); await rpc('sync');
   const reevaluated = await wait(async () => { const a = await localAttempt(activeRun.attemptId); return a.status === 'ready' && a.runIds.length === 3 && a; }, 'A ready continuous participant did not evaluate new counterevidence');
   assert.equal(reevaluated.usedTokens, 720); assert.equal(modelCalls, activeStart + 3);
   assert.match(modelInputs.find(i => i.runId === reevaluated.runIds[2])!.text, /COUNTEREXAMPLE_AFTER_CANDIDATE_READY/);
-  await fixture.call(0, 'tasks/' + activeTask.id, { operationId: randomUUID(), revision: activeTask.revision, status: 'closed' }); await rpc('sync');
+  await assertRounds(reevaluated);
+  await fixture.call(0, `tasks/${activeTask.id}/complete`, { operationId: randomUUID(), baseRevision: activeTask.specRevision, taskRevision: activeTask.revision, summary: 'Counterexamples verified and the requested outcome reached.' }); await rpc('sync');
   await awaitAttempt(activeRun.attemptId, 'completed'); assert.equal(modelCalls, activeStart + 3);
-  checks.push('A ready continuous participant evaluates a later counterexample in another run; task closure then ends participation without another model call');
+  checks.push('An automatic participant evaluates a later counterexample in the same session; author completion then ends participation without another model call');
 
   const pauseTask = await createTask('等待与持久暂停'), pauseStart = modelCalls;
   modelPlans.set(pauseTask.id, [{ action: 'wait', summary: 'Waiting for a reproducible counterexample.' }, { action: 'ready', summary: 'New evidence verified after explicit resume.' }]);
@@ -155,6 +193,7 @@ try {
   await rpc('attempt-resume', { attemptId: waitingRun.attemptId, nextStep: 'Evaluate the pending counterexample before continuing.' });
   const resumed = await awaitAttempt(waitingRun.attemptId, 'ready');
   assert.equal(resumed.runIds.length, 2); assert.equal(modelCalls, pauseStart + 2);
+  await assertRounds(resumed);
   assert.match(modelInputs.find(i => i.runId === resumed.runIds[1])!.text, /COUNTEREXAMPLE_WHILE_USER_PAUSED/);
   checks.push('Waiting participation accepts durable updates; user pause survives incoming evidence and a real runtime restart with no model wakeup; explicit resume consumes the evidence');
 
@@ -167,7 +206,7 @@ try {
   assert.equal(woken.runIds.length, 2); assert.equal(modelCalls, wakeStart + 2);
   checks.push('Authorized waiting participation wakes on a matching new contribution and stops at a reviewable candidate');
 
-  await rpc('profile', { nickname: stateValue.peer.nickname, maxTokens: 240, maxMinutes: 10, publishMode: 'review', executionMode: 'continuous' });
+  await rpc('profile', { nickname: stateValue.peer.nickname, maxTokens: 240, maxMinutes: 10, publishMode: 'auto', executionMode: 'continuous' });
   const budgetTask = await createTask('跨阶段预算'), budgetStart = modelCalls;
   modelPlans.set(budgetTask.id, [{ action: 'continue', summary: 'First experiment consumed the allocated budget.', nextStep: 'Run one more explicit verification.' }, { action: 'ready', summary: 'Verification completed with the added budget.' }]);
   const budgetRun = await rpc('start', { operationId: randomUUID(), taskId: budgetTask.id, mode: 'solve', executionMode: 'continuous' });
@@ -178,7 +217,18 @@ try {
   await rpc('attempt-resume', { attemptId: budgetRun.attemptId, additionalTokens: 500, nextStep: 'Verify with the additional explicit budget.' });
   const funded = await awaitAttempt(budgetRun.attemptId, 'ready');
   assert.equal(funded.usedTokens, 480); assert.equal(funded.limits.maxTokens, 740);
+  await assertRounds(funded);
   checks.push('The cumulative token cap pauses before another stage; messages and bare resume cannot bypass it; an explicit 500-token extension permits the second stage');
+
+  const ownerStart = modelCalls;
+  modelPlans.set(own.id, [{ action: 'ready', summary: 'Owner-side checks reached the goal.', completion: 'The isolated owner run verified the requested result.' }]);
+  const ownerRun = await rpc('start', { operationId: randomUUID(), taskId: own.id, mode: 'solve', executionMode: 'continuous', publishMode: 'auto', maxTokens: 2000, maxMinutes: 10 });
+  await awaitAttempt(ownerRun.attemptId, 'completed');
+  const ownerDetail = await rpc('detail', { taskId: own.id });
+  assert.equal(ownerDetail.task.status, 'resolved'); assert.equal(ownerDetail.task.acceptedReplyId, null); assert.equal(ownerDetail.validations.length, 0);
+  assert.equal(ownerDetail.replies.length, 1); assert.equal(ownerDetail.replies[0].messageType, 'progress'); assert.equal(ownerDetail.replies[0].actor, 'dsh');
+  assert.match(ownerDetail.replies[0].body, /isolated owner run/); assert.equal(modelCalls, ownerStart + 1);
+  checks.push('An automatic publisher-side run completes its own task from an explicit checkpoint summary, with exactly one public completion message and no independent validation requirement');
 
   await client!.rpc('pluginManager/setBundleEnabled', { name: 'dsh-p2p-collab', enabled: false });
   checks.push('HTTP-only collaboration works with WebSocket rejected; cold restart preserves identity, results and subscriptions without another model call; plugin disables live');

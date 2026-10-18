@@ -17,7 +17,7 @@ const controls = new Set([
 ]);
 const streams = new Set(['$events', 'session/follow', 'workspace/follow', 'session/control', 'job/list', 'job/follow']);
 const controlStreams = new Set(['workspaceFiles/changes', 'terminal/follow', 'terminal/retain']);
-const collabControls = new Set(['state', 'sync', 'catalog', 'detail', 'history', 'inbox', 'read', 'create', 'update', 'follow', 'accept', 'upload', 'download', 'draft-get', 'draft-put', 'start', 'run', 'cancel', 'reply', 'generated-file', 'publish-run']);
+const collabControls = new Set(['state', 'identity', 'sync', 'catalog', 'detail', 'candidates', 'history', 'inbox', 'read', 'create', 'update', 'follow', 'accept', 'validate', 'complete', 'upload', 'download', 'profile', 'draft-get', 'draft-put', 'start', 'run', 'cancel', 'attempt-pause', 'attempt-resume', 'attempt-configure', 'attempt-withdraw', 'reply', 'generated-file', 'publish-run']);
 
 /** A refused logical stream must not retire the other streams on the same socket. */
 export class RemoteStreamDenied extends Error {

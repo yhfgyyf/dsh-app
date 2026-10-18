@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -47,6 +47,136 @@ test('grants are scoped, authenticated and expire', () => {
   assert.throws(() => verifyCollabGrant(grant.token + 'x', secret, 2000));
   assert.throws(() => verifyCollabGrant(grant.token, secret, 301000));
   assert.throws(() => issueCollabGrant({ kind: 'desktop', deviceId: 'device-fixture', role: 'control' }, 'short'));
+});
+
+test('conversation messages retain legacy payloads and enforce same-task reply references', async () => {
+  const f = await fixture();
+  try {
+    const [owner, contributor] = f.tokens, task = f.store.createTask(f.peers[0], { ...operation(), title: 'Conversation', description: 'Public contributions' });
+    const path = `tasks/${task.id}/replies`, oldMessage = { ...operation(), kind: 'message', actor: 'user', body: 'Legacy discussion', baseRevision: 1 };
+    const original = (await f.call(contributor, path, oldMessage)).body;
+    f.store.db.prepare('DELETE FROM collab_reply_metadata WHERE replyId = ?').run(original.id);
+    const progress = { ...operation(), kind: 'message', messageType: 'progress', replyTo: original.id, actor: 'dsh', body: 'A reproduction is available', baseRevision: 1 };
+    const posted = await f.call(contributor, path, progress); assert.equal(posted.status, 200);
+    const beforeRetry = f.store.cursor(); assert.deepEqual((await f.call(contributor, path, progress)).body, posted.body); assert.equal(f.store.cursor(), beforeRetry);
+    const proposed = await f.call(contributor, path, { ...operation(), kind: 'solution', messageType: 'solution', actor: 'dsh', body: 'Proposed approach', baseRevision: 1, replyTo: posted.body.id });
+    assert.equal(proposed.status, 200);
+    const detail = (await f.call(owner, `tasks/${task.id}`)).body;
+    assert.deepEqual(detail.replies.map((r: any) => r.messageType), ['discussion', 'progress', 'solution']);
+    assert.deepEqual(detail.replies.map((r: any) => r.replyTo), [null, original.id, posted.body.id]);
+    assert.equal(detail.replies[2].solution.verification, '未提供实测验证证据');
+    assert.equal(detail.task.status, 'open'); assert.equal(detail.validations.length, 0);
+    assert.equal((await f.call(owner, `tasks/${task.id}/candidates`)).body.items[0].messageType, 'solution');
+    assert.equal((await f.call(owner, `tasks/${task.id}/replies/${posted.body.id}`)).body.replyTo, original.id);
+    assert.equal((await f.call(contributor, path, { ...oldMessage, ...operation(), kind: 'solution' })).status, 400, 'legacy solutions still require verification metadata');
+    assert.equal((await f.call(contributor, path, { ...progress, ...operation(), messageType: 'solution' })).status, 400);
+    assert.equal((await f.call(contributor, path, { ...progress, ...operation(), messageType: 'unknown' })).status, 400);
+    const other = f.store.createTask(f.peers[0], { ...operation(), title: 'Other', description: 'Reference boundary' });
+    assert.equal((await f.call(contributor, `tasks/${other.id}/replies`, { ...progress, ...operation() })).body.error, 'invalid_reply_reference');
+    assert.equal((await f.call(contributor, path, { ...progress, ...operation(), replyTo: randomUUID() })).body.error, 'invalid_reply_reference');
+    assert.equal((await f.call(owner, 'me')).body.capabilities.conversationWorkflow, 1);
+    assert.equal(detail.capabilities.conversationWorkflow, 1);
+    assert.equal((await (await fetch(f.origin + '/health')).json()).capabilities.conversationWorkflow, 1);
+  } finally { await f.close(); }
+});
+
+test('message filters paginate the full conversation and subject links locate the unfiltered page', async () => {
+  const f = await fixture();
+  try {
+    const task = f.store.createTask(f.peers[0], { ...operation(), title: 'Pagination', description: 'Filter every message' });
+    const progressIds: string[] = [];
+    for (let i = 0; i < 55; i++) {
+      f.store.addReply(f.peers[1], task.id, { ...operation(), kind: 'message', actor: 'user', body: `Discussion ${i}`, baseRevision: 1 });
+      progressIds.push(f.store.addReply(f.peers[1], task.id, { ...operation(), kind: 'message', messageType: 'progress', actor: 'dsh', body: `Progress ${i}`, baseRevision: 1 }).id);
+    }
+    const first = (await f.call(f.tokens[0], `tasks/${task.id}?messageType=progress`)).body;
+    const second = (await f.call(f.tokens[0], `tasks/${task.id}?messageType=progress&offset=50`)).body;
+    assert.equal(first.replyOffset, 0); assert.equal(first.hasMore, true);
+    assert.equal(second.replyOffset, 50); assert.equal(second.hasMore, false);
+    assert.deepEqual([...first.replies, ...second.replies].map((r: any) => r.id), progressIds);
+    const empty = (await f.call(f.tokens[0], `tasks/${task.id}?messageType=solution`)).body;
+    assert.deepEqual(empty.replies, []); assert.equal(empty.hasMore, false); assert.equal(empty.replyOffset, 0);
+    const located = (await f.call(f.tokens[0], `tasks/${task.id}?messageType=solution&subjectId=${progressIds.at(-1)}`)).body;
+    assert.equal(located.replyOffset, 100); assert.equal(located.replies.length, 10);
+    assert.ok(located.replies.some((r: any) => r.messageType === 'discussion'));
+    assert.ok(located.replies.some((r: any) => r.id === progressIds.at(-1)));
+    assert.equal((await f.call(f.tokens[0], `tasks/${task.id}?messageType=invalid`)).status, 400);
+  } finally { await f.close(); }
+});
+
+test('only the owner completes current requirements once, with a public summary and no acceptance dependency', async () => {
+  const f = await fixture();
+  try {
+    const task = f.store.createTask(f.peers[0], { ...operation(), title: 'Complete', description: 'Original requirements' }), path = `tasks/${task.id}/complete`;
+    const request = { ...operation(), baseRevision: task.specRevision, summary: 'The requested outcome is verified.', actor: 'dsh' };
+    const before = f.store.cursor();
+    assert.equal((await f.call(f.tokens[0], path, { ...request, summary: '' })).status, 400);
+    assert.equal((await f.call(f.tokens[0], path, { ...request, actor: 'system' })).status, 400);
+    assert.equal((await f.call(f.tokens[1], path, request)).status, 403); assert.equal(f.store.cursor(), before);
+    f.store.updateTask(f.peers[0], task.id, { ...operation(), revision: task.revision, description: 'Changed requirements' });
+    assert.equal((await f.call(f.tokens[0], path, request)).body.error, 'task_changed');
+    const current = f.store.detail(f.peers[0], task.id).task;
+    await f.call(f.tokens[1], `tasks/${task.id}/follow`, { following: true });
+    const complete = { ...request, ...operation(), baseRevision: current.specRevision };
+    const completed = await f.call(f.tokens[0], path, complete); assert.equal(completed.status, 200);
+    assert.equal(completed.body.status, 'resolved'); assert.equal(completed.body.revision, current.revision + 1);
+    assert.equal(completed.body.acceptedReplyId, null); assert.equal(completed.body.specRevision, current.specRevision);
+    const cursor = f.store.cursor(); assert.deepEqual((await f.call(f.tokens[0], path, complete)).body, completed.body); assert.equal(f.store.cursor(), cursor);
+    assert.equal((await f.call(f.tokens[0], path, { ...complete, summary: 'Changed retry' })).body.error, 'operation_conflict');
+    assert.equal((await f.call(f.tokens[0], path, { ...complete, ...operation() })).body.error, 'task_changed');
+    const detail = f.store.detail(f.peers[0], task.id);
+    assert.equal(detail.replies.length, 1); assert.equal(detail.replies[0].actor, 'dsh'); assert.equal(detail.replies[0].messageType, 'progress');
+    assert.ok(detail.replies[0].body.includes(request.summary)); assert.equal(detail.validations.length, 0); assert.equal(detail.decision, null);
+    const events = f.store.sync(f.peers[1], before).events.filter(e => e.kind === 'task.completed');
+    assert.equal(events.length, 1); assert.equal(events[0].subjectId, detail.replies[0].id);
+    assert.equal(f.store.inbox(f.peers[1]).items[0].kind, 'task.completed');
+    assert.equal(f.store.history(f.peers[0], task.id, 0).revisions[0].status, 'resolved');
+    const racing = f.store.createTask(f.peers[0], { ...operation(), title: 'Concurrent completion', description: 'Only one completion' });
+    const results = await Promise.all([0, 1].map(i => f.call(f.tokens[0], `tasks/${racing.id}/complete`, { ...operation(), baseRevision: 1, summary: `Attempt ${i}` })));
+    assert.deepEqual(results.map(r => r.status).sort(), [200, 409]); assert.equal(f.store.detail(f.peers[0], racing.id).replies.length, 1);
+    const review = f.store.createTask(f.peers[0], { ...operation(), title: 'Legacy review', description: 'May be completed' });
+    f.store.db.prepare("UPDATE collab_tasks SET status = 'review' WHERE id = ?").run(review.id);
+    assert.equal((await f.call(f.tokens[0], `tasks/${review.id}/complete`, { ...operation(), baseRevision: 1, summary: 'Legacy task done' })).status, 200);
+  } finally { await f.close(); }
+});
+
+test('task revision rejects a stale completion after close and reopen without requirement changes', async () => {
+  const f = await fixture();
+  try {
+    const task = f.store.createTask(f.peers[0], { ...operation(), title: 'Reopened task', description: 'Same requirements' });
+    const closed = f.store.updateTask(f.peers[0], task.id, { ...operation(), revision: task.revision, status: 'closed' });
+    const reopened = f.store.updateTask(f.peers[0], task.id, { ...operation(), revision: closed.revision, status: 'open' });
+    assert.equal(reopened.specRevision, task.specRevision); assert.notEqual(reopened.revision, task.revision);
+    const request = { ...operation(), baseRevision: task.specRevision, taskRevision: task.revision, summary: 'A prior session completion' };
+    const cursor = f.store.cursor();
+    assert.equal((await f.call(f.tokens[0], `tasks/${task.id}/complete`, request)).body.error, 'task_changed');
+    assert.equal(f.store.cursor(), cursor); assert.equal(f.store.detail(f.peers[0], task.id).replies.length, 0);
+    assert.equal((await f.call(f.tokens[0], `tasks/${task.id}/complete`, { ...request, ...operation(), taskRevision: reopened.revision })).status, 200);
+  } finally { await f.close(); }
+});
+
+test('conversation migration preserves identity rows and legacy candidate validation digests', async () => {
+  const f = await fixture(), dir = mkdtempSync(join(tmpdir(), 'collab-conversation-upgrade-'));
+  try {
+    const identity = verifyCollabGrant(f.tokens[0], secret);
+    f.store.join(identity, { id: f.peers[0].id, nickname: f.peers[0].nickname, recoverySecret: randomBytes(32).toString('base64url') });
+    const task = f.store.createTask(f.peers[0], { ...operation(), title: 'Existing task', description: 'Preserve evidence' });
+    const reply = f.store.addReply(f.peers[1], task.id, { ...operation(), kind: 'solution', actor: 'user', body: 'Existing proposal', baseRevision: 1, solution: { verification: 'Existing check' } });
+    const validation = f.store.validate(f.peers[2], task.id, { ...operation(), replyId: reply.id, baseRevision: 1, outcome: 'passed', method: 'Existing method', environment: 'Fixture', evidence: 'Expected result' });
+    const peers = f.store.db.prepare('SELECT * FROM collab_peers ORDER BY id').all(), replies = f.store.db.prepare('SELECT * FROM collab_replies ORDER BY id').all();
+    const path = join(dir, 'legacy.sqlite'); await f.store.db.backup(path);
+    const legacy = new Database(path); legacy.exec('DROP TABLE collab_reply_metadata'); legacy.close();
+    const upgraded = new CollabStore(path);
+    try {
+      assert.deepEqual(upgraded.db.prepare('SELECT * FROM collab_peers ORDER BY id').all(), peers);
+      assert.deepEqual(upgraded.db.prepare('SELECT * FROM collab_replies ORDER BY id').all(), replies);
+      assert.equal(upgraded.reply(f.peers[0], task.id, reply.id).messageType, 'solution');
+      assert.equal(upgraded.reply(f.peers[0], task.id, reply.id).replyTo, null);
+      const accepted = upgraded.accept(f.peers[0], task.id, { ...operation(), replyId: reply.id, revision: task.revision, validationId: validation.id });
+      assert.equal(accepted.status, 'resolved'); assert.equal(upgraded.detail(f.peers[0], task.id).decision?.candidateDigest, validation.candidateDigest);
+      assert.deepEqual(upgraded.db.prepare('SELECT * FROM collab_peers ORDER BY id').all(), peers);
+    } finally { upgraded.db.close(); }
+  } finally { await f.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('three peers publish, read, follow, reply, solve and author-accept with durable, idempotent events', async () => {
@@ -98,6 +228,8 @@ test('phone reads collaboration while desktop has no tunnel; revoke and unregist
     const token = (await res.json()).token;
     assert.equal((await f.call(token, 'tasks')).status, 200);
     assert.equal((await f.call(token, 'tasks', { ...operation(), title: 'denied', description: 'denied' })).status, 403);
+    const task = f.store.createTask(f.peers[0], { ...operation(), title: 'Desktop completion', description: 'Phone is read-only' });
+    assert.equal((await f.call(token, `tasks/${task.id}/complete`, { ...operation(), baseRevision: task.specRevision, summary: 'Denied' })).status, 403);
     f.relayStore.revoke(f.devices[0].deviceId, bound.bindingId);
     assert.equal((await f.call(token, 'tasks')).status, 403);
     f.relayStore.db.prepare('DELETE FROM remote_devices WHERE id = ?').run(f.devices[1].deviceId);

@@ -5,7 +5,6 @@
     dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
 - id: system-prompt
   config:
-    personaSuffix: Your working directory is {{cwd}}.
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 - id: session-query-sqlite

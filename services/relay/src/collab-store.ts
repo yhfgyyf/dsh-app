@@ -1,10 +1,11 @@
 import Database from 'better-sqlite3';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
-import { CollabError, attachmentIds, idField, numberField, record, reportField, tagsField, textField, MAX_ATTACHMENT_BYTES,
-  type CollabAcceptance, type CollabAttachment, type CollabAttempt, type CollabCandidates, type CollabDetail, type CollabEvent, type CollabIdentity, type CollabInboxItem, type CollabJoinResult, type CollabPeer, type CollabReply, type CollabTask, type CollabValidation } from './collab-types.js';
+import { CollabError, COLLAB_CAPABILITIES, attachmentIds, idField, numberField, record, reportField, tagsField, textField, MAX_ATTACHMENT_BYTES,
+  type CollabAcceptance, type CollabAttachment, type CollabAttempt, type CollabCandidates, type CollabDetail, type CollabEvent, type CollabIdentity, type CollabInboxItem, type CollabJoinResult, type CollabMessageType, type CollabPeer, type CollabReply, type CollabTask, type CollabValidation } from './collab-types.js';
 
 type PeerRow = CollabPeer & { device: string; banned: number; recoveryHash: string | null };
 type TaskRow = Omit<CollabTask, 'tags' | 'following'> & { tags: string; following: number; hidden: number };
+type ReplyRow = Omit<CollabReply, 'solution' | 'attachments' | 'messageType' | 'replyTo'> & { solution: string | null };
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 function recoveryHashField(value: unknown): string | undefined {
   if (value === undefined) return undefined;
@@ -23,12 +24,14 @@ export class CollabStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
+    // Keep conversation metadata out of legacy reply rows: older servers hash SELECT * for candidate evidence.
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS collab_peers (id TEXT PRIMARY KEY, device TEXT NOT NULL UNIQUE, nickname TEXT NOT NULL, createdAt INTEGER NOT NULL, banned INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS collab_tasks (id TEXT PRIMARY KEY, authorId TEXT NOT NULL REFERENCES collab_peers(id), title TEXT NOT NULL, description TEXT NOT NULL, acceptance TEXT NOT NULL, tags TEXT NOT NULL, status TEXT NOT NULL, revision INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, acceptedReplyId TEXT, hidden INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS collab_task_revisions (taskId TEXT NOT NULL REFERENCES collab_tasks(id), revision INTEGER NOT NULL, snapshot TEXT NOT NULL, PRIMARY KEY(taskId, revision));
       CREATE TABLE IF NOT EXISTS collab_replies (id TEXT PRIMARY KEY, taskId TEXT NOT NULL REFERENCES collab_tasks(id), authorId TEXT NOT NULL REFERENCES collab_peers(id), actor TEXT NOT NULL, kind TEXT NOT NULL, body TEXT NOT NULL, baseRevision INTEGER NOT NULL, replaces TEXT REFERENCES collab_replies(id), createdAt INTEGER NOT NULL, solution TEXT);
       CREATE INDEX IF NOT EXISTS collab_replies_task ON collab_replies(taskId, createdAt);
+      CREATE TABLE IF NOT EXISTS collab_reply_metadata (replyId TEXT PRIMARY KEY REFERENCES collab_replies(id), messageType TEXT NOT NULL, replyTo TEXT REFERENCES collab_replies(id));
       CREATE TABLE IF NOT EXISTS collab_follows (peerId TEXT NOT NULL REFERENCES collab_peers(id), taskId TEXT NOT NULL REFERENCES collab_tasks(id), muted INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(peerId, taskId));
       CREATE TABLE IF NOT EXISTS collab_participants (peerId TEXT NOT NULL REFERENCES collab_peers(id), taskId TEXT NOT NULL REFERENCES collab_tasks(id), status TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(peerId, taskId));
       CREATE TABLE IF NOT EXISTS collab_events (id INTEGER PRIMARY KEY AUTOINCREMENT, taskId TEXT NOT NULL REFERENCES collab_tasks(id), actorId TEXT NOT NULL REFERENCES collab_peers(id), kind TEXT NOT NULL, at INTEGER NOT NULL);
@@ -142,10 +145,16 @@ export class CollabStore {
   private attachments(taskId: string, replyId = ''): CollabAttachment[] {
     return this.db.prepare('SELECT a.id, a.name, a.size, a.sha256 FROM collab_attachments a JOIN collab_attachment_links l ON l.attachmentId = a.id WHERE l.taskId = ? AND l.replyId = ?').all(taskId, replyId) as CollabAttachment[];
   }
-  detail(peer: CollabPeer, id: string, offset = 0, subjectId?: string): CollabDetail {
+  private publicReply(reply: ReplyRow): CollabReply {
+    const metadata = this.db.prepare('SELECT messageType, replyTo FROM collab_reply_metadata WHERE replyId = ?').get(reply.id) as { messageType: CollabMessageType; replyTo: string | null } | undefined;
+    return { ...reply, messageType: metadata?.messageType ?? (reply.kind === 'solution' ? 'solution' : 'discussion'), replyTo: metadata?.replyTo ?? null, solution: reply.solution ? JSON.parse(reply.solution) : null, attachments: this.attachments(reply.taskId, reply.id) };
+  }
+  detail(peer: CollabPeer, id: string, offset = 0, subjectId?: string, messageType?: string): CollabDetail {
+    if (messageType !== undefined && !['discussion', 'progress', 'solution'].includes(messageType)) throw new CollabError(400, 'invalid_message_type');
     return this.db.transaction(() => {
       const task = this.task(peer, id);
       if (subjectId !== undefined) {
+        messageType = undefined;
         const target = this.db.prepare('SELECT rowid, createdAt FROM collab_replies WHERE taskId = ? AND (id = ? OR id = (SELECT replyId FROM collab_validations WHERE taskId = ? AND id = ?))').get(id, subjectId, id, subjectId) as { rowid: number; createdAt: number } | undefined;
         if (target) {
           const before = this.db.prepare('SELECT count(*) AS n FROM collab_replies WHERE taskId = ? AND (createdAt < ? OR (createdAt = ? AND rowid < ?))').get(id, target.createdAt, target.createdAt, target.rowid) as { n: number };
@@ -153,27 +162,29 @@ export class CollabStore {
         } else if (subjectId === id || this.db.prepare('SELECT 1 FROM collab_attempts WHERE taskId = ? AND id = ?').get(id, subjectId)) offset = 0;
         else throw new CollabError(404, 'subject_not_found');
       }
-      const replies = (this.db.prepare('SELECT r.*, (SELECT replacement.id FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id ORDER BY replacement.createdAt DESC, replacement.rowid DESC LIMIT 1) AS supersededBy FROM collab_replies r WHERE r.taskId = ? ORDER BY r.createdAt, r.rowid LIMIT 51 OFFSET ?').all(id, offset) as (Omit<CollabReply, 'solution' | 'attachments'> & { solution: string | null })[])
-        .map(r => ({ ...r, solution: r.solution ? JSON.parse(r.solution) : null, attachments: this.attachments(id, r.id) }));
+      const filter = messageType === undefined ? '' : " AND COALESCE(m.messageType, CASE r.kind WHEN 'solution' THEN 'solution' ELSE 'discussion' END) = ?";
+      const args = messageType === undefined ? [id, offset] : [id, messageType, offset];
+      const replies = (this.db.prepare(`SELECT r.*, (SELECT replacement.id FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id ORDER BY replacement.createdAt DESC, replacement.rowid DESC LIMIT 1) AS supersededBy FROM collab_replies r LEFT JOIN collab_reply_metadata m ON m.replyId = r.id WHERE r.taskId = ?${filter} ORDER BY r.createdAt, r.rowid LIMIT 51 OFFSET ?`).all(...args) as ReplyRow[])
+        .map(r => this.publicReply(r));
       const participants = this.db.prepare('SELECT peerId, status, updatedAt FROM collab_participants WHERE taskId = ? ORDER BY updatedAt').all(id) as CollabDetail['participants'];
       const attempts = this.db.prepare('SELECT * FROM collab_attempts WHERE taskId = ? ORDER BY createdAt, rowid').all(id) as CollabAttempt[];
       const validations = this.db.prepare('SELECT * FROM collab_validations WHERE taskId = ? ORDER BY createdAt, rowid').all(id) as CollabValidation[];
       const decision = task.status === 'resolved' ? this.db.prepare('SELECT * FROM collab_acceptances WHERE taskId = ? AND replyId = ? ORDER BY createdAt DESC, rowid DESC LIMIT 1').get(id, task.acceptedReplyId) as CollabAcceptance | undefined : undefined;
-      return { task, replies: replies.slice(0, 50), participants, attempts, validations, decision: decision ?? null, attachments: this.attachments(id), peers: this.peers([task.authorId, ...replies.map(r => r.authorId), ...participants.map(p => p.peerId), ...attempts.map(a => a.peerId), ...validations.map(v => v.authorId)]), cursor: this.cursor(), replyOffset: offset, hasMore: replies.length > 50 };
+      return { task, replies: replies.slice(0, 50), participants, attempts, validations, decision: decision ?? null, capabilities: COLLAB_CAPABILITIES, attachments: this.attachments(id), peers: this.peers([task.authorId, ...replies.map(r => r.authorId), ...participants.map(p => p.peerId), ...attempts.map(a => a.peerId), ...validations.map(v => v.authorId)]), cursor: this.cursor(), replyOffset: offset, hasMore: replies.length > 50 };
     })();
   }
   candidates(peer: CollabPeer, taskId: string, offset = 0): CollabCandidates {
     return this.db.transaction(() => {
       const task = this.task(peer, taskId);
-      const rows = this.db.prepare("SELECT r.*, NULL AS supersededBy FROM collab_replies r WHERE r.taskId = ? AND r.kind = 'solution' AND NOT EXISTS(SELECT 1 FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id) ORDER BY r.createdAt, r.rowid LIMIT 51 OFFSET ?").all(taskId, offset) as (Omit<CollabReply, 'solution' | 'attachments'> & { solution: string | null })[];
-      return { items: rows.slice(0, 50).map(r => ({ ...r, solution: r.solution ? JSON.parse(r.solution) : null, attachments: this.attachments(taskId, r.id) })), hasMore: rows.length > 50, total: task.solutionCount };
+      const rows = this.db.prepare("SELECT r.*, NULL AS supersededBy FROM collab_replies r WHERE r.taskId = ? AND r.kind = 'solution' AND NOT EXISTS(SELECT 1 FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id) ORDER BY r.createdAt, r.rowid LIMIT 51 OFFSET ?").all(taskId, offset) as ReplyRow[];
+      return { items: rows.slice(0, 50).map(r => this.publicReply(r)), hasMore: rows.length > 50, total: task.solutionCount };
     })();
   }
   reply(peer: CollabPeer, taskId: string, replyId: string): CollabReply {
     this.task(peer, taskId);
-    const reply = this.db.prepare('SELECT r.*, (SELECT replacement.id FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id ORDER BY replacement.createdAt DESC, replacement.rowid DESC LIMIT 1) AS supersededBy FROM collab_replies r WHERE r.taskId = ? AND r.id = ?').get(taskId, replyId) as (Omit<CollabReply, 'solution' | 'attachments'> & { solution: string | null }) | undefined;
+    const reply = this.db.prepare('SELECT r.*, (SELECT replacement.id FROM collab_replies replacement WHERE replacement.taskId = r.taskId AND replacement.replaces = r.id ORDER BY replacement.createdAt DESC, replacement.rowid DESC LIMIT 1) AS supersededBy FROM collab_replies r WHERE r.taskId = ? AND r.id = ?').get(taskId, replyId) as ReplyRow | undefined;
     if (!reply) throw new CollabError(404, 'reply_not_found');
-    return { ...reply, solution: reply.solution ? JSON.parse(reply.solution) : null, attachments: this.attachments(taskId, replyId) };
+    return this.publicReply(reply);
   }
   private snapshot(peer: CollabPeer, id: string) {
     const { replyCount: _replies, solutionCount: _solutions, following: _following, ...task } = this.task(peer, id);
@@ -244,12 +255,16 @@ export class CollabStore {
   addReply(peer: CollabPeer, taskId: string, value: unknown) {
     const b = record(value), body = textField(b.body), files = attachmentIds(b.attachments), baseRevision = numberField(b.baseRevision, 1), attemptId = b.attemptId == null ? null : idField(b.attemptId);
     if (!['message', 'solution'].includes(b.kind as string) || !['user', 'dsh'].includes(b.actor as string)) throw new CollabError(400, 'invalid_reply');
-    const solution = b.kind === 'solution' ? record(b.solution) : undefined;
-    const metadata = solution ? { verification: textField(solution.verification, 16000), limitations: textField(solution.limitations, 8000, true), report: reportField(solution.report) } : null;
+    const messageType = b.messageType ?? (b.kind === 'solution' ? 'solution' : 'discussion'), replyTo = b.replyTo == null ? null : idField(b.replyTo);
+    if (!['discussion', 'progress', 'solution'].includes(messageType as string) || (messageType === 'solution') !== (b.kind === 'solution')) throw new CollabError(400, 'invalid_message_type');
+    const conversationSolution = b.messageType === 'solution';
+    const solution = b.kind === 'solution' ? record(conversationSolution && b.solution === undefined ? {} : b.solution) : undefined;
+    const metadata = solution ? { verification: textField(solution.verification, 16000, conversationSolution) || '未提供实测验证证据', limitations: textField(solution.limitations, 8000, true), report: reportField(solution.report) } : null;
     return this.command(peer, b.operationId, 'reply:' + taskId, b, () => {
       const task = this.task(peer, taskId);
       if (baseRevision > task.specRevision) throw new CollabError(409, 'task_changed');
       if (b.kind === 'solution' && ['closed', 'resolved'].includes(task.status)) throw new CollabError(409, 'task_not_open');
+      if (replyTo && !this.db.prepare('SELECT 1 FROM collab_replies WHERE id = ? AND taskId = ?').get(replyTo, taskId)) throw new CollabError(400, 'invalid_reply_reference');
       if (attemptId && !this.db.prepare('SELECT 1 FROM collab_attempts WHERE id = ? AND taskId = ? AND peerId = ?').get(attemptId, taskId, peer.id)) throw new CollabError(403, 'attempt_not_owned');
       let replaces: string | null = null;
       if (b.replaces) {
@@ -258,6 +273,7 @@ export class CollabStore {
       }
       const id = randomUUID();
       this.db.prepare('INSERT INTO collab_replies(id, taskId, authorId, actor, kind, body, baseRevision, replaces, createdAt, solution, attemptId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, taskId, peer.id, b.actor, b.kind, body, baseRevision, replaces, Date.now(), metadata ? JSON.stringify(metadata) : null, attemptId);
+      this.db.prepare('INSERT INTO collab_reply_metadata (replyId, messageType, replyTo) VALUES (?, ?, ?)').run(id, messageType, replyTo);
       this.linkAttachments(peer, files, taskId, id); this.follow(peer, taskId);
       this.db.prepare('UPDATE collab_tasks SET updatedAt = ? WHERE id = ?').run(Date.now(), taskId);
       if (b.kind === 'solution') this.db.prepare("INSERT INTO collab_participants VALUES (?, ?, 'submitted', ?) ON CONFLICT(peerId, taskId) DO UPDATE SET status = 'submitted', updatedAt = excluded.updatedAt").run(peer.id, taskId, Date.now());
@@ -266,7 +282,7 @@ export class CollabStore {
     });
   }
   private candidate(taskId: string, replyId: string) {
-    const reply = this.db.prepare("SELECT * FROM collab_replies WHERE id = ? AND taskId = ? AND kind = 'solution'").get(replyId, taskId) as (Omit<CollabReply, 'solution' | 'attachments'> & { solution: string | null }) | undefined;
+    const reply = this.db.prepare("SELECT * FROM collab_replies WHERE id = ? AND taskId = ? AND kind = 'solution'").get(replyId, taskId) as ReplyRow | undefined;
     if (!reply) throw new CollabError(404, 'solution_not_found');
     if (this.db.prepare('SELECT 1 FROM collab_replies WHERE taskId = ? AND replaces = ?').get(taskId, replyId)) throw new CollabError(409, 'solution_replaced');
     const attachments = this.attachments(taskId, replyId).sort((a, b) => a.id.localeCompare(b.id));
@@ -299,6 +315,23 @@ export class CollabStore {
       this.db.prepare('INSERT INTO collab_acceptances VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(randomUUID(), taskId, replyId, peer.id, validationId, task.specRevision, digest, validation.evidence, Date.now());
       this.db.prepare("UPDATE collab_tasks SET acceptedReplyId = ?, status = 'resolved', revision = revision + 1, updatedAt = ? WHERE id = ?").run(replyId, Date.now(), taskId);
       this.snapshot(peer, taskId); this.emit(peer, taskId, 'solution.accepted', replyId); return this.task(peer, taskId);
+    });
+  }
+  complete(peer: CollabPeer, taskId: string, value: unknown): CollabTask {
+    const b = record(value), baseRevision = numberField(b.baseRevision, 1), summary = textField(b.summary, 16000), actor = b.actor ?? 'user';
+    const taskRevision = b.taskRevision === undefined ? undefined : numberField(b.taskRevision, 1);
+    if (!['user', 'dsh'].includes(actor as string)) throw new CollabError(400, 'invalid_reply');
+    return this.command(peer, b.operationId, 'complete:' + taskId, b, () => {
+      const task = this.task(peer, taskId);
+      if (task.authorId !== peer.id) throw new CollabError(403, 'author_required');
+      if (baseRevision !== task.specRevision || (taskRevision !== undefined && taskRevision !== task.revision) || !['open', 'review'].includes(task.status)) throw new CollabError(409, 'task_changed');
+      this.snapshot(peer, taskId);
+      const id = randomUUID(), now = Date.now();
+      this.db.prepare("INSERT INTO collab_replies(id, taskId, authorId, actor, kind, body, baseRevision, replaces, createdAt, solution, attemptId) VALUES (?, ?, ?, ?, 'message', ?, ?, NULL, ?, NULL, NULL)").run(id, taskId, peer.id, actor, `任务完成总结\n\n${summary}`, baseRevision, now);
+      this.db.prepare("INSERT INTO collab_reply_metadata (replyId, messageType, replyTo) VALUES (?, 'progress', NULL)").run(id);
+      this.db.prepare("UPDATE collab_tasks SET status = 'resolved', revision = revision + 1, updatedAt = ? WHERE id = ?").run(now, taskId);
+      this.snapshot(peer, taskId); this.follow(peer, taskId); this.emit(peer, taskId, 'task.completed', id);
+      return this.task(peer, taskId);
     });
   }
   setFollow(peer: CollabPeer, taskId: string, value: unknown) {

@@ -63,3 +63,7 @@ Driver archives are verified against the SHA-256 pins in
 - Sealed transport crypto: april-jk/dsh-mobile-plugin v0.1.9, Copyright (c) 2026 dsh-mobile contributors (MIT). Full license retained in `src/runtime/remote/LICENSE`, copied to the packaged runtime; Android port retains `mobile/android/CENTRAL-CRYPTO-LICENSE`.
 
 Exact source commits and modifications are recorded in `REMOTE-SOURCES.json`.
+
+## DSH 0.2.1-rc.2 frontend
+
+- The upstream client uses Zod 4.6.5 and TanStack React Virtual 3.14.10 (MIT). Their license texts, including the virtual-core dependency, are retained under `dist/renderer/licenses/`.

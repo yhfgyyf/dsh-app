@@ -1,0 +1,18 @@
+{
+  "name": "dsh-codex-collab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "../relay/node_modules/.bin/tsx --test test/*.test.ts",
+    "test:package": "../relay/node_modules/.bin/tsx --test test/package-smoke.ts",
+    "test:native": "node test/native-smoke.ts",
+    "test:native-collaboration": "../relay/node_modules/.bin/tsx test/native-collaboration.ts",
+    "test:native-image": "node test/native-image.ts",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit -p tsconfig.json",
+    "build": "node build.ts",
+    "install:local": "node install.ts",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:package"
+  }
+}

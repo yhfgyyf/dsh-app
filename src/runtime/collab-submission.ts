@@ -1,11 +1,11 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, basename, sep } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { record, textField, MAX_ATTACHMENT_BYTES } from '../../services/relay/src/collab-types.ts';
+import { idField, record, textField, MAX_ATTACHMENT_BYTES } from '../../services/relay/src/collab-types.ts';
 import type { CollabGeneratedFile, CollabSubmission } from '../shared/collab.ts';
 
 export const COLLAB_ANSWER_FORMAT = `使用 GitHub Issue 风格的 Markdown：先直接回答结论，再按需要写步骤、实际验证及结果、限制。使用清晰的小标题、列表、表格、行内代码；多行代码使用带语言名称的围栏代码块。引用资料提供有说明文字的 HTTPS 链接，不编造链接或未执行的检查。附件在正文中说明文件名、用途和验证情况，不把本机绝对路径当成别人可访问的下载链接。
-在当前工作目录写入 UTF-8 submission.json，结构为 {"body":"Markdown 正文","verification":"实际验证及结果；未验证就明确写未验证","limitations":"限制与未验证部分","files":["相对于当前工作目录的产物路径"]}。正文最多 49152 字符，验证最多 16000 字符，限制最多 8000 字符。files 只列本任务确实生成、需要共享的文件，最多 8 个，每个不超过 8 MiB，禁止绝对路径或目录外文件。无附件时写空数组；超过限制的文件仅在已有可访问下载地址时提供链接，不擅自上传到第三方。最后一条回答也应为可直接发布的 Markdown 正文。发布由协作空间处理，不要自行调用消息或上传接口。`;
+在本轮 roundDirectory（未提供时为当前工作目录）写入 UTF-8 submission.json，结构为 {"messageType":"discussion|progress|solution","replyTo":"可选：回复的公共消息 ID","body":"Markdown 正文","verification":"可选：已执行的检查结果","limitations":"限制与未确认部分","files":["相对于本轮交付目录的产物路径"]}。讨论包括提问和反馈，进展包括发现和失败经验，方案是可采用的做法。正文最多 49152 字符，验证最多 16000 字符，限制最多 8000 字符。不要求为发布而额外做验证，但必须区分事实、建议和未确认部分。files 只列本任务确实生成、需要共享的文件，最多 8 个，每个不超过 8 MiB，禁止绝对路径或目录外文件。无附件时写空数组；超过限制的文件仅在已有可访问下载地址时提供链接，不擅自上传到第三方。最后一条回答也应为可直接发布的 Markdown 正文。发布由协作空间处理，不要自行调用消息或上传接口。`;
 
 /** Usage reports, operation IDs and attachment order do not make an unchanged contribution new. */
 export function collabContributionDigest(value: { kind: 'message' | 'solution'; body: string; verification?: string; limitations?: string; files: readonly { name: string; sha256: string }[] }) {
@@ -44,11 +44,13 @@ export async function readSubmission(cwd: string, output: string): Promise<Colla
   }
   if (!Array.isArray(value.files) || value.files.length > 8 || value.files.some(p => typeof p !== 'string')) throw new Error('附件清单必须是最多 8 个相对路径。');
   if (new Set(value.files).size !== value.files.length) throw new Error('附件清单包含重复文件。');
-  const body = textField(value.body, 49152), verification = textField(value.verification ?? '未提供单独验证说明。', 16000), limitations = textField(value.limitations ?? '', 8000, true);
+  const body = textField(value.body, 49152), verification = textField(value.verification ?? '', 16000, true) || '未提供单独验证说明。', limitations = textField(value.limitations ?? '', 8000, true);
+  if (value.messageType !== undefined && !['discussion', 'progress', 'solution'].includes(value.messageType as string)) throw new Error('回复标签必须是讨论、进展或方案。');
+  const messageType = value.messageType as CollabSubmission['messageType'], replyTo = value.replyTo ? idField(value.replyTo) : undefined;
   const files: CollabGeneratedFile[] = [];
   for (const path of value.files as string[]) {
     const bytes = await readGeneratedFile(cwd, path);
     files.push({ id: randomUUID(), path, name: basename(path), size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), uploadId: randomUUID() });
   }
-  return { body, verification, limitations, files };
+  return { body, verification, limitations, files, ...(messageType ? { messageType } : {}), ...(replyTo ? { replyTo } : {}) };
 }

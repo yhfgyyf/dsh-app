@@ -1,10 +1,11 @@
 import type { CollabEvent, CollabPeer, ExecutionReport } from '../../services/relay/src/collab-types.ts';
 export type CollabExecutionMode = 'manual' | 'continuous';
 export type CollabDecision = { eventId: number; decision: 'adopt' | 'verify' | 'defer' | 'reject'; reason: string };
-export type CollabCheckpoint = { action: 'continue' | 'wait' | 'ready'; summary: string; nextStep: string; wakeOn: string[]; decisions: CollabDecision[]; contribution?: { summary: string } };
+export type CollabCheckpoint = { action: 'continue' | 'wait' | 'ready'; summary: string; nextStep: string; wakeOn: string[]; decisions: CollabDecision[]; contribution?: { summary: string }; completion?: { summary: string } };
 export type CollabLocalAttempt = {
   id: string; taskId: string; title: string; direction: string; baseRevision: number; currentTaskRevision: number;
   publicDirection?: string; candidateReplyId?: string;
+  sessionId?: string; reviewedReplyIds?: string[];
   status: 'working' | 'waiting' | 'ready' | 'paused' | 'budget' | 'submitted' | 'withdrawn' | 'completed' | 'error';
   desiredState: 'active' | 'paused' | 'withdrawn'; executionMode: CollabExecutionMode; publishMode: CollabPublishMode;
   limits: CollabSettings; startedAt: number; updatedAt: number; runIds: string[]; activeRunId?: string;
@@ -24,12 +25,16 @@ export type CollabRun = {
   submittedReplyId?: string;
   submittedKind?: 'message' | 'solution'; replacesReplyId?: string;
   publicationSkipReason?: string; inputContributionDigests?: string[];
+  inputReplyIds?: string[]; eventStarts?: Record<string, number>; eventEnds?: Record<string, number>;
+  owner?: boolean; conversationWorkflow?: boolean; taskStateRevision?: number;
+  completion?: { operationId: string; status: 'pending' | 'completed' | 'error'; summary: string; error?: string };
+  completionSkipReason?: string;
   publication?: { operationId: string; status: 'pending' | 'published' | 'error'; error?: string; replyId?: string; payload?: Record<string, unknown> };
   attemptId?: string; triggerEventIds?: number[]; checkpoint?: CollabCheckpoint; checkpointHandled?: boolean; settledTokens?: number; activeMillis?: number; eventEpoch?: number;
 };
 export type CollabPublishMode = 'manual' | 'review' | 'auto';
 export type CollabGeneratedFile = { id: string; path: string; name: string; size: number; sha256: string; uploadId: string; attachmentId?: string };
-export type CollabSubmission = { body: string; verification: string; limitations: string; files: CollabGeneratedFile[] };
+export type CollabSubmission = { body: string; verification: string; limitations: string; files: CollabGeneratedFile[]; messageType?: 'discussion' | 'progress' | 'solution'; replyTo?: string };
 export type CollabSettings = { maxTokens: number; maxMinutes: number; publishMode?: CollabPublishMode; executionMode?: CollabExecutionMode };
 export const MAX_COLLAB_MINUTES = Math.floor(Number.MAX_SAFE_INTEGER / 60000);
 export const DEFAULT_COLLAB_SETTINGS: CollabSettings = { maxTokens: 1_000_000, maxMinutes: 480, publishMode: 'review', executionMode: 'manual' };
@@ -43,6 +48,7 @@ export function collabSettings(maxTokens: unknown, maxMinutes: unknown, publishM
 }
 export type CollabRecoveryState = { supported: boolean | null; ready: boolean };
 export type CollabState = {
+  relayProfileId?: string; relayProfileName?: string;
   peer: CollabPeer; registered: boolean; syncing: boolean; origin?: string;
   unread: number; cursor: number; lastSyncAt?: number; settings: CollabSettings; runs: Omit<CollabRun, 'output' | 'report' | 'submission'>[];
   attempts: CollabLocalAttempt[]; recovery: CollabRecoveryState;
