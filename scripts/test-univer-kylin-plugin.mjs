@@ -17,7 +17,7 @@ await mkdir(reportRoot, { recursive: true });
 const data = await mkdtemp(join(reportRoot, 'host-fixture-'));
 const workspace = join(data, 'workspace'); await mkdir(workspace);
 const report = { data, runtime, installed, platform: process.platform, architecture: process.arch,
-  scope: 'Real DSH 0.2.0-rc.1 ToolRuntime with Kylin SQLite/JS formula paths; no LLM, browser or live user profile', dependencies: {}, calls: [], checks: [], failures: [] };
+  scope: 'Real selected DSH ToolRuntime with Kylin SQLite/JS formula paths; no LLM, browser or live user profile', dependencies: {}, calls: [], checks: [], failures: [] };
 let ctx;
 async function freePort() {
   const server = createServer();
@@ -38,8 +38,14 @@ try {
   assert.ok(process.env.DSH_TEST_UNIVER_PROVENANCE, 'DSH_TEST_UNIVER_PROVENANCE must identify the preview build report');
   const provenance = JSON.parse(await readFile(resolve(process.env.DSH_TEST_UNIVER_PROVENANCE), 'utf8'));
   const metadata = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
-  assert.equal(metadata.version, '0.3.5-kylin.1');
+  assert.equal(metadata.version, provenance.version);
   assert.equal(metadata.engines.node, '>=22.16.0');
+  if (metadata.version.includes('universal')) {
+    assert.equal(process.platform, 'linux');
+    assert.ok(['loong64', 'loongarch64'].includes(process.arch), 'Run the universal portable backend test on actual LoongArch Node, including QEMU');
+    assert.equal(createRequire(join(installed, 'package.json'))('./artifacts/universal-backend.cjs').portableBackend, true);
+    report.checks.push('The same universal archive automatically selects the portable backend on real LoongArch Node');
+  }
   for (const name of ['libsql', '@univerjs-pro/engine-formula-rust-binding', '@univerjs-pro/exchange-node-binding']) assert.equal(metadata.dependencies[name], undefined);
   for (const entry of provenance.files) assert.equal(createHash('sha256').update(await readFile(join(installed, entry.path))).digest('hex'), entry.sha256, entry.path);
   // Keep the installed profile read-only. The isolated package resolves peers from
