@@ -8,7 +8,7 @@ import { previewGrant } from './preview-files.ts';
 import { installTextContextMenu } from './context-menu.ts';
 import { browserHistory } from './browser-history.ts';
 
-type Page = { view: WebContentsView; targetKey: string; preview?: Awaited<ReturnType<typeof previewGrant>>; state: BrowserState };
+type Page = { view: WebContentsView; targetKey: string; preview?: Awaited<ReturnType<typeof previewGrant>>; state: BrowserState; findRequest?: number; findQuery?: string };
 
 /** Native web content is isolated from the DSH renderer, preload and cookies. */
 export class SidebarBrowser {
@@ -72,6 +72,18 @@ export class SidebarBrowser {
     view.setVisible(false);
     this.window.contentView.addChildView(view);
     const contents = view.webContents;
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || input.alt || input.shift || input.isAutoRepeat || !(input.meta || input.control)) return;
+      const key = input.key.toLowerCase();
+      if (key !== 's' && key !== 'f') return;
+      event.preventDefault();
+      this.window.webContents.focus();
+      this.window.webContents.send('desktop:command', key === 's' ? 'find-content' : 'search', id);
+    });
+    contents.on('found-in-page', (_event, result) => {
+      if (this.pages.get(id) !== page || result.requestId !== page.findRequest || !result.finalUpdate) return;
+      this.window.webContents.send('desktop:browser-find-result', { id, query: page.findQuery ?? '', matches: result.matches, active: result.activeMatchOrdinal });
+    });
     const history = browserHistory(contents);
     installTextContextMenu(contents, this.window);
     const allowed = (value: string) => externalWebUrl(value) !== undefined || (preview !== undefined && value.startsWith('dsh-preview://' + preview.host + '/'));
@@ -120,6 +132,22 @@ export class SidebarBrowser {
     else if (action === 'reload') contents.reload();
     else if (action === 'stop') contents.stop();
     else if (!['back', 'forward', 'reload', 'stop'].includes(action)) throw new Error('浏览器操作无效。');
+  }
+
+  find(id: unknown, query: unknown, forward?: unknown): void {
+    if (!validBrowserId(id) || typeof query !== 'string' || query.length > 4096 || (forward !== undefined && typeof forward !== 'boolean')) throw new Error('查找参数无效。');
+    const page = this.pages.get(id);
+    if (!page || page.view.webContents.isDestroyed()) return;
+    const contents = page.view.webContents;
+    if (!query) { contents.stopFindInPage('clearSelection'); page.findRequest = undefined; page.findQuery = ''; return; }
+    // Electron's findNext flag starts a NEW search; subsequent navigation uses false.
+    const findNext = page.findQuery !== query || forward === undefined;
+    page.findQuery = query;
+    page.findRequest = contents.findInPage(query, { forward: forward !== false, findNext });
+  }
+
+  focusedId(): string | undefined {
+    return [...this.pages].find(([, page]) => !page.view.webContents.isDestroyed() && page.view.webContents.isFocused())?.[0];
   }
 
   close(id: string): void {

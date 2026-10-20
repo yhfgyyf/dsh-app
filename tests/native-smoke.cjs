@@ -1,5 +1,5 @@
 // Electron-owned lifecycle and renderer boot integration, without synthetic UI input.
-const { app, ipcMain, session } = require('electron');
+const { app, BrowserWindow, ipcMain, session } = require('electron');
 const assert = require('node:assert/strict');
 const { readFileSync, mkdirSync, writeFileSync } = require('node:fs');
 const { join } = require('node:path');
@@ -98,6 +98,34 @@ ipcMain.handle = (channel, listener) => {
         assert.equal(handlers.has('desktop:computer-act'), false);
         assert.equal(handlers.has('desktop:computer-observe'), false);
         report.checks.push('Computer status and emergency stop use trusted App IPC; renderer exposes no native action endpoint');
+        const parent = BrowserWindow.fromWebContents(event.sender);
+        const bounds = parent.getContentBounds();
+        await handlers.get('desktop:content-find-show')(event, 'native_find');
+        const find = BrowserWindow.getAllWindows().find(window => window.getTitle() === 'DSH 内容搜索');
+        assert.ok(find?.isVisible());
+        assert.equal(find.getParentWindow(), parent);
+        assert.deepEqual(parent.getContentBounds(), bounds);
+        const query = await find.webContents.executeJavaScript(`(async () => {
+          if (window.desktop) throw Error('Find window exposes the full Desktop API');
+          document.querySelector('input').value = '中文 a+b[0]';
+          await window.dshContentFind.act({ id: 'native_find', type: 'query', query: '中文 a+b[0]' });
+          return window.dshContentFind.state();
+        })()`);
+        assert.equal(query.query, '中文 a+b[0]');
+        await assert.rejects(Promise.resolve().then(() => handlers.get('content-find:state')(event)));
+        await handlers.get('desktop:content-find-update')(event, { ...query, matches: 2, active: 1 });
+        const deadline = Date.now() + 5000;
+        while (await find.webContents.executeJavaScript('document.querySelector("output").textContent') !== '1/2') {
+          assert.ok(Date.now() < deadline, 'Native find counter did not update');
+          await new Promise(resolve => setTimeout(resolve, 20));
+        }
+        await find.webContents.executeJavaScript(`window.dshContentFind.act({ id: 'native_find', type: 'close' })`);
+        assert.equal(find.isVisible(), false);
+        await handlers.get('desktop:content-find-show')(event, 'native_find_reopen');
+        assert.equal((await find.webContents.executeJavaScript('window.dshContentFind.state()')).query, '');
+        await handlers.get('desktop:content-find-close')(event, 'native_find_reopen');
+        assert.deepEqual(parent.getContentBounds(), bounds);
+        report.checks.push('External content find loads its sandboxed preload, exchanges query and counter state, rejects foreign IPC, reopens cleanly and preserves the parent layout');
         const ses = session.fromPartition('persist:dsh');
         const document = await (await ses.fetch(info.endpoint)).text();
         assert.equal(document, readFileSync(join(root, 'dist/renderer/app/index.html'), 'utf8'));

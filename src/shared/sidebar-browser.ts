@@ -4,6 +4,7 @@ export type BrowserTarget = { kind: 'web'; url: string } | { kind: 'preview'; ad
 export type BrowserBounds = { x: number; y: number; width: number; height: number };
 export type BrowserState = { id: string; url: string; title: string; loading: boolean; canGoBack: boolean; canGoForward: boolean; error?: string };
 export type BrowserAction = 'back' | 'forward' | 'reload' | 'stop';
+export type BrowserFindResult = { id: string; query: string; matches: number; active: number };
 export const BROWSER_TAB_ID = 'dsh-desktop-browser';
 export const PREVIEW_TAB_ID = 'dsh-desktop-preview';
 const WEB_PREFIX = 'dsh-resource://web/';

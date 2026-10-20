@@ -22,7 +22,7 @@ await progressiveImageInstaller.applyProgressiveImages();
 const workspaceInstaller = await import(new URL('install-workspace-dependencies.mjs', import.meta.url).href);
 await workspaceInstaller.applyWorkspaceDependencies();
 
-for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) {
+for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload', 'content-find-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 
@@ -47,7 +47,7 @@ const pluginBuild = await build({
     emptyOutDir: true,
     lib: { entry: resolve(root, 'src/renderer/plugin.tsx'), formats: ['cjs'], fileName: () => 'plugin.js' },
     rolldownOptions: {
-      external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'],
+      external: ['react', 'react/jsx-runtime', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'],
       output: {
         banner: 'window.__ModuleLoader__.load({id:"dsh-desktop-shell",factory:(require)=>{const module={exports:{}};const exports=module.exports;',
         footer: 'return module.exports;}});',
@@ -83,6 +83,7 @@ await build({
   build: { outDir: resolve(root, 'dist/renderer/setup'), target: 'chrome148', emptyOutDir: true },
 });
 await build({ configFile: false, root: resolve(root, 'src/renderer/computer-preview'), base: './', build: { outDir: resolve(root, 'dist/renderer/computer-preview'), target: 'chrome148', emptyOutDir: true } });
+await build({ configFile: false, root: resolve(root, 'src/renderer/content-find'), base: './', build: { outDir: resolve(root, 'dist/renderer/content-find'), target: 'chrome126', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
 for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));

@@ -8,6 +8,20 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.43: separate content search window
+
+`Ctrl+S` (`Command+S` on macOS) opens a compact modeless child window above the app and its native previews. Search adds no form, padding or reserved space inside conversations or sidebar panels, so their layout and dimensions stay unchanged. It still searches the selected main, side-chat, file or browser panel. `Enter` / `Shift+Enter`, `Esc`, and the separate session-search shortcut keep their existing behavior.
+
+## v0.1.42: compact search and selected-text previews
+
+Content search is now a compact box at the current panel's top right. Click a selected-text reference in either composer to view its original text. Long selections initially show a beginning excerpt with expand/collapse controls; previewing preserves the draft and sends no message. The side-chat plugin remains at 0.1.5, and an already-open side chat continues to receive new selections.
+
+## v0.1.41: selected text and content search
+
+Select transcript text to add a reference chip to the main composer or prepare a question in `/side` (requires the enabled `dsh-side-chat 0.1.5` plugin). Existing drafts and attachments stay intact; the action does not send a message. Closing the temporary side chat still discards it.
+
+Click or focus the main conversation, a right-panel file or `/side`, then press `Ctrl+S` (`Command+S` on macOS) to search that panel's loaded text. Matches are highlighted; `Enter` / `Shift+Enter` navigate and `Esc` closes search. `Ctrl+F` / `Command+F` continues to search the left session list. Desktop 0.1.41 uses DSH Core 0.2.1-rc.2.
+
 ## dsh-p2p-collab 0.1.3 (unreleased)
 
 Phone remote control now lives in **Plugins → dsh-p2p-collab**, with relay registration, QR pairing and phone unbinding in the plugin detail page. Configuration and LAN pairing remain available while the plugin is disabled. The collaboration workspace appears only when the plugin is enabled and the relay is registered, and closes when registration is removed. Existing phone connections and background behavior are preserved.

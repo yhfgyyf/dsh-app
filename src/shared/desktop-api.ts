@@ -1,11 +1,12 @@
 import type { RemoteAction, RemoteState } from './remote-access.ts';
-import type { BrowserAction, BrowserState, BrowserTarget } from './sidebar-browser.ts';
+import type { BrowserAction, BrowserState, BrowserTarget, BrowserFindResult } from './sidebar-browser.ts';
 import type { UpdateSchedule, UpdateState } from './updates.ts';
 import type { LocalOpenRequest } from './local-open.ts';
 import type { ComputerState } from './computer-use.ts';
 import type { BrowserUseState } from './browser-use.ts';
+import type { ContentFindAction, ContentFindState } from './content-find.ts';
 
-export type DesktopCommand = 'new-session' | 'search' | 'settings' | 'sidebar' | 'details';
+export type DesktopCommand = 'new-session' | 'search' | 'find-content' | 'settings' | 'sidebar' | 'details';
 
 export type DesktopInfo = {
   name: string;
@@ -53,9 +54,15 @@ export interface DesktopAPI {
   browserNavigate(id: string, url: string): Promise<void>;
   browserAction(id: string, action: BrowserAction): Promise<void>;
   browserClose(id: string): Promise<void>;
+  browserFind(id: string, query: string, forward?: boolean): Promise<void>;
+  onBrowserFindResult(listener: (result: BrowserFindResult) => void): () => void;
+  showContentFind(id: string): Promise<void>;
+  updateContentFind(state: ContentFindState): Promise<void>;
+  closeContentFind(id: string): Promise<void>;
+  onContentFindAction(listener: (action: ContentFindAction) => void): () => void;
   onOpenLink(listener: (url: string) => void): () => void;
   onBrowserState(listener: (state: BrowserState) => void): () => void;
-  onCommand(listener: (command: DesktopCommand) => void): () => void;
+  onCommand(listener: (command: DesktopCommand, browserId?: string) => void): () => void;
 }
 
 declare global {
@@ -66,7 +73,7 @@ declare global {
 }
 
 export function isDesktopCommand(value: unknown): value is DesktopCommand {
-  return ['new-session', 'search', 'settings', 'sidebar', 'details'].includes(value as string);
+  return ['new-session', 'search', 'find-content', 'settings', 'sidebar', 'details'].includes(value as string);
 }
 
 export function externalWebUrl(value: unknown): string | undefined {

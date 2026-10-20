@@ -13,7 +13,7 @@ import { verifyComputerDriverBuild } from './build-computer-driver.ts';
 import { prepareReleaseRuntime } from './prepare-release-runtime.ts';
 
 if (process.platform !== 'darwin') throw new Error('此打包脚本面向 macOS。');
-const { values } = parseArgs({ options: { 'developer-id': { type: 'boolean' }, 'previous-app': { type: 'string' } } });
+const { values } = parseArgs({ options: { 'developer-id': { type: 'boolean' }, 'previous-app': { type: 'string' }, 'electron-zip-dir': { type: 'string' } } });
 // Validate credentials before creating artifacts. A requested release identity
 // must never silently fall back to a build-specific ad-hoc signature.
 const signing = await macSigningIdentity(values['developer-id'] === true);
@@ -51,6 +51,7 @@ if (developerId) {
   if (stdout.includes('<key>com.apple.security.get-task-allow</key>')) await run('/usr/libexec/PlistBuddy', ['-c', 'Delete :com.apple.security.get-task-allow', nodeEntitlements]);
 }
 const packaged = await packager({
+  electronZipDir: values['electron-zip-dir'],
   extraResource: [runtime], dir: staging, name: 'DSH Desktop', appBundleId: 'io.dsh.desktop', appVersion: version.version, buildVersion: version.version, platform: 'darwin', arch: process.arch as 'arm64' | 'x64', electronVersion: version.devDependencies.electron, out: output, asar: true, prune: false, icon: join(output, 'DSH.icns'), appCopyright: 'Independent desktop client for DeepSeek Harness', extendInfo: { NSHumanReadableCopyright: 'Independent desktop client for DeepSeek Harness', NSMicrophoneUsageDescription: '用于录制语音输入并转换为文字。' },
   osxSign: {
     identity: signing.identity, identityValidation: developerId, keychain: signing.keychain,

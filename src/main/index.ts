@@ -21,6 +21,7 @@ import { DesktopBrowserUse } from './browser-use.ts';
 import { BrowserUseCredentialsFile } from './browser-use-credentials.ts';
 import { CuaComputerDriver } from './computer-use-driver.ts';
 import { ComputerPreviewWindow } from './computer-preview.ts';
+import { ContentFindWindow } from './content-find.ts';
 import { resetDshComputerPermissions } from './macos-privacy.ts';
 import { installDesktopPermissions } from './permissions.ts';
 
@@ -49,6 +50,7 @@ else {
   let computer: DesktopComputerUse;
   let browserUse: DesktopBrowserUse;
   let computerPreview: ComputerPreviewWindow | undefined;
+  let contentFind: ContentFindWindow | undefined;
   let computerSettingRevision = 0;
   let connected = false;
   let connecting = false;
@@ -99,7 +101,9 @@ else {
 
   function sendCommand(command: DesktopCommand) {
     if (window && !window.isDestroyed() && isEndpointDocument(window.webContents.getURL(), preferences.endpoint)) {
-      window.webContents.send('desktop:command', command);
+      const browserId = command === 'find-content' ? browser?.focusedId() : undefined;
+      if (browserId) window.webContents.focus();
+      window.webContents.send('desktop:command', command, browserId);
     }
   }
 
@@ -122,7 +126,7 @@ else {
   function installMenu() {
     const template: MenuItemConstructorOptions[] = [
       { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
-      { label: '文件', submenu: [{ label: '新建会话', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new-session') }, { label: '搜索会话', accelerator: 'CmdOrCtrl+F', click: () => sendCommand('search') }, { type: 'separator' }, { role: 'close', label: '关闭窗口' }] },
+      { label: '文件', submenu: [{ label: '新建会话', accelerator: 'CmdOrCtrl+N', click: () => sendCommand('new-session') }, { label: '搜索会话', accelerator: 'CmdOrCtrl+F', click: () => sendCommand('search') }, { label: '查找当前内容', accelerator: 'CmdOrCtrl+S', click: () => sendCommand('find-content') }, { type: 'separator' }, { role: 'close', label: '关闭窗口' }] },
       { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
       { label: '视图', submenu: [{ label: '切换侧边栏', accelerator: 'CmdOrCtrl+B', click: () => sendCommand('sidebar') }, { label: '打开右侧面板', accelerator: 'CmdOrCtrl+Shift+I', click: () => sendCommand('details') }, { type: 'separator' }, { role: 'reload', label: '重新加载' }, { label: '放大', accelerator: 'CmdOrCtrl+Plus', click: () => applyZoom(preferences.zoomFactor + 0.1) }, { label: '缩小', accelerator: 'CmdOrCtrl+-', click: () => applyZoom(preferences.zoomFactor - 0.1) }, { label: '实际大小', accelerator: 'CmdOrCtrl+0', click: () => applyZoom(1) }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' }, { role: 'toggleDevTools', label: '开发者工具' }] },
       { role: 'windowMenu', label: '窗口' },
@@ -150,6 +154,7 @@ else {
     if (bounds.maximized) window.maximize();
     installTextContextMenu(window.webContents, window);
     browser = new SidebarBrowser(window, () => preferences.endpoint, openSidebarLink);
+    contentFind = new ContentFindWindow(window, app.getAppPath(), () => sendCommand('search'));
     window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) browser?.clear(); });
     window.once('ready-to-show', () => window?.show());
     window.on('resize', scheduleSave);
@@ -181,7 +186,7 @@ else {
     window.webContents.on('before-input-event', (event, input) => {
       if (input.type !== 'keyDown' || input.alt || !(input.meta || input.control) || input.isAutoRepeat) return;
       const key = input.key.toLowerCase();
-      const command: DesktopCommand | undefined = input.shift ? (key === 'i' ? 'details' : undefined) : ({ n: 'new-session', b: 'sidebar', f: 'search', ',': 'settings' } as const)[key as 'n' | 'b' | 'f' | ','];
+      const command: DesktopCommand | undefined = input.shift ? (key === 'i' ? 'details' : undefined) : ({ n: 'new-session', b: 'sidebar', f: 'search', s: 'find-content', ',': 'settings' } as const)[key as 'n' | 'b' | 'f' | 's' | ','];
       if (command) { event.preventDefault(); sendCommand(command); }
     });
     window.webContents.on('will-navigate', (event, url) => {
@@ -337,6 +342,10 @@ else {
     handle('desktop:browser-navigate', (id, url) => browser?.navigate(id, url));
     handle('desktop:browser-action', (id, action) => browser?.action(id, action));
     handle('desktop:browser-close', (id) => browser?.close(id));
+    handle('desktop:browser-find', (id, query, forward) => browser?.find(id, query, forward));
+    handle('desktop:content-find-show', id => contentFind?.show(id));
+    handle('desktop:content-find-update', state => contentFind?.update(state));
+    handle('desktop:content-find-close', id => contentFind?.close(id));
   }
 
   app.on('second-instance', restoreWindow);
