@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { access, copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -37,11 +37,19 @@ async function inventory(directory, prefix = '') {
   return result.sort((a, b) => a.path.localeCompare(b.path));
 }
 let npm = options['npm-cli'];
+for (const candidate of [process.env.npm_execpath,
+  join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js'),
+  join(dirname(process.execPath), '../lib/node_modules/npm/bin/npm-cli.js')].filter(Boolean)) {
+  if (!npm && candidate.endsWith('npm-cli.js') && await exists(candidate)) npm = candidate;
+}
 if (!npm) {
   for (const path of (process.env.PATH ?? '').split(delimiter)) {
-    if (!await exists(join(path, 'npm'))) continue;
-    const candidate = await realpath(join(path, 'npm'));
+    const command = join(path, process.platform === 'win32' ? 'npm.cmd' : 'npm');
+    if (!await exists(command)) continue;
+    const candidate = await realpath(command);
     if (candidate.endsWith('npm-cli.js')) { npm = candidate; break; }
+    const adjacent = join(dirname(candidate), 'node_modules/npm/bin/npm-cli.js');
+    if (await exists(adjacent)) { npm = adjacent; break; }
   }
 }
 assert.ok(npm, 'Pass --npm-cli with the npm-cli.js shipped with the build Node.js');
