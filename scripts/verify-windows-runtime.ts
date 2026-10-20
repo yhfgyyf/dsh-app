@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { extractFile } from '@electron/asar';
@@ -9,9 +9,9 @@ const [installed, packaged] = process.argv.slice(2);
 if (!installed || !packaged) throw new Error('Expected installed and packaged directories');
 assert.deepEqual(await readFile(join(installed, 'resources/app.asar')), await readFile(join(packaged, 'resources/app.asar')));
 for (const path of ['dist/renderer/content-find/index.html', 'dist/content-find-preload/index.cjs']) {
-  assert.deepEqual(extractFile(join(installed, 'resources/app.asar'), path), await readFile(new URL('../' + path, import.meta.url)));
+  assert.deepEqual(extractFile(join(installed, 'resources/app.asar'), normalize(path)), await readFile(new URL('../' + path, import.meta.url)));
 }
-assert.doesNotMatch(extractFile(join(installed, 'resources/app.asar'), 'dist/renderer/theme.css').toString(), /\.desktop-content-find-scope|\.desktop-content-find\s*\{/);
+assert.doesNotMatch(extractFile(join(installed, 'resources/app.asar'), join('dist', 'renderer', 'theme.css')).toString(), /\.desktop-content-find-scope|\.desktop-content-find\s*\{/);
 assert.deepEqual(await runtimeManifest(join(installed, 'resources/runtime')), await runtimeManifest(join(packaged, 'resources/runtime')));
 const runtime = join(installed, 'resources/runtime');
 assert.deepEqual(JSON.parse(await readFile(join(runtime, 'local-plugins/package.json'), 'utf8')), { private: true });
