@@ -78,4 +78,5 @@ jobs:
             .test-data/univer-client-upgrade/report.json
             .test-data/univer-client-upgrade/ready.png
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 14
