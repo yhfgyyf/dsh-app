@@ -36,6 +36,10 @@ jobs:
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
         run: npm run check
+      - name: Recover from a denied cached Windows port
+        timeout-minutes: 1
+        shell: pwsh
+        run: ./scripts/test-windows-port.ps1
       - name: Remote pairing, native settings and shared Host sessions
         timeout-minutes: 4
         run: |

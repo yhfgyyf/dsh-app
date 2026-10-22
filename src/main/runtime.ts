@@ -14,7 +14,8 @@ export async function availableDesktopPort(port: number): Promise<number> {
   if (!port) return 0;
   return new Promise((resolve, reject) => {
     const probe = createServer();
-    probe.once('error', (error: NodeJS.ErrnoException) => error.code === 'EADDRINUSE' ? resolve(0) : reject(error));
+    // Windows may reserve a previously usable port; let the OS choose another.
+    probe.once('error', (error: NodeJS.ErrnoException) => error.code === 'EADDRINUSE' || error.code === 'EACCES' ? resolve(0) : reject(error));
     probe.listen(port, '127.0.0.1', () => probe.close(error => error ? reject(error) : resolve(port)));
   });
 }
