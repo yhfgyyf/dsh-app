@@ -33,15 +33,17 @@ test('desktop does not hide unrelated socket failures', async t => {
   await assert.rejects(availableDesktopPort(61506), value => value === error);
 });
 
-test('desktop recovers from a real Windows excluded port', { skip: !process.env.DSH_TEST_EXCLUDED_PORT }, async () => {
+test('desktop recovers from a real Windows access-denied port', { skip: !process.env.DSH_TEST_DENIED_PORT }, async () => {
   assert.equal(process.platform, 'win32');
-  const port = Number(process.env.DSH_TEST_EXCLUDED_PORT);
+  const port = Number(process.env.DSH_TEST_DENIED_PORT);
   assert.ok(Number.isInteger(port) && port >= 1024 && port <= 65535);
   const blocked = createServer();
-  await assert.rejects(new Promise<void>((resolve, reject) => {
-    blocked.once('error', reject);
-    blocked.listen(port, '127.0.0.1', resolve);
-  }), { code: 'EACCES' });
+  try {
+    await assert.rejects(new Promise<void>((resolve, reject) => {
+      blocked.once('error', reject);
+      blocked.listen(port, '127.0.0.1', resolve);
+    }), { code: 'EACCES' });
+  } finally { if (blocked.listening) await new Promise<void>(resolve => blocked.close(() => resolve())); }
   const fallback = await availableDesktopPort(port);
   assert.equal(fallback, 0);
   const server = createServer();
