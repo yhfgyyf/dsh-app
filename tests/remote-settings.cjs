@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
-const { mkdtempSync, mkdirSync, writeFileSync, readFileSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, symlinkSync } = require('node:fs');
 const { spawn } = require('node:child_process');
 const { createInterface } = require('node:readline');
 const root = join(__dirname, '..');
@@ -9,6 +9,14 @@ mkdirSync(join(root, '.test-data'), { recursive: true });
 const data = mkdtempSync(join(root, '.test-data/remote-settings-'));
 process.env.DSH_DESKTOP_DATA_DIR = data;
 process.env.DSH_DESKTOP_CONFIG_HOME = join(data, 'core');
+// The new core lists explicitly installed extensions. Keep this fixture local
+// to the disposable profile; production packages still exclude user plugins.
+const fixtureProfile = join(data, 'core/profiles/desktop');
+mkdirSync(join(fixtureProfile, 'node_modules'), { recursive: true });
+writeFileSync(join(fixtureProfile, 'package.json'), JSON.stringify({ name: 'dsh-profile-desktop', private: true,
+  dependencies: { 'dsh-p2p-collab': 'file:' + join(root, '.runtime/plugins/dsh-p2p-collab') },
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface'] } } }));
+symlinkSync(join(root, '.runtime/plugins/dsh-p2p-collab'), join(fixtureProfile, 'node_modules/dsh-p2p-collab'), process.platform === 'win32' ? 'junction' : 'dir');
 const relay = spawn(join(root, '.runtime/bin', process.platform === 'win32' ? 'node.exe' : 'node'), ['services/relay/node_modules/tsx/dist/cli.mjs', 'services/relay/test/settings-fixture.ts'], { cwd: root, stdio: ['pipe', 'pipe', 'inherit'] });
 const fixture = new Promise((resolve, reject) => { createInterface({ input: relay.stdout }).once('line', line => resolve(JSON.parse(line))); relay.once('error', reject); });
 const report = { checks: [], errors: [] };
