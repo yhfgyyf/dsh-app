@@ -83,7 +83,7 @@ try {
   assert.equal(Univer.Config({}).telemetry, false);
   report.checks.push('Reviewed candidate and both default telemetry=false paths verified');
   ctx = new Context();
-  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime, { mode: 'native' }); await ctx.plugin(SkillRegistry);
+  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime); await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native')); await ctx.plugin(SkillRegistry);
   await ctx.plugin(Univer, { telemetry: false, skills: true, gatewayPort: await freePort(), gatewayStartupTimeoutMs: 60_000, resourceCacheRoot: join(data, 'resource-cache') });
   const schemas = ctx.tools.schemas();
   const names = schemas.filter(x => x.name.startsWith('univer_')).map(x => x.name);
@@ -102,7 +102,8 @@ try {
   const agent = { id: session.id, session };
   let n = 0;
   async function execute(name, args) {
-    return ctx.tools.execute({ callId: ToolCallId('univer-rc1-' + (++n)), name, arguments: args, agent, signal: AbortSignal.timeout(90_000) });
+    const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: ToolCallId('univer-rc1-' + (++n)), name, arguments: args }], agent, signal: AbortSignal.timeout(90_000) });
+    return batch.results[0].result;
   }
   const rejected = await execute('univer_api', { action: 'find', queries: '["border"]' });
   assert.equal(rejected.isError, true); assert.match(JSON.stringify(rejected), /INVALID_ARGS/);
@@ -156,7 +157,7 @@ try {
   report.checks.push('Draft with recalculated formulas merges successfully into trunk');
   await ctx.fiber.dispose(); ctx = undefined;
   ctx = new Context();
-  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime, { mode: 'native' }); await ctx.plugin(SkillRegistry);
+  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime); await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native')); await ctx.plugin(SkillRegistry);
   await ctx.plugin(Univer, { telemetry: false, skills: true, gatewayPort: await freePort(), gatewayStartupTimeoutMs: 60000, resourceCacheRoot: join(data, 'resource-cache') });
   const reopened = await call('univer_inspect', { file, unitId, range: 'Sheet1!A4:C5' });
   assert.deepEqual(reopened.result.ranges[0].cellData.map(row => row.map(cell => cell.v)), [[12,20,32],[7,3,21]]);

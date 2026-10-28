@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+// Xvfb has no desktop detection; select the fixture's real Secret Service.
+if (process.platform === 'linux') app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 const root = join(__dirname, '..');
 const data = process.env.DSH_BROWSER_SETTINGS_TEST_DATA;
 assert.ok(data, 'Run through scripts/test-browser-use-settings.ts');

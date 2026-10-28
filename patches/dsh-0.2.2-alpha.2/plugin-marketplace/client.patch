@@ -351,6 +351,15 @@
  					showsMoreList ? (0, react_jsx_runtime.jsxs)("header", {
  						className: PluginManagerPage_module_css_default.moreHead,
  						"data-window-drag": true,
+@@ -7314,7 +7450,7 @@
+ 									})]
+ 								}) : null]
+ 							}) : null,
+-							onInstalled && activated !== void 0 && !state.install.open ? renderSlot("plugins.bundle.activation", {
++							!props.marketplace && onInstalled && activated !== void 0 && !state.install.open ? renderSlot("plugins.bundle.activation", {
+ 								packageName: activated.name,
+ 								onDismiss: () => {
+ 									setActivation(null);
 @@ -7338,9 +7474,12 @@
  						onClose: props.closeUpdate,
  						onToggleOutput: props.toggleUpdateOutput

@@ -28,11 +28,18 @@ jobs:
         timeout-minutes: 1
         shell: pwsh
         run: ./scripts/test-windows-port.ps1
-      - name: Install frontend and relay dependencies
-        run: |
-          npm ci --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm ci --prefix services/relay --no-audit --no-fund
+      - name: Prepare verified native addon toolchain
+        timeout-minutes: 6
+        shell: pwsh
+        run: ./scripts/prepare-windows-node-gyp.ps1
+      - name: Install frontend dependencies
+        timeout-minutes: 8
+        run: npm ci --no-audit --no-fund
+      - name: Build relay native dependencies
+        timeout-minutes: 8
+        env:
+          npm_config_build_from_source: 'true'
+        run: npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
       - name: Windows menu Quit helper preflight
         timeout-minutes: 1
         run: npx --no-install electron tests/windows-quit-smoke.cjs

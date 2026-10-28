@@ -5,8 +5,15 @@
       "package": "@deepseek-ai/dsh-client-ui-plugin-manager",
       "path": "@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js",
       "before": "2d68b55273312057afc0c59a8784f6b08a55dfd69e1c5ca8022915ff4de4bd4c",
-      "after": "346166500753acbc759e9aa2cf2ff3990bd7f340c12a746c1d6cd7fc7707e5d8",
-      "patchSha256": "4d4a763e66ff2f3f32806c5df9a573c5796e58db6064c1d7df9c412f5ee6905b"
+      "after": "a6a605dc543968f6c11c09b5cbb9d6a418a83c23d3f28e4edd895a4a1a7c7692",
+      "patchSha256": "0a6e750ca2bbc41798940fb765dae064c41b43963be007c1cd61c23e8571d314",
+      "upgrades": [
+        {
+          "before": "346166500753acbc759e9aa2cf2ff3990bd7f340c12a746c1d6cd7fc7707e5d8",
+          "patch": "client-slot-upgrade.patch",
+          "patchSha256": "60c7437172e9d8f82a98ed18e0b984f3de7f24d2cb3a74369aa06ea3e6eb6746"
+        }
+      ]
     }
   ]
 }

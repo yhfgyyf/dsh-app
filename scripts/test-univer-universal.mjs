@@ -16,7 +16,7 @@ const runtime = resolve(process.env.DSH_TEST_RUNTIME ?? join(root, '.runtime'));
 const require = createRequire(join(runtime, 'package.json'));
 const { evaluatePluginCompatibility } = await import(pathToFileURL(require.resolve('@deepseek-ai/dsh-app-boot')).href);
 const checks = [];
-assert.equal(metadata.version, '0.3.5-universal.1');
+assert.equal(metadata.version, '0.3.5-universal.2');
 assert.equal(metadata.version, provenance.version);
 assert.equal(metadata.os, undefined); assert.equal(metadata.cpu, undefined);
 for (const entry of provenance.files) {
@@ -30,8 +30,8 @@ for (const name of ['libsql', '@univerjs-pro/engine-formula-rust-binding', '@uni
 assert.equal(metadata.optionalDependencies['@univerjs-pro/engine-formula-rust-binding'], '1.0.1');
 assert.equal(metadata.optionalDependencies['@univerjs-pro/exchange-node-binding'], '1.0.1');
 checks.push('Unavailable native modules are optional, with the existing native binding versions preserved');
-for (const version of ['0.2.0-rc.1', '0.2.1-rc.2']) assert.equal(evaluatePluginCompatibility(metadata, {}, version), undefined);
-for (const version of ['0.2.1-rc.3', '0.3.0']) assert.ok(evaluatePluginCompatibility(metadata, {}, version));
+for (const version of ['0.2.0-rc.1', '0.2.1-rc.2', '0.2.2-alpha.2']) assert.equal(evaluatePluginCompatibility(metadata, {}, version), undefined);
+for (const version of ['0.2.1-rc.3', '0.2.2-alpha.3', '0.3.0']) assert.ok(evaluatePluginCompatibility(metadata, {}, version));
 checks.push('The official checker accepts exactly the added core release while retaining rc.1 support and rejecting unverified future releases');
 for (const name of ['old-desktop', 'old-kylin']) {
   const original = JSON.parse(await readFile(join(root, 'tests/fixtures', `univer-${name}.json`), 'utf8'));
@@ -40,6 +40,6 @@ for (const name of ['old-desktop', 'old-kylin']) {
 }
 checks.push('Both previously shipped plugin variants reproduce the reported incompatibility; the universal candidate needs no exemption');
 await mkdir(reportDir, { recursive: true });
-const result = { status: 'pass', version: metadata.version, core: '0.2.1-rc.2', platform: process.platform, architecture: process.arch, checks };
+const result = { status: 'pass', version: metadata.version, core: '0.2.2-alpha.2', platform: process.platform, architecture: process.arch, checks };
 await writeFile(join(reportDir, 'universal-compatibility.json'), JSON.stringify(result, null, 2) + '\n');
 console.log(JSON.stringify(result, null, 2));
