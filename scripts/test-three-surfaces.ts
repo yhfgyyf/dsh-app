@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, symlink, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
+import { zstdDecompressSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { DesktopRuntime } from '../src/main/runtime.ts';
 import { connectFixture } from '../tests/fixture-client.ts';
@@ -14,7 +15,7 @@ await mkdir(join(root,'.test-data'),{recursive:true});
 await mkdir(join(root,'docs/evidence'),{recursive:true});
 const data=await mkdtemp(join(root,'.test-data/three-surfaces-'));
 const home=join(data,'shared-home'); await mkdir(home);
-const nm=join(upgrade.globalPackage,'node_modules');
+const nm=dirname(dirname(upgrade.globalPackage));
 for(const name of ['web','tui']) {
  const dir=join(home,'profiles',name);await mkdir(join(dir,'node_modules'),{recursive:true});
  const plugins=['dsh-auto-preset-router','dsh-audit-mode','dsh-progressive-tools',...(name==='tui'?['dsh-tui-app']:[])];
@@ -25,7 +26,7 @@ for(const name of ['web','tui']) {
  await writeFile(join(dir,'package.json'),JSON.stringify(manifest,null,2));
  await writeFile(join(dir,'cordis.patch.yml'),'- id: session-telemetry-otel\n  disabled: true\n');
 }
-await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-v4-flash\n');
+await writeFile(join(home,'settings.yaml'),'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n');
 const processes:ChildProcess[]=[]; const cores:DesktopRuntime[]=[]; const clients:Awaited<ReturnType<typeof connectFixture>>[]=[];
 const results:{name:string;status:string}[]=[];
 const until=async(fn:()=>boolean|Promise<boolean>,timeout=15000)=>{const t=Date.now();while(!await fn()){if(Date.now()-t>timeout)throw Error('Timed out');await new Promise(r=>setTimeout(r,50));}};
@@ -35,6 +36,17 @@ function cli(profile:string,args:string[]=[]){const child=spawn(process.execPath
 async function stop(child:ChildProcess,signal:NodeJS.Signals='SIGTERM'){if(child.exitCode!==null||child.signalCode!==null)return;child.kill(signal);await until(()=>child.exitCode!==null||child.signalCode!==null,10000);}
 async function tui(id:string){const t=cli('tui',['--resume',id]);await until(()=>t.output().includes('cannot start session')||t.output().includes('resumed ')||t.child.exitCode!==null,30000).catch(async e=>{await writeFile(join(data,'tui-error.log'),t.output().replace(/token=[^\s]+/g,'token=[redacted]'));throw e;});return t;}
 async function digest(path:string):Promise<string>{const hash=createHash('sha256');async function walk(dir:string){for(const name of (await readdir(dir)).sort()){const p=join(dir,name),st=await stat(p);if(st.isDirectory())await walk(p);else if(name!=='session.lock'){hash.update(p.slice(path.length));hash.update(await readFile(p));}}}await walk(path);return hash.digest('hex');}
+async function settledDigest(path: string) {
+ let last = await digest(path), stable = 0;
+ for (let i = 0; i < 40; i++) {
+  await new Promise(resolve => setTimeout(resolve, 25));
+  const current = await digest(path);
+  stable = current === last ? stable + 1 : 0; last = current;
+  if (stable === 3) return current;
+ }
+ throw new Error('Session persistence did not settle before ownership verification');
+}
+
 try{
  let app=await desktop();
  const w=cli('web',['--no-open','--port','0']);
@@ -44,9 +56,10 @@ try{
  const created=await app.client.rpc('session/create',{request:{cwd:data,agentPreset:'standard'}}); const sessionId=created.sessionId;
  await app.client.rpc('session/rename',{request:{sessionId,title:'three surface ownership'}});
  await until(async()=> (await web.rpc('session/list',{_request:{}})).items.some((x:any)=>x.sessionId===sessionId));
+ await until(async () => { const logs = await readdir(join(home, 'sessions'), { recursive: true }); for (const name of logs) { if (!name.endsWith('.jsonl.zstd')) continue; const bytes = await readFile(join(home, 'sessions', name)); let rest = bytes, text = ''; while (rest.length) { const part = zstdDecompressSync(rest, { info: true }) as any; text += part.buffer.toString('utf8'); rest = rest.subarray(part.engine.bytesWritten); } if (text.includes('three surface ownership')) return true; } return false; });
  await check('App and official Web boot on the pinned runtime and share session listing',async()=>assert.ok(sessionId));
  const deny=async(client:typeof web,method:string)=>{const reply=await client.rpc('session/'+method,{request:{sessionId,title:'must not write'}},true);assert.equal(reply.ok,false);assert.equal(reply.error.code,'session/agent-busy');};
- await check('App owner rejects foreign Web rename and deletion without log changes',async()=>{const before=await digest(join(home,'sessions'));await deny(web,'rename');await deny(web,'delete');assert.equal(await digest(join(home,'sessions')),before);});
+ await check('App owner rejects foreign Web rename and deletion without log changes',async()=>{const before=await settledDigest(join(home,'sessions'));await deny(web,'rename');await deny(web,'delete');assert.equal(await settledDigest(join(home,'sessions')),before);});
  await check('actual TUI rejects a session owned by App',async()=>{const t=await tui(sessionId);await until(()=>t.child.exitCode!==null);assert.equal(t.child.exitCode,1);assert.match(t.output(),/already.*owned|owned.*process|already.*open/i);});
  app.client.close();await app.core.stop();
  const terminal=await tui(sessionId);await writeFile(join(data,'tui-start.log'),terminal.output());

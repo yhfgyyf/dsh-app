@@ -1,0 +1,11 @@
+--- a/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
+@@ -3487,7 +3487,7 @@
+ 				};
+ 			}, [highlight, clearHighlight]);
+ 			const noticeLine = state.notice === null || state.notice.kind === "refresh-failed" ? null : noticeText(state.notice, t);
+-			const listed = state.packages.filter((pkg) => !BUILTIN_PROFILE_BUNDLES.has(pkg.name) && (pkg.installed || pkg.optional || pkg.error !== void 0));
++			const listed = state.packages.filter((pkg) => !BUILTIN_PROFILE_BUNDLES.has(pkg.name) && (pkg.installed || pkg.optional || pkg.name === "dsh-p2p-collab" || pkg.error !== void 0));
+ 			const mine = listed.filter((pkg) => pkg.installed || !pkg.optional);
+ 			const official = listed.filter((pkg) => pkg.optional && !pkg.installed);
+ 			const loaded = state.status === "ready" || state.status === "error";

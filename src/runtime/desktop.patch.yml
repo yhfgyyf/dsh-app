@@ -1,28 +1,29 @@
 # Desktop-owned composition; DSH shared core and reusable feature packages.
 
-- id: settings
-  config:
-    dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
 - id: credentials
   config:
     dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
 - id: system-prompt
   config:
-    personaSuffix: Your working directory is {{cwd}}.
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 - id: session-query-sqlite
   config:
     path: ':memory:'
     openAt: never
-- id: tools
-  config:
-    mode: !!js process.env.DSH_TOOLS_MODE
+- id: tool-executor-native
+  disabled: !!js process.env.DSH_TOOLS_MODE === 'ptc'
+- id: tool-executor-ptc
+  disabled: !!js process.env.DSH_TOOLS_MODE !== 'ptc' 
 - insert:
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
+    - id: workspace-dependencies
+      name: '@deepseek-ai/dsh-tool-workspace-dependencies'
+      config:
+        source: !!js process.env.DSH_DESKTOP_RUNTIME_ROOT
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
     - id: message-feedback
       name: '@deepseek-ai/dsh-message-feedback'
       config:
@@ -61,8 +62,26 @@
       name: '@deepseek-ai/dsh-api-workspace-controller'
     - id: workspace-files
       name: '@deepseek-ai/dsh-api-workspace-files'
+    - id: terminal-controller
+      name: '@deepseek-ai/dsh-api-terminal-controller'
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+    - id: api-speech-to-text
+      name: '@deepseek-ai/dsh-experimental-api-speech-to-text'
+    - id: ui-voice-input
+      name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
+    - id: job-controller
+      name: '@deepseek-ai/dsh-api-job-controller'
     - id: cordis-host-runner
       name: '@deepseek-ai/dsh-cordis-host-runner'
+    - id: cordis-inspect-providers
+      name: '@deepseek-ai/dsh-tool-cordis/host'
     - id: webserver
       name: '@deepseek-ai/dsh-host-webserver'
       config:
@@ -86,6 +105,10 @@
       name: '@deepseek-ai/dsh-client-ui-theme'
     - id: locale
       name: '@deepseek-ai/dsh-client-locale'
+    - id: shortcuts
+      name: '@deepseek-ai/dsh-client-shortcuts'
+    - id: ui-shortcuts
+      name: '@deepseek-ai/dsh-client-ui-shortcuts'
     - id: ui-layout
       name: '@deepseek-ai/dsh-client-ui-layout'
     - id: ui-renderer
@@ -100,6 +123,10 @@
       name: '@deepseek-ai/dsh-client-ui-sidebar-right'
     - id: ui-sidebar-documentpreview
       name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
+    - id: office-to-pdf
+      name: '@deepseek-ai/dsh-office-to-pdf'
+    - id: ui-sidebar-terminal
+      name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
     - id: ui-sidebar-files
       name: '@deepseek-ai/dsh-client-ui-sidebar-files'
     - id: ui-settings
@@ -108,8 +135,24 @@
       name: '@deepseek-ai/dsh-client-ui-settings-general'
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
+    - id: ui-settings-account
+      name: '@deepseek-ai/dsh-client-ui-settings-account'
+    - id: account-controller
+      name: '@deepseek-ai/dsh-api-account-controller'
+    - id: ui-settings-session-log
+      name: '@deepseek-ai/dsh-client-ui-settings-session-log'
+    - id: ui-settings-shell
+      name: '@deepseek-ai/dsh-client-ui-settings-shell'
+    - id: ui-settings-agent-loop
+      name: '@deepseek-ai/dsh-client-ui-settings-agent-loop'
+    - id: ui-settings-subagent
+      name: '@deepseek-ai/dsh-client-ui-settings-subagent'
+    - id: ui-settings-web-search
+      name: '@deepseek-ai/dsh-client-ui-settings-web-search'
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+    - id: ui-plugin-manager
+      name: '@deepseek-ai/dsh-client-ui-plugin-manager'
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'
     - id: ui-approval
@@ -120,6 +163,12 @@
       name: '@deepseek-ai/dsh-client-ui-brand-official'
     - id: ui-attachment
       name: '@deepseek-ai/dsh-client-ui-attachment'
+    - id: ui-file-drag
+      name: '@deepseek-ai/dsh-client-ui-file-drag'
+    - id: message-quotes
+      name: '@deepseek-ai/dsh-message-quotes'
+    - id: deliverable-file-references
+      name: '@deepseek-ai/dsh-deliverable-file-references'
     - id: ui-tool
       name: '@deepseek-ai/dsh-client-ui-tool'
     - id: ui-cordis
@@ -128,6 +177,8 @@
       name: '@deepseek-ai/dsh-client-ui-workflow-run'
     - id: ui-deliverables
       name: '@deepseek-ai/dsh-client-ui-deliverables'
+    - id: workspace-changes
+      name: '@deepseek-ai/dsh-workspace-changes'
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'
     - id: ui-input-trigger
@@ -142,7 +193,6 @@
       name: '@deepseek-ai/dsh-client-ui-reference'
     - id: ui-schedule
       name: '@deepseek-ai/dsh-client-ui-schedule'
-      disabled: true
     - id: ui-jobs
       name: '@deepseek-ai/dsh-client-ui-jobs'
     - id: ui-goal
@@ -199,7 +249,7 @@
   disabled: true
 - id: tool-subagent-fork
   disabled: true
-- id: workflow-worker-thread
+- id: workflow-ptc
   disabled: true
 - id: tool-workflow
   disabled: true
@@ -212,8 +262,8 @@
 - id: tool-web
   disabled: true
 - insert:
-    - id: agent-presets
-      name: '@deepseek-ai/dsh-agent-presets'
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
       config:
         default: standard
 - id: session-telemetry-otel
@@ -228,3 +278,7 @@
       name: dsh-progressive-tools
     - id: desktop-computer-use
       name: './computer-use.ts'
+    - id: desktop-plugin-marketplace
+      name: './plugin-marketplace.ts'
+    - id: desktop-plugin-security
+      name: './plugin-security-host.ts'

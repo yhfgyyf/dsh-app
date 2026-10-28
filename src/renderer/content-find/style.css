@@ -1,0 +1,9 @@
+:root{font:12px system-ui,sans-serif;color-scheme:light dark;color:light-dark(#242424,#ececec);background:light-dark(#f6f6f6,#242424)}
+*{box-sizing:border-box}body{margin:0;padding:6px;overflow:hidden}
+form{height:32px;display:flex;align-items:center;gap:3px;padding:3px 5px;border:1px solid light-dark(#ddd,#494949);border-radius:7px;background:light-dark(#fff,#2e2e2e)}
+input{flex:1;min-width:40px;width:0;height:24px;border:1px solid light-dark(#ddd,#555);border-radius:4px;padding:2px 6px;font:inherit;color:inherit;background:transparent}
+input:focus{outline:1px solid light-dark(#7584ab,#9eacd0);outline-offset:0}
+output{min-width:32px;text-align:center;white-space:nowrap}
+button{flex:none;width:22px;height:24px;border:0;border-radius:4px;background:transparent;color:inherit;font:inherit;cursor:pointer}
+button:hover{background:light-dark(#eee,#444)}button:disabled{opacity:.35;cursor:default}
+[role=alert]{margin:4px 2px;font-size:11px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}

@@ -1,5 +1,17 @@
 # Third-party components
 
+Desktop 0.1.26 bundles CPython 3.12.14 and pip from Astral's
+python-build-standalone release 20260924 on macOS/Windows. Runtime archives
+and Office/PDF wheels are pinned by URL, version, size and SHA-256 in
+`runtime/python-lock.json`; the shipped copy is `runtime/python-provenance.json`.
+Python's license is under `runtime/dependencies/python/lib/python3.12/LICENSE.txt`
+(Windows: `Lib/LICENSE.txt`). Package license texts are retained in their
+`site-packages/*.dist-info` directories. Included libraries are openpyxl,
+python-docx, python-pptx, Pillow, lxml, XlsxWriter, pypdf and ReportLab, plus
+et_xmlfile, typing_extensions and charset-normalizer. NumPy/Pandas are not bundled.
+Python's bundled native dependency notices are preserved under
+`runtime/licenses/python-build-standalone`, with their source URLs and hashes.
+
 DSH Desktop is an independent application and is not an official DeepSeek or OpenAI product.
 
 The distribution includes Electron and DeepSeek Harness (MIT), React (MIT),
@@ -13,12 +25,23 @@ pi-ai components. Their original licenses remain applicable. Exact runtime and
 plugin revisions are listed in `runtime/dependencies.json`; installer checksums
 are provided with each GitHub Release.
 
+Browser Use includes the official DSH Browser Use registry and Playwright MCP
+provider (MIT), with Playwright and Playwright MCP (Apache-2.0). Their versions
+and integrity hashes are pinned in `runtime/dsh/package-lock.json`, and their
+licenses remain in the bundled runtime. Chrome and Edge are detected from the
+user's machine and are not redistributed in the installer.
+
 Offline document previews bundle docx-preview 0.4.0, SheetJS CE 0.20.3,
 and @aiden0z/pptx-renderer 1.2.4 (Apache-2.0), together with Apache ECharts,
 ZRender, JSZip (under its MIT option), and their dependencies. Their license
 texts and notices are included under `dist/renderer/licenses` in the app.
 Spreadsheet code pages are distributed with SheetJS. Exact dependency versions
 and integrity hashes are pinned in `package-lock.json`.
+
+Plugin installation includes pnpm 11.7.0 (MIT), isolated under
+`runtime/package-manager/node_modules/pnpm` in the application resources. Its
+license and bundled dependency notices accompany the package. The exact package
+and integrity hash are pinned in `runtime/pnpm/package-lock.json`.
 
 Computer use includes Cua Driver and its Node SDK 0.25.0 (MIT), pinned to
 `trycua/cua` commit `45d78fedcf2c7033ba33f10dd30f8af8ba31ec3f`.
@@ -31,3 +54,16 @@ available in the [Cua release source](https://github.com/trycua/cua/tree/cua-dri
 and [UniFFI source](https://github.com/jhugman/uniffi-bindgen-react-native).
 Driver archives are verified against the SHA-256 pins in
 `runtime/computer-use/driver.json`; npm packages use the accompanying lockfile.
+
+## DSH Remote
+
+- qrcode 1.5.4 (MIT), added with user approval; bundled license under `dist/renderer/licenses/qrcode/license`.
+- Native Android fork: sorsama/deepseek-harness-mobile v0.12.1 (MIT), license retained in `mobile/android/LICENSE`.
+- Relay fork: april-jk/dsh-relay v0.1.9 (MIT), license retained in `services/relay/LICENSE`.
+- Sealed transport crypto: april-jk/dsh-mobile-plugin v0.1.9, Copyright (c) 2026 dsh-mobile contributors (MIT). Full license retained in `src/runtime/remote/LICENSE`, copied to the packaged runtime; Android port retains `mobile/android/CENTRAL-CRYPTO-LICENSE`.
+
+Exact source commits and modifications are recorded in `REMOTE-SOURCES.json`.
+
+## DSH 0.2.2-alpha.2 frontend
+
+- The upstream client uses Zod 4.6.5 and TanStack React Virtual 3.14.10 (MIT). Their license texts, including the virtual-core dependency, are retained under `dist/renderer/licenses/`.

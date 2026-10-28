@@ -1,0 +1,377 @@
+--- a/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
++++ b/@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js
+@@ -355,7 +355,12 @@
+ 			restartRequired: false,
+ 			failure: null,
+ 			approvedBuilds: [],
+-			enabling: false
++			enabling: false,
++			review: null,
++			reviewError: null,
++			reviewAcknowledged: false,
++			reviewBuilds: [],
++			reviewRequested: false
+ 		};
+ 		/** The dialog back at its spec: the run and its outcome forgotten, the spec and the registries kept. */
+ 		function specAgain(install) {
+@@ -394,6 +399,7 @@
+ 			/** Cancels the check the dialog has in flight. */
+ 			inspectAbort;
+ 			request;
++			installSurface = "plugins";
+ 			noticeSeq = 0;
+ 			/** The registry last used from this browser, kept across dialogs and page loads; null until one was used. */
+ 			registryMemory = (0, _deepseek_ai_dsh_client_store.createSnapshotStore)(null, { persist: { name: "dsh.plugin-manager.install-registry" } });
+@@ -422,6 +428,7 @@
+ 			/** Stop publishing and drop every late settlement. */
+ 			dispose() {
+ 				this.disposed = true;
++				this.abortInspect();
+ 				this.request = void 0;
+ 				this.generation += 1;
+ 			}
+@@ -431,9 +438,11 @@
+ 			* @param resolveText - render-time package text resolution supplied by the locale service.
+ 			* @returns the tab's snapshot sources and its actions.
+ 			*/
+-			inject(configLedger, resolveText) {
++			inject(configLedger, resolveText, marketplace = false) {
+ 				return {
+ 					resolveText,
++					marketplace,
++					showInstall: () => this.installSurface === (marketplace ? "marketplace" : "plugins"),
+ 					hooks: {
+ 						pluginManager: this.store,
+ 						configLedger,
+@@ -447,6 +456,8 @@
+ 						this.load();
+ 					},
+ 					openInstall: () => {
++						this.abortInspect();
++						this.installSurface = marketplace ? "marketplace" : "plugins";
+ 						if (this.getSnapshot().install.requestId === void 0) {
+ 							this.patch({ install: {
+ 								...IDLE_INSTALL,
+@@ -468,7 +479,7 @@
+ 					},
+ 					editInstallSpec: (text) => {
+ 						const install = this.getSnapshot().install;
+-						if (install.phase === "checking" || isInstallPending(install.phase)) return;
++						if (install.phase === "checking" || install.phase === "reviewing" || install.phase === "preparing" || isInstallPending(install.phase)) return;
+ 						this.patchInstall(install.phase === "idle" ? {
+ 							spec: text,
+ 							inputError: null
+@@ -478,7 +489,22 @@
+ 						});
+ 					},
+ 					runInstall: () => {
+-						this.runInstall();
++						const install = this.getSnapshot().install;
++						this.runInstall(install.phase === "failed" && install.reviewRequested);
++					},
++					reviewBeforeInstall: () => {
++						this.runInstall(true);
++					},
++					installWithoutReview: () => {
++						const install = this.getSnapshot().install;
++						if ((install.phase === "reviewing" || install.phase === "review") && install.subject !== null) this.startDirectInstall(install.subject, install.reviewBuilds);
++					},
++					acknowledgeReview: (value) => {
++						if (this.getSnapshot().install.phase === "review") this.patchInstall({ reviewAcknowledged: value === true });
++					},
++					continueReviewedInstall: () => {
++						const install = this.getSnapshot().install;
++						if (install.phase === "review" && install.subject !== null && install.reviewAcknowledged) this.startInstall(install.subject, install.reviewBuilds);
+ 					},
+ 					toggleRegistryOptions: () => {
+ 						this.patchInstall({ registryOpen: !this.getSnapshot().install.registryOpen });
+@@ -689,11 +715,11 @@
+ 			* names first; a refused spec returns to the field with the reason, an
+ 			* accepted one becomes the subject the next screens show while pnpm runs.
+ 			*/
+-			async runInstall() {
++			async runInstall(withReview = false) {
+ 				const state = this.getSnapshot();
+ 				const install = state.install;
+ 				const spec = install.spec.trim();
+-				if (install.phase === "checking" || isInstallPending(install.phase) || spec === "") return;
++				if (install.phase === "checking" || install.phase === "reviewing" || install.phase === "preparing" || isInstallPending(install.phase) || spec === "") return;
+ 				if (state.packages.some((pkg) => pkg.name === spec)) {
+ 					this.patchInstall({
+ 						phase: "idle",
+@@ -759,18 +785,95 @@
+ 					});
+ 					return;
+ 				}
+-				await this.startInstall({
+-					spec,
+-					...inspected.value
+-				});
++				const subject = { ...inspected.value, spec };
++				// The desktop's bounded archive verifier currently serves public npm only.
++				// Never silently substitute npm for a different selected registry.
++				const sourceRegistry = subject.registry ?? this.getSnapshot().install.registries?.resolved;
++				if (subject.kind === "registry" && (typeof sourceRegistry !== "string" || sourceRegistry.replace(/\/+$/, "") !== "https://registry.npmjs.org")) {
++					this.patchInstall({ phase: "idle", inputError: { problem: "unknown", reason: "桌面插件下载目前仅支持公共 npm 源，请选择 https://registry.npmjs.org/ 后重试。" } });
++					return;
++				}
++				if (subject.kind === "registry" && subject.name && subject.version) subject.spec = `${subject.name}@${subject.version}`;
++				if (withReview) await this.reviewInstall(subject);
++				else await this.startDirectInstall(subject);
+ 			}
+ 			/**
+ 			* Hand the checked spec to the Host and settle the dialog from its answer.
+ 			* `approvedBuilds` names the pending install scripts the person allowed;
+ 			* the Host saves that permission for this profile before pnpm runs.
+ 			*/
++			async reviewInstall(subject, approvedBuilds = []) {
++				this.abortInspect();
++				const controller = new AbortController();
++				this.inspectAbort = controller;
++				this.patchInstall({ phase: "reviewing", reviewRequested: true, subject, review: null, reviewError: null, reviewAcknowledged: false, reviewBuilds: approvedBuilds });
++				try {
++					const result = await this.ctx.get("connection").rpc.call("/desktop-plugin-security", "review", { args: { spec: subject.spec } }, controller.signal);
++					if (this.gone(controller.signal) || this.inspectAbort !== controller) return;
++					const report = result.ok ? result.value : null;
++					if (!report || report.spec !== subject.spec || report.requiresConfirmation !== true || !Number.isFinite(Date.parse(report.checkedAt))) {
++						this.patchInstall({ phase: "review", reviewError: result.ok ? "检查报告与待安装版本不一致，请重新检查。" : result.error.message });
++					} else this.patchInstall({ phase: "review", review: report });
++				} catch (error) {
++					if (!this.gone(controller.signal) && this.inspectAbort === controller) this.patchInstall({ phase: "review", reviewError: reasonOf(error) });
++				} finally {
++					if (this.inspectAbort === controller) this.inspectAbort = void 0;
++				}
++			}
++			/** Direct npm installs still download and verify a bounded archive, without a model report. */
++			async startDirectInstall(subject, approvedBuilds) {
++				this.abortInspect();
++				const controller = new AbortController();
++				this.inspectAbort = controller;
++				this.patchInstall({ phase: "preparing", subject, reviewRequested: false, review: null, reviewError: null, reviewAcknowledged: false, reviewBuilds: [] });
++				let spec = subject.spec;
++				try {
++					if (subject.kind === "registry") {
++						const prepared = await this.ctx.get("connection").rpc.call("/desktop-plugin-security", "prepare-direct-install", { args: { spec } }, controller.signal);
++						if (this.gone(controller.signal) || this.inspectAbort !== controller) return;
++						if (!prepared.ok || prepared.value.spec !== spec || !/^[a-f0-9]{64}$/.test(prepared.value.sha256) || typeof prepared.value.installSpec !== "string" || !prepared.value.installSpec) throw new Error(prepared.ok ? "下载安装包与所选版本不一致，请重试。" : prepared.error.message);
++						spec = prepared.value.installSpec;
++					}
++				} catch (error) {
++					if (!this.gone(controller.signal) && this.inspectAbort === controller) this.patchInstall({ phase: "idle", inputError: { problem: "unknown", reason: reasonOf(error) } });
++					return;
++				} finally {
++					if (this.inspectAbort === controller) this.inspectAbort = void 0;
++				}
++				if (!this.gone(controller.signal)) await this.performInstall(subject, spec, approvedBuilds);
++			}
+ 			async startInstall(subject, approvedBuilds) {
+-				const { spec, registry } = subject;
++				const current = this.getSnapshot().install;
++				const report = current.review;
++				if (current.subject !== subject || !current.reviewAcknowledged || !report || report.error || current.reviewError || report.spec !== subject.spec || !report.reviewId || !report.sha256) return;
++				const age = Date.now() - Date.parse(report.checkedAt);
++				if (!Number.isFinite(age) || age < 0 || age >= 10 * 60 * 1000) {
++					await this.reviewInstall(subject, approvedBuilds);
++					return;
++				}
++				this.abortInspect();
++				const controller = new AbortController();
++				this.inspectAbort = controller;
++				this.patchInstall({ phase: "preparing", reviewBuilds: approvedBuilds ?? [] });
++				let spec;
++				try {
++					const prepared = await this.ctx.get("connection").rpc.call("/desktop-plugin-security", "prepare-install", { args: { reviewId: report.reviewId } }, controller.signal);
++					if (this.gone(controller.signal) || this.inspectAbort !== controller) return;
++					if (!prepared.ok || prepared.value.spec !== subject.spec || prepared.value.sha256 !== report.sha256 || typeof prepared.value.installSpec !== "string" || !prepared.value.installSpec) {
++						this.patchInstall({ phase: "review", reviewAcknowledged: false, reviewError: prepared.ok ? "待安装的文件与检查报告不一致，请重新检查。" : prepared.error.message });
++						return;
++					}
++					spec = prepared.value.installSpec;
++				} catch (error) {
++					if (!this.gone(controller.signal) && this.inspectAbort === controller) this.patchInstall({ phase: "review", reviewAcknowledged: false, reviewError: reasonOf(error) });
++					return;
++				} finally {
++					if (this.inspectAbort === controller) this.inspectAbort = void 0;
++				}
++				await this.performInstall(subject, spec, approvedBuilds);
++			}
++			async performInstall(subject, spec, approvedBuilds) {
++				const { registry } = subject;
+ 				const requestId = randomUUID();
+ 				const request = {
+ 					requestId,
+@@ -879,7 +982,8 @@
+ 				const install = this.getSnapshot().install;
+ 				const pending = install.failure?.pendingBuilds;
+ 				if (install.phase !== "failed" || install.subject === null || pending === void 0 || pending.length === 0) return;
+-				await this.startInstall(install.subject, pending);
++				if (install.reviewRequested) await this.reviewInstall(install.subject, pending);
++				else await this.startDirectInstall(install.subject, pending);
+ 			}
+ 			/**
+ 			* Leave the check or the failed screen for the spec at once; a Host-owned
+@@ -888,7 +992,7 @@
+ 			*/
+ 			async cancelInstall() {
+ 				const install = this.getSnapshot().install;
+-				if (install.phase === "checking" || install.phase === "failed" || install.phase === "unknown") {
++				if (["checking", "reviewing", "preparing", "review", "failed", "unknown"].includes(install.phase)) {
+ 					this.abortInspect();
+ 					this.offerSpecAgain();
+ 					return;
+@@ -1980,7 +2084,7 @@
+ 		* and failed screens over the same subject card. A failed run that left
+ 		* install scripts undecided shows them for approval in place of plain retry.
+ 		*/
+-		function InstallDialog({ install, t, onClose, onEditSpec, onRun, onCancel, onReconcile, onToggleDetails, onEnableNow, onApproveBuilds, onToggleRegistry, onChooseRegistry, onChangeRegistry }) {
++		function InstallDialog({ install, t, renderSlot, onAcknowledgeReview, onContinueReview, onReview, onSkipReview, onClose, onEditSpec, onRun, onCancel, onReconcile, onToggleDetails, onEnableNow, onApproveBuilds, onToggleRegistry, onChooseRegistry, onChangeRegistry }) {
+ 			const errorId = (0, react.useId)();
+ 			const guideId = (0, react.useId)();
+ 			const approvalId = (0, react.useId)();
+@@ -2012,6 +2116,18 @@
+ 					document.removeEventListener("keydown", onKeyDown, true);
+ 				};
+ 			}, [registryShown, onToggleRegistry]);
++			if (phase === "reviewing" || phase === "preparing" || phase === "review") return (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Modal, {
++				open: install.open,
++				onClose,
++				title: t(install.reviewRequested ? "installReviewTitle" : "installPreparingTitle"),
++				closeLabel: t("close"),
++				className: PluginManagerPage_module_css_default.installDialog,
++				children: renderSlot("plugins.install.review", {
++					phase, direct: !install.reviewRequested, spec: install.subject?.spec ?? install.spec,
++					report: install.review, error: install.reviewError, acknowledged: install.reviewAcknowledged,
++					onAcknowledge: onAcknowledgeReview, onContinue: onContinueReview, onRetry: onReview, onSkip: onSkipReview, onCancel: onClose
++				})
++			});
+ 			if (phase === "idle" || phase === "checking") {
+ 				const checking = phase === "checking";
+ 				const empty = install.spec.trim() === "";
+@@ -2029,14 +2145,19 @@
+ 					description: t("installDescription"),
+ 					className: PluginManagerPage_module_css_default.installDialog,
+ 					contentClassName: PluginManagerPage_module_css_default.installContent,
+-					footer: (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++					footer: (0, react_jsx_runtime.jsxs)("div", {
++						style: { display: "flex", gap: 8, width: "100%" },
++						children: [(0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.Button, {
++							variant: "outline", style: { flexShrink: 0, whiteSpace: "nowrap" }, disabled: checking || empty, onClick: onReview,
++							children: t("installReviewFirst")
++						}), (0, react_jsx_runtime.jsxs)(_deepseek_ai_dsh_client_ui_primitives.Button, {
+ 						variant: "primary",
+ 						className: PluginManagerPage_module_css_default.wide,
+ 						disabled: checking || empty,
+ 						"aria-busy": checking,
+ 						onClick: onRun,
+-						children: [checking ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "ongoing" }) : null, t(checking ? "installChecking" : "installRun")]
+-					}),
++						children: [checking ? (0, react_jsx_runtime.jsx)(_deepseek_ai_dsh_client_ui_primitives.StateDot, { state: "ongoing" }) : null, t(checking ? "installChecking" : "installDirect")]
++					})] }),
+ 					children: (0, react_jsx_runtime.jsxs)("div", {
+ 						className: PluginManagerPage_module_css_default.installBody,
+ 						children: [
+@@ -2544,7 +2665,7 @@
+ 			const openPkg = view.kind === "package" || view.kind === "row" ? listed.find((pkg) => pkg.name === view.name) : void 0;
+ 			const openItem = view.kind === "item" ? ledger.items.find((item) => item.id === view.id) : void 0;
+ 			const openRow = view.kind === "row" && openPkg !== void 0 ? openPkg.rows.find((row) => row.rowId === view.rowId) : void 0;
+-			const showsCards = openPkg === void 0 && openItem === void 0;
++			const showsCards = !props.marketplace && openPkg === void 0 && openItem === void 0;
+ 			const activated = listed.find((pkg) => pkg.name === activation && pkg.enabled && !state.busy.includes(pkg.name));
+ 			const setRowEnabled = (row, enabled) => {
+ 				/* v8 ignore next -- a row without a live entry has its switch disabled */
+@@ -2611,8 +2732,17 @@
+ 			return (0, react_jsx_runtime.jsxs)("section", {
+ 				className: PluginManagerPage_module_css_default.page,
+ 				"data-plugin-panel": true,
++				"data-plugin-marketplace-page": props.marketplace || void 0,
+ 				"aria-busy": state.status === "loading",
+ 				children: [
++					props.marketplace ? renderSlot("plugins.marketplace", {
++						packages: state.packages,
++						busy: state.busy,
++						ready: state.status === "ready",
++						installBusy: state.install.open || isInstallPending(state.install.phase),
++						onInstall: (spec = "") => { props.openInstall(); props.editInstallSpec(spec); },
++						onSetEnabled: props.setEnabled
++					}) : null,
+ 					showsCards ? (0, react_jsx_runtime.jsxs)("header", {
+ 						className: PluginManagerPage_module_css_default.pageHead,
+ 						children: [(0, react_jsx_runtime.jsxs)("div", { children: [(0, react_jsx_runtime.jsx)("h1", {
+@@ -2751,9 +2881,12 @@
+ 							});
+ 						}
+ 					}, { entryKey: activated.name }) : null,
+-					(0, react_jsx_runtime.jsx)(InstallDialog, {
+-						install: state.install,
+-						t,
++					props.renderFactorySlot("plugins.install.dialog", {
++						install: props.showInstall() ? state.install : IDLE_INSTALL,
++						onAcknowledgeReview: props.acknowledgeReview,
++						onContinueReview: props.continueReviewedInstall,
++						onReview: props.reviewBeforeInstall,
++						onSkipReview: props.installWithoutReview,
+ 						onClose: props.closeInstall,
+ 						onEditSpec: props.editInstallSpec,
+ 						onRun: props.runInstall,
+@@ -2793,6 +2926,11 @@
+ 		/** Plugin management interface copy. */
+ 		/** Simplified Chinese dictionary and key source of truth. */
+ 		const zh = {
++			marketplaceTitle: "插件市场",
++			installReviewTitle: "安装前检查（可选）",
++			installPreparingTitle: "准备安装",
++			installReviewFirst: "先检查",
++			installDirect: "直接安装",
+ 			panel: "插件",
+ 			title: "插件",
+ 			intro: "添加和管理插件",
+@@ -2837,7 +2975,7 @@
+ 			uninstall: "卸载",
+ 			uninstallLabel: "卸载 {name}",
+ 			installTitle: "添加插件",
+-			installDescription: "输入插件的包名、GitHub 仓库地址或本地目录路径。",
++			installDescription: "输入插件的包名、GitHub 仓库地址或本地目录路径。可以直接安装，也可以先检查。",
+ 			installSpecLabel: "包名或地址",
+ 			installSpecPlaceholder: "例如 @deepseek-ai/dsh-experimental-auto-review",
+ 			installGuideToggle: "插件安装引导和示例",
+@@ -2973,6 +3111,11 @@
+ 		};
+ 		/** English dictionary checked against the Chinese key set. */
+ 		const en = {
++			marketplaceTitle: "Plugin marketplace",
++			installReviewTitle: "Optional installation review",
++			installPreparingTitle: "Preparing installation",
++			installReviewFirst: "Review first",
++			installDirect: "Install directly",
+ 			panel: "Plugins",
+ 			title: "Plugins",
+ 			intro: "Add and manage plugins",
+@@ -3168,6 +3311,7 @@
+ 		/** Services required by the sidebar registration and the Remote methods; the inventory says whether the Host manages a profile. */
+ 		const inject = [
+ 			"slots",
++			"connection",
+ 			"locale",
+ 			"remote",
+ 			"remote.pluginManager",
+@@ -3207,7 +3351,20 @@
+ 					for (const dispose of disposers) dispose();
+ 				};
+ 			}, "ui-plugin-manager: host invalidations");
++			ctx.slots.registerFactory({
++				name: "plugins.install.dialog", scope: "root", locale: NS,
++				children: { "plugins.install.review": { kind: "single", scope: "root" } }
++			}, InstallDialog);
+ 			const configLedger = configLedgerSource(ctx);
++			ctx.slots.inject("settings.section", () => ctx.slots.register({
++				name: "settings.section",
++				id: "desktop-plugin-marketplace",
++				order: 80,
++				label: () => t("marketplaceTitle"),
++				locale: NS,
++				inject: () => controller.inject(configLedger, (text) => ctx.locale.resolveText(text), true),
++				children: { "plugins.marketplace": { kind: "list", scope: "root" } }
++			}, PluginManagerPage));
+ 			ctx.slots.inject("main", () => ctx.slots.register({
+ 				name: "main",
+ 				key: PANEL_ID,

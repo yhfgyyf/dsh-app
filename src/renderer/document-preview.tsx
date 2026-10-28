@@ -6,7 +6,7 @@ import { WordDocument, SlidesDocument } from './office-preview.tsx';
 import { SpreadsheetDocument } from './spreadsheet-preview.tsx';
 
 export interface DocumentContext extends BrowserContext {
-  documentPreviews: { register(definition: { id: string; extensions: string[]; title(): string; priority: 'extension'; loading: 'bytes-complete'; wrap: boolean }): () => void };
+  documentPreviews: { register(definition: { id: string; extensions: string[]; title(): string; priority: 'builtin' | 'extension'; loading: 'bytes-complete'; wrap: boolean }): () => void };
 }
 export interface DocumentProps {
   resourceAddress: string;
@@ -82,24 +82,18 @@ function MediaDocument({ resourceAddress, content }: DocumentProps) {
   </section>;
 }
 
-function LegacyOfficeDocument({ resourceAddress }: DocumentProps) {
-  const word = documentExtension(resourceAddress) === 'doc';
-  return <section className="desktop-document" data-document-preview="unsupported-office">
-    <p>此文件是旧版 {word ? 'DOC' : 'PPT'} 格式。请在 Word、PowerPoint 或 WPS 中另存为 {word ? 'DOCX' : 'PPTX'} 或 PDF，再在侧栏预览。</p>
-    <p>也可以通过文件菜单直接在本地应用中打开原文件。</p>
-  </section>;
-}
-
-export function installDocumentPreviews(ctx: DocumentContext): void {
+export function installDocumentPreviews(ctx: DocumentContext, preferLocalOffice = false): void {
   for (const [id, title, extensions, wrap, component] of [
     ['desktop-text', '文本（编码兼容）', TEXT_EXTENSIONS, true, TextDocument],
     ['desktop-media', '图片 / 音视频', Object.keys(MEDIA_TYPES), false, MediaDocument],
     ['desktop-word', 'Word 文档', ['docx', 'docm', 'dotx', 'dotm'], false, WordDocument],
     ['desktop-slides', 'PowerPoint 演示', ['pptx', 'pptm', 'ppsx', 'ppsm', 'potx'], false, SlidesDocument],
     ['desktop-spreadsheet', '电子表格', ['xlsx', 'xls', 'xlsm', 'xlsb', 'xltx', 'xltm', 'ods', 'csv', 'tsv'], true, SpreadsheetDocument],
-    ['desktop-legacy-office', '旧版 Office 格式', ['doc', 'ppt'], false, LegacyOfficeDocument],
   ] as const) {
-    ctx.effect(() => ctx.documentPreviews.register({ id, title: () => title, extensions: [...extensions], priority: 'extension', loading: 'bytes-complete', wrap }), `${id}: metadata`);
+    // LoongArch has no bundled native Office converter; use the existing local
+    // Word/Slides renderers there. Other platforms keep the official default.
+    const priority = !preferLocalOffice && (id === 'desktop-word' || id === 'desktop-slides') ? 'builtin' : 'extension';
+    ctx.effect(() => ctx.documentPreviews.register({ id, title: () => title, extensions: [...extensions], priority, loading: 'bytes-complete', wrap }), `${id}: metadata`);
     ctx.effect(() => ctx.slots.inject('sidebar.right.tab.document', () => ctx.slots.register({ name: 'sidebar.right.tab.document', key: id }, component)), `${id}: body`);
   }
 }

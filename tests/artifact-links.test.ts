@@ -13,9 +13,9 @@ const clientNodeModules = process.env.DSH_OVERLAY_TEST_CLIENT ?? fileURLToPath(n
 const paths = await import(pathToFileURL(join(runtimeNodeModules, '@deepseek-ai/dsh-util-workspace-path/lib/index.js')).href);
 const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-ui-chat/lib/client.js'), 'utf8');
 const start = source.indexOf('function localArtifactPath(');
-const end = source.indexOf('/** Reasoning block', start);
+const end = source.indexOf('const AssistantMarkdown =', start);
 assert.ok(start > 0 && end > start, 'Install the artifact adapter before testing');
-const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath);
+const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', 'fileMediaUrl', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath, paths.fileMediaUrl);
 const { fileAddressFor } = new Function(source.slice(source.indexOf('const FILE_ADDRESS_PREFIX'), source.indexOf('const EMPTY_LIST$1')) + '; return {fileAddressFor};')();
 
 test('artifact paths use the owning workspace and normalize relative, spaced and Windows destinations', () => {
@@ -37,9 +37,31 @@ test('web URLs, executable schemes, non-path code and unresolved relative paths 
 });
 
 test('Markdown image destinations resolve relative and encoded paths through the authenticated file endpoint', () => {
-  assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
-  assert.equal(localPathMediaUrl('http:', 'http://localhost:1234', 'https://outside.invalid/a.png', '/workspace'), undefined);
-  assert.equal(localPathMediaUrl('file:', 'null', '/tmp/a.png'), undefined);
+  assert.equal(localPathMediaUrl('http://localhost:1234/', 'charts/my%20plot.svg', '/workspace'), 'http://localhost:1234/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
+  assert.equal(localPathMediaUrl('dsh-app://app/', 'charts/my%20plot.svg', '/workspace'), 'dsh-app://app/api/file?path=%2Fworkspace%2Fcharts%2Fmy%20plot.svg');
+  assert.equal(localPathMediaUrl('http://localhost:1234/', '/tmp/%XX.png', '/workspace'), undefined);
+  assert.equal(localPathMediaUrl('http://localhost:1234/', 'https://outside.invalid/a.png', '/workspace'), undefined);
+  assert.equal(localPathMediaUrl('file:///', '/tmp/a.png'), undefined);
+});
+
+test('artifact preview collection preserves the official file delegate and line navigation', async () => {
+  const primitives = await readFile(join(clientNodeModules, '@deepseek-ai/dsh-client-ui-primitives/lib/index.js'), 'utf8');
+  const start = primitives.indexOf('function localDestinationMention(');
+  const end = primitives.indexOf('function MarkdownFileLink(', start);
+  assert.ok(start > 0 && end > start);
+  const FileLink = Symbol('official file delegate');
+  const render = new Function('parseFileLink', 'jsx', 'MarkdownFileLink', 'renderSafeLink', 'normalizeUri', 'markdownCss',
+    primitives.slice(start, end) + '\nreturn renderAnchor;')(
+    () => ({ path: '/tmp/chart.png', line: 7 }),
+    (type: unknown, props: unknown) => ({ type, props }), FileLink,
+    () => { throw new Error('Local files must use the scoped delegate'); }, (uri: string) => uri, {},
+  );
+  const collected: string[] = [];
+  const context = { fileMentions: { resolve: (path: string) => { collected.push(path); return { open() {} }; } } };
+  const result = render('/tmp/chart.png#L7-L9', ['Chart'], 'key', true, false, context);
+  assert.equal(result.type, FileLink);
+  assert.deepEqual(result.props.file, { path: '/tmp/chart.png', line: 7 });
+  assert.deepEqual(collected, ['/tmp/chart.png'], 'The fragment is navigation, not part of the preview filename');
 });
 
 test('Windows artifact addresses preserve session reads across casing, separators and outside paths', () => {

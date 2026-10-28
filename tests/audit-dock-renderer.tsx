@@ -14,13 +14,13 @@ export function mount(client: (...args: any[]) => void) {
   const listeners = new Set<() => void>();
   const subscribe = (callback: () => void) => { listeners.add(callback); return () => { listeners.delete(callback); }; };
   const snapshot = () => store;
-  const useSessions = (select: any) => {
+  const useProjection = (key: string) => {
     const current = React.useSyncExternalStore(subscribe, snapshot);
-    return select({ byId: { [current.id]: { projectionValues: { agentPreset: current.preset } } } });
+    return key === 'agentPreset' ? current.preset : undefined;
   };
   function Fixture() {
     const current = React.useSyncExternalStore(subscribe, snapshot);
-    return <AuditDock sessionId={current.id} useSessions={useSessions} view={retained} />;
+    return <AuditDock sessionId={current.id} useProjection={useProjection} view={retained} />;
   }
   const node = document.createElement('div'); node.id = 'audit-render-fixture'; document.body.append(node);
   const root = createRoot(node); root.render(<Fixture />);

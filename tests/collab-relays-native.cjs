@@ -1,0 +1,108 @@
+const { app, BrowserWindow, ipcMain } = require('electron');
+const assert = require('node:assert/strict');
+const { join } = require('node:path');
+const { mkdirSync, mkdtempSync, writeFileSync, readFileSync, symlinkSync } = require('node:fs');
+const { createHash } = require('node:crypto');
+const { spawn } = require('node:child_process');
+const { createInterface } = require('node:readline');
+const root = join(__dirname, '..');
+mkdirSync(join(root, '.test-data'), { recursive: true });
+const data = mkdtempSync(join(root, '.test-data/collab-relays-native-'));
+process.env.DSH_DESKTOP_DATA_DIR = data;
+process.env.DSH_DESKTOP_CONFIG_HOME = join(data, 'core');
+process.env.DSH_TELEMETRY_DISABLED = '1';
+
+// 0.2.2 offers installation-owned bundles explicitly; install this test-only
+// extension in the disposable profile instead of relying on runtime discovery.
+const fixtureProfile = join(data, 'core/profiles/desktop');
+mkdirSync(join(fixtureProfile, 'node_modules'), { recursive: true });
+writeFileSync(join(fixtureProfile, 'package.json'), JSON.stringify({ name: 'dsh-profile-desktop', private: true,
+  dependencies: { 'dsh-p2p-collab': 'file:' + join(root, '.runtime/plugins/dsh-p2p-collab') },
+  dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface'] } } }));
+symlinkSync(join(root, '.runtime/plugins/dsh-p2p-collab'), join(fixtureProfile, 'node_modules/dsh-p2p-collab'), process.platform === 'win32' ? 'junction' : 'dir');
+
+const nativeFiles = ['dist/main/index.cjs', 'dist/preload/index.cjs', '.runtime/app/index.ts'];
+const hashes = () => Object.fromEntries(nativeFiles.map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')]));
+const nativeBefore = hashes();
+const children = [], fixtures = [0, 1].map(() => {
+  const child = spawn(join(root, '.runtime/bin', process.platform === 'win32' ? 'node.exe' : 'node'), ['services/relay/node_modules/tsx/dist/cli.mjs', 'services/relay/test/collab-fixture.ts'], { cwd: root, stdio: ['pipe', 'pipe', 'inherit'] });
+  children.push(child); return new Promise((resolve, reject) => { createInterface({ input: child.stdout }).once('line', line => resolve(JSON.parse(line))); child.once('error', reject); });
+});
+const report = { checks: [], errors: [], console: [], data, platform: process.platform };
+let done = false, started = false;
+const timer = setTimeout(() => finish(new Error('Relay profile UI timeout')), 120000);
+function finish(error) {
+  if (done) return; done = true; clearTimeout(timer);
+  if (error) report.errors.push(String(error.stack ?? error));
+  report.nativeUnchanged = JSON.stringify(nativeBefore) === JSON.stringify(hashes());
+  writeFileSync(join(data, 'report.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2));
+  for (const child of children) child.stdin.end(); app.quit();
+}
+app.on('quit', () => { for (const child of children) child.stdin.end(); if (report.errors.length) process.exitCode = 1; });
+app.on('web-contents-created', (_, contents) => contents.on('console-message', details => { if (details.level === 'error') report.console.push(details.message); }));
+const handlers = new Map(), original = ipcMain.handle.bind(ipcMain);
+ipcMain.handle = (channel, callback) => { handlers.set(channel, callback); return original(channel, async (...args) => {
+  const result = await callback(...args);
+  if (channel === 'desktop:ready' && !started) { started = true; setTimeout(() => run(args[0]).then(() => finish()).catch(async error => { report.ui = await args[0].sender.executeJavaScript('document.body.innerText').catch(() => ''); finish(error); }), 100); }
+  return result;
+}); };
+async function run(event) {
+  const contents = event.sender, window = BrowserWindow.fromWebContents(contents), js = code => contents.executeJavaScript(code, true);
+  window.setSize(1160, 900); contents.setBackgroundThrottling(false);
+  const until = async (fn, message) => { const deadline = Date.now() + 20000; while (!await fn()) { if (Date.now() > deadline) throw new Error(message); await new Promise(resolve => setTimeout(resolve, 80)); } };
+  const click = async (label, selector = 'body') => {
+    await until(() => js(`Array.from(document.querySelector(${JSON.stringify(selector)})?.querySelectorAll('button')??[]).some(b=>b.textContent.trim()===${JSON.stringify(label)}&&!b.disabled)`), 'Button missing: ' + label);
+    return js(`(()=>{Array.from(document.querySelector(${JSON.stringify(selector)}).querySelectorAll('button')).find(b=>b.textContent.trim()===${JSON.stringify(label)}&&!b.disabled).click();return !!document.querySelector('[data-testid="collab-page"]')?.inert;})()`);
+  };
+  const fill = async (selector, value) => { await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})&&!document.querySelector(${JSON.stringify(selector)}).disabled`), 'Input missing: ' + selector); return js(`(async()=>{const el=document.querySelector(${JSON.stringify(selector)});Object.getOwnPropertyDescriptor(el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));await new Promise(requestAnimationFrame)})()`); };
+  const select = id => js(`(()=>{const el=document.querySelector('select[aria-label="已保存的中继"]');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(el,${JSON.stringify(id)});el.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  const rpc = (method, args = {}, channel = '/desktop-collab') => js(`(async()=>{const method=${JSON.stringify(method)}; const r=await fetch(${JSON.stringify(channel + '/' + method)},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({type:'client-request',rpcId:crypto.randomUUID(),method,payload:{args:${JSON.stringify(args)}}})});const body=await r.json();if(!body.result.ok)throw Error(body.result.error.message);return body.result.value;})()`);
+  await until(() => js(`(()=>{const b=Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue','稍后配置','Configure later'].includes(b.textContent));if(b){if(!b.disabled)b.click();return false;}return document.getElementById('root')?.inert===false&&!!document.querySelector('[contenteditable="true"]')})()`), 'Onboarding did not finish');
+  const [a, b] = await Promise.all(fixtures), act = action => handlers.get('desktop:remote-action')(event, action);
+  await act({ type: 'configure', config: { relay: a.origin, enabled: false, background: true, sessionOnly: true, name: 'Legacy A fixture' } });
+  await act({ type: 'register', code: a.code });
+  await click('插件');
+  await until(() => js(`!!document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role=switch]')`), 'Plugin missing');
+  await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] [role=switch]').click()`);
+  await until(async () => { try { return !!(await rpc('relays/state')).activeId; } catch { return false; } }, 'Legacy import failed');
+  let state = await rpc('relays/state'); const idA = state.activeId;
+  assert.equal(state.profiles.length, 1); assert.equal(state.remote.registered, true);
+  assert.equal((await handlers.get('desktop:remote-state')(event)).config.enabled, false);
+  const identityA = (await rpc('state')).peer.id; await rpc('sync');
+  report.checks.push('Existing desktop registration migrates through existing IPC; native phone connection is disabled without unregistering');
+  await js(`document.querySelector('[data-plugin-package="dsh-p2p-collab"] button').click()`);
+  await until(() => js(`!!document.querySelector('[aria-label="中继配置管理"]')`), 'Plugin settings slot did not replace native settings');
+  await fill('input[aria-label="中继名称"]', 'Relay A'); await click('保存名称');
+  await click('新增中继'); await fill('input[aria-label="新中继名称"]', 'Relay B'); await fill('input[aria-label="新中继地址"]', b.origin); await click('保存新中继');
+  await until(async () => (await rpc('relays/state')).profiles.length === 2, 'Second profile missing');
+  state = await rpc('relays/state'); const idB = state.profiles.find(p => p.name === 'Relay B').id;
+  await click('切换到此中继'); await until(async () => (await rpc('relays/state')).activeId === idB, 'GUI switch failed');
+  await until(() => js(`!!document.querySelector('input[aria-label="注册码"]')`), 'New registration form missing');
+  await fill('input[aria-label="注册码"]', b.code); await click('注册此中继'); await until(async () => (await rpc('state')).registered, 'Second registration failed');
+  const identityB = (await rpc('state')).peer.id; assert.notEqual(identityA, identityB);
+  await click('协作空间'); await until(() => js(`!!document.querySelector('[data-testid="collab-page"]')`), 'Workspace missing');
+  await click('发布任务'); await until(() => js(`!!document.querySelector('.collab-compose textarea')`), 'Draft editor missing');
+  await fill('.collab-compose textarea', 'Draft belongs only to Relay B');
+  await js(`document.querySelector('.collab-relay-picker').open=true`); await select(idA); assert.equal(await click('切换到此中继', '.collab-relay-picker'), true, 'The old draft editor stays inert while switching');
+  await until(async () => (await rpc('relays/state')).activeId === idA, 'Return to A failed');
+  assert.equal((await rpc('state')).peer.id, identityA); assert.equal(await rpc('draft-get', { key: 'new-task' }), null);
+  await select(idB); await click('切换到此中继', '.collab-relay-picker'); await until(async () => (await rpc('relays/state')).activeId === idB, 'Return to B failed');
+  assert.equal((await rpc('draft-get', { key: 'new-task' })).body, 'Draft belongs only to Relay B'); assert.equal((await rpc('state')).peer.id, identityB);
+  assert.ok((await rpc('relays/state')).profiles.every(p => p.registered));
+  report.checks.push('GUI add, rename, register and A/B/A switching retain distinct identities and flush the live editor to its own profile; both registrations survive');
+  await click('扫码绑定手机', '.collab-relay-picker'); await until(() => js(`!!document.querySelector('.collab-relay-picker img[alt="当前中继的手机配对二维码"]')`), 'Per-profile QR missing');
+  await click('取消配对', '.collab-relay-picker');
+  await click('解除此中继注册', '.collab-relay-picker'); await click('确认解除注册', '.collab-relay-picker');
+  await until(async () => !(await rpc('state')).registered, 'Explicit revocation failed');
+  state = await rpc('relays/state'); assert.equal(state.profiles.find(p => p.id === idA).registered, true); assert.equal(state.profiles.find(p => p.id === idB).registered, false);
+  assert.equal((await rpc('draft-get', { key: 'new-task' })).body, 'Draft belongs only to Relay B');
+  report.checks.push('Phone pairing uses the active profile; explicit confirmed unregister affects only B and preserves its draft');
+  await select(idA); await click('切换到此中继', '.collab-relay-picker'); await until(async () => (await rpc('relays/state')).activeId === idA, 'A was affected by B revocation');
+  assert.equal((await rpc('state')).registered, true);
+  window.show(); window.focus(); await js(`document.querySelector('.collab-relay-picker').scrollIntoView()`);
+  writeFileSync(join(data, 'relay-profiles.png'), (await contents.capturePage()).toPNG());
+  assert.deepEqual(hashes(), nativeBefore); assert.deepEqual(report.console, []);
+  report.checks.push('Existing Electron main, preload and runtime entrypoint hashes remain unchanged; browser console has no errors');
+}
+app.setAppPath(root);
+require(join(root, 'dist/main/index.cjs'));

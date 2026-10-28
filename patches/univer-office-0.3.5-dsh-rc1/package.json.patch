@@ -1,0 +1,31 @@
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "dsh-univer-office",
+-  "version": "0.3.5",
++  "version": "0.3.5-desktop.1",
+   "description": "DSH × Univer integration with a bundled collaboration Gateway and Viewer: inline previews, live floating Worktree windows, and session-end review actions in DeepSeek Harness.",
+   "type": "module",
+   "main": "./lib/index.js",
+@@ -99,13 +99,13 @@
+   },
+   "peerDependencies": {
+     "@deepseek-ai/cordis": "^4.0.2",
+-    "@deepseek-ai/dsh-attachment": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-llm": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-session": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-settings": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-skill": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
+-    "@deepseek-ai/dsh-tools": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1",
++    "@deepseek-ai/dsh-attachment": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-host-webserver": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-llm": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-session": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-settings": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-skill": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
++    "@deepseek-ai/dsh-tools": "^0.1.5-rc.3 || ^0.1.7-alpha.2 || ^0.1.7-rc.1 || 0.2.0-rc.1",
+     "@deepseek-ai/schemastery": "^3.18.1"
+   },
+   "engines": {

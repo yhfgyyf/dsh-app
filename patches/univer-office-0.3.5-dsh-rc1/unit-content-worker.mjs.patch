@@ -1,0 +1,23 @@
+--- a/artifacts/unit-content-worker.mjs
++++ b/artifacts/unit-content-worker.mjs
+@@ -306465,6 +306465,7 @@
+       return HorizontalAlign.LEFT;
+     case "center":
+       return HorizontalAlign.CENTER;
++    case "right":
+     case "normal":
+       return HorizontalAlign.RIGHT;
+     default:
+@@ -310194,9 +310195,9 @@
+     return this;
+   }
+   /**
+-  * Sets the horizontal alignment for the range using `left`, `center`, or `normal`.
+-  * These parameter names follow Google Apps Script. In Univer, `normal` means right alignment; `right` is not accepted.
+-  * @param {FHorizontalAlignment} alignment The horizontal alignment: `left`, `center`, or `normal` (right alignment).
++  * Sets the horizontal alignment for the range using `left`, `center`, `right`, or legacy `normal`.
++  * These parameter names follow Google Apps Script. In Univer, `normal` means right alignment; `right` is also accepted as a local compatibility alias.
++  * @param {FHorizontalAlignment} alignment The horizontal alignment: `left`, `center`, `right`, or legacy `normal` (right alignment).
+   * @returns {FRange} this range, for chaining
+   * @example
+   * ```ts

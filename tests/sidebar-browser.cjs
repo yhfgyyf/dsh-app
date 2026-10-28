@@ -79,6 +79,9 @@ ipcMain.handle = (channel, listener) => {
 };
 async function run(event) {
   const host = event.sender;
+  const resourceURL = await host.executeJavaScript(`(() => { const url = new URL('dsh-resource://file/session/fixture/sample.txt'); return { protocol: url.protocol, hostname: url.hostname, pathname: url.pathname }; })()`);
+  assert.deepEqual(resourceURL, { protocol: 'dsh-resource:', hostname: 'file', pathname: '/session/fixture/sample.txt' });
+  report.checks.push('Renderer URL parsing retains the file resource provider hostname, including older Chromium');
   const window = BrowserWindow.fromWebContents(host);
   window.setSize(980, 720);
   const invoke = (channel, ...args) => handlers.get('desktop:' + channel)({ sender: host, senderFrame: host.mainFrame }, ...args);
@@ -109,7 +112,7 @@ async function run(event) {
   await sleep(400); // Allow the sidebar's opening transition to settle.
   const rect = await host.executeJavaScript(`(() => {const r=document.querySelector('.desktop-browser-viewport').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height};})()`);
   assert.equal(nativeView.getBounds().x, Math.round(rect.x * host.getZoomFactor()));
-  assert.equal(nativeView.getBounds().width, Math.round(rect.width * host.getZoomFactor()));
+  assert.ok(Math.abs(nativeView.getBounds().width - rect.width * host.getZoomFactor()) <= 1, 'Native width must match the DOM viewport within integer pixel rounding');
   report.checks.push('Clicking a link opens a visible native browser inside the actual DSH right sidebar, including X-Frame-Options DENY pages');
   const safety = await page.executeJavaScript(`({node:typeof require,preload:typeof window.dshDesktop,pixel:chart.getContext('2d').getImageData(0,0,1,1).data[3]})`);
   assert.deepEqual(safety, { node: 'undefined', preload: 'undefined', pixel: 255 });

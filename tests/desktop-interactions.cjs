@@ -44,6 +44,8 @@ function restore() {
 }
 
 async function verifySelection(contents, text, until) {
+  contents.setBackgroundThrottling(false);
+  contents.focus();
   await contents.executeJavaScript('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))');
   const position = await contents.executeJavaScript(`(() => {
     const text = ${JSON.stringify(text)};
@@ -104,18 +106,23 @@ async function verifyLocalMenu(host, workspace, until) {
   if (process.platform === 'darwin') pickerResults.push('/Applications/Preview.app');
   await js(`document.querySelector('button[aria-label="选择本地打开方式"]').click()`);
   await js(`Array.from(document.querySelectorAll('[role="menuitem"]')).find(el=>el.textContent.includes('选择其他应用')).click()`);
-  await until(() => appChoices.length > 0, 'Choose app did not reach the OS');
-  const choice = appChoices.at(-1);
-  if (process.platform === 'win32') {
-    assert.equal(choice.path, join(workspace, 'report.md'));
-    const script = Buffer.from(choice.args.at(-1), 'base64').toString('utf16le');
-    assert.ok(script.includes('[OpenWith]::SHOpenWithDialog'));
-    assert.equal(script.includes(workspace), false);
-    // Compile the exact production interop on Windows without opening an application.
-    const compile = script.slice(0, script.indexOf('$info = New-Object')) + "\nWrite-Output 'OPEN_WITH_COMPILED'";
-    const output = childProcess.execFileSync(choice.file, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(compile, 'utf16le').toString('base64')], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
-    assert.match(output, /OPEN_WITH_COMPILED/);
-  } else assert.deepEqual(choice.args, ['-a', '/Applications/Preview.app', join(workspace, 'report.md')]);
+  if (process.platform === 'linux') {
+    await until(() => js(`document.body.innerText.includes('当前系统不支持选择打开方式。')`), 'Unsupported choose-app action did not explain the Linux limitation');
+    assert.equal(appChoices.length, 0, 'Unsupported Linux chooser reached an OS command');
+  } else {
+    await until(() => appChoices.length > 0, 'Choose app did not reach the OS');
+    const choice = appChoices.at(-1);
+    if (process.platform === 'win32') {
+      assert.equal(choice.path, join(workspace, 'report.md'));
+      const script = Buffer.from(choice.args.at(-1), 'base64').toString('utf16le');
+      assert.ok(script.includes('[OpenWith]::SHOpenWithDialog'));
+      assert.equal(script.includes(workspace), false);
+      // Compile the exact production interop on Windows without opening an application.
+      const compile = script.slice(0, script.indexOf('$info = New-Object')) + "\nWrite-Output 'OPEN_WITH_COMPILED'";
+      const output = childProcess.execFileSync(choice.file, ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(compile, 'utf16le').toString('base64')], { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+      assert.match(output, /OPEN_WITH_COMPILED/);
+    } else assert.deepEqual(choice.args, ['-a', '/Applications/Preview.app', join(workspace, 'report.md')]);
+  }
   for (const [label, path, property] of [['选择文件…', join(workspace, 'my image.svg'), 'openFile'], ['选择文件夹…', workspace, 'openDirectory']]) {
     pickerResults.push(path);
     await until(() => js(`!document.querySelector('button[aria-label="选择本地打开方式"]').disabled`), 'Local action remained busy');

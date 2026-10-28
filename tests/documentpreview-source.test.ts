@@ -20,11 +20,13 @@ function harness() {
   const state = spec.init();
   const effects: (() => void)[] = [];
   // Execute the published component's selection and effect before loading begins.
-  const preview = new Function('react', 'hostFileOf', 'matchingDocumentPreviews', 'PLAIN_BODY_ID', `${source.slice(viewStart, viewEnd)} return selected; }\nreturn TextPreview;`)(
+  const preview = new Function('react', 'hostFileOf', 'matchingDocumentPreviews', 'PLAIN_BODY_ID', 'unviewableBinaryPath', 'binaryDocumentPath', `${source.slice(viewStart, viewEnd)} return selected; }\nreturn TextPreview;`)(
     { useMemo: (fn: () => unknown) => fn(), useEffect: (fn: () => void) => effects.push(fn) },
     () => ({ path: '/fixture.html' }),
     (definitions: { id: string }[]) => definitions.filter(item => item.id === html),
     plain,
+    () => false,
+    () => false,
   );
   const actions = Object.fromEntries(Object.entries(spec.actions).map(([name, fn]) => [name, (...args: unknown[]) => (fn as Function)(state, ...args)]));
   const render = (revision: number, params: unknown = undefined, tabId = 'one') => preview({

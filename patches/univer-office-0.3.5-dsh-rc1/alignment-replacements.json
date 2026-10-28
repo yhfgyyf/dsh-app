@@ -1,0 +1,46 @@
+{
+  "lib/index.js": [
+    {
+      "before": "{\"kind\":\"alias\",\"pkg\":\"sheets\",\"unit\":\"sheet\",\"name\":\"FHorizontalAlignment\",\"declaration\":\"FHorizontalAlignment = \\'left\\' | \\'center\\' | \\'normal\\'\",\"summary\":\"Horizontal alignment accepted by the Facade API. `normal` means right alignment.\",\"documentation\":{\"description\":\"Horizontal alignment accepted by the Facade API. `normal` means right alignment.\",\"tags\":[]},\"def\":\"\\'left\\' | \\'center\\' | \\'normal\\'\"}",
+      "after": "{\"kind\":\"alias\",\"pkg\":\"sheets\",\"unit\":\"sheet\",\"name\":\"FHorizontalAlignment\",\"declaration\":\"FHorizontalAlignment = \\'left\\' | \\'center\\' | \\'right\\' | \\'normal\\'\",\"summary\":\"Horizontal alignment accepted by the Facade API. `right` and legacy `normal` both mean right alignment.\",\"documentation\":{\"description\":\"Horizontal alignment accepted by the Facade API. `right` and legacy `normal` both mean right alignment.\",\"tags\":[]},\"def\":\"\\'left\\' | \\'center\\' | \\'right\\' | \\'normal\\'\"}",
+      "count": 1
+    },
+    {
+      "before": "using `left`, `center`, or `normal`.",
+      "after": "using `left`, `center`, `right`, or legacy `normal`.",
+      "count": 2
+    },
+    {
+      "before": "`right` is not accepted.",
+      "after": "`right` is also accepted as a local compatibility alias.",
+      "count": 2
+    },
+    {
+      "before": "The horizontal alignment: `left`, `center`, or `normal` (right alignment).",
+      "after": "The horizontal alignment: `left`, `center`, `right`, or legacy `normal` (right alignment).",
+      "count": 1
+    }
+  ],
+  "artifacts/unit-content-worker.mjs": [
+    {
+      "before": "    case \"normal\":\n      return HorizontalAlign.RIGHT;",
+      "after": "    case \"right\":\n    case \"normal\":\n      return HorizontalAlign.RIGHT;",
+      "count": 1
+    },
+    {
+      "before": "using `left`, `center`, or `normal`.",
+      "after": "using `left`, `center`, `right`, or legacy `normal`.",
+      "count": 1
+    },
+    {
+      "before": "`right` is not accepted.",
+      "after": "`right` is also accepted as a local compatibility alias.",
+      "count": 1
+    },
+    {
+      "before": "The horizontal alignment: `left`, `center`, or `normal` (right alignment).",
+      "after": "The horizontal alignment: `left`, `center`, `right`, or legacy `normal` (right alignment).",
+      "count": 1
+    }
+  ]
+}

@@ -55,6 +55,21 @@ function release(version = '0.1.2', suffix = 'macOS-arm64.zip') {
   return { tag_name: 'v' + version, draft: false, prerelease: true, published_at: '2026-09-09T00:00:00Z', assets: [{ name, state: 'uploaded', digest: 'sha256:' + sha, size: bytes.length, browser_download_url: `https://github.com/yhfgyyf/dsh-app/releases/download/v${version}/${name}` }] };
 }
 
+test('Linux packages do not schedule an unsupported in-app update', async context => {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-linux-update-'));
+  let calls = 0;
+  const updater = new DesktopUpdates({ currentVersion: '0.1.33', platform: 'linux', arch: 'x64', home, appPath: home, runtimeRoot: home, executable: '/opt/dsh-desktop/dsh-desktop', packaged: true, corePid: () => undefined, quit: () => {}, publish: () => {}, fetch: async () => { calls++; return Response.json([]); } });
+  context.mock.timers.enable({ apis: ['Date', 'setTimeout'] });
+  try {
+    updater.start();
+    await updater.setSchedule({ mode: 'daily', time: '09:00' });
+    context.mock.timers.tick(48 * 60 * 60 * 1000);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(calls, 0);
+    assert.equal(updater.state.status, 'idle');
+  } finally { updater.stop(); context.mock.timers.reset(); }
+});
+
 test('version ordering handles numeric versions, previews, stable releases and downgrades', () => {
   for (const [a, b] of [['0.1.10', '0.1.9'], ['1.0.0', '1.0.0-rc.9'], ['1.0.0-rc.10', '1.0.0-rc.2'], ['1.0.0-beta', '1.0.0-alpha'], ['1.0.0-alpha.1', '1.0.0-alpha']]) {
     assert.equal(compareVersions(a, b), 1); assert.equal(compareVersions(b, a), -1);

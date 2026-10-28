@@ -1,0 +1,114 @@
+diff --git a/cordis.patch.yml b/cordis.patch.yml
+index ee3a0b7e78e9b92a20a3e07ecc035f7c6f21eed0..f5344d65afe506cab92805413cf616e46f6da27c 100644
+--- a/cordis.patch.yml
++++ b/cordis.patch.yml
+@@ -30,6 +30,8 @@
+ # The base bundle exposes one process-wide coding-agent toolset. This TUI now
+ # composes every session from an agent preset instead, matching the Web surface:
+ # host registries stay mounted, while model-facing rows move behind the preset.
++- id: tool-plugin-manager
++  disabled: true
+ - id: tool-bash
+   disabled: true
+ - id: tool-pwsh
+@@ -46,6 +48,8 @@
+   disabled: true
+ - id: tool-skill
+   disabled: true
++- id: command-goal
++  disabled: true
+ - id: tool-goal
+   disabled: true
+ - id: plan-mode
+@@ -64,7 +68,7 @@
+   disabled: true
+ - id: tool-subagent-fork
+   disabled: true
+-- id: workflow-worker-thread
++- id: workflow-ptc
+   disabled: true
+ - id: tool-workflow
+   disabled: true
+@@ -85,10 +89,7 @@
+     - id: subagent-model-selection-settings
+       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+ 
+-    # PTC mode presents the preset's tools through run_code and requires this
+-    # host-plane worker. Other presets leave it idle.
+-    - id: code-runtime
+-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
++    # The alpha.2 base already owns ptc-runtime; presets use its run_code transport.
+ 
+     # Cordis mode needs the host-side dynamic package registry and read-only
+     # inspect providers. Client-half packages still require a connected Web UI;
+diff --git a/package.json b/package.json
+index e5260aadfaca5e3d6b2a821816820c38811d4c3c..34cb5d51963aefb89b461ad2f0dcff695b817998 100644
+--- a/package.json
++++ b/package.json
+@@ -44,19 +44,19 @@
+     "url": "https://github.com/yhfgyyf/dsh-tui-app/issues"
+   },
+   "peerDependencies": {
+-    "@deepseek-ai/dsh-agent": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-agent-presets": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-api-session-controller": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-cmdline": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-code-runtime-worker-thread": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-cordis-host-runner": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-llm": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-session": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-tool-subagent": "^0.1.3-alpha.2",
+-    "@deepseek-ai/dsh-workspace": "^0.1.3-alpha.2",
++    "@deepseek-ai/dsh-agent": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-agent-presets": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-api-session-controller": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-cmdline": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-cordis-host-runner": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-llm": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-session": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-tool-subagent": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-workspace": "^0.1.6-alpha.2",
+     "@deepseek-ai/schemastery": "^3.18.1",
+     "commander": "^15.0.0",
+-    "@deepseek-ai/dsh-session-log-export": "^0.1.3-alpha.2"
++    "@deepseek-ai/dsh-session-log-export": "^0.1.6-alpha.2",
++    "@deepseek-ai/dsh-ptc-runtime-node": "^0.1.6-alpha.2"
+   },
+   "peerDependenciesMeta": {
+     "@deepseek-ai/dsh-agent": {
+@@ -71,9 +71,6 @@
+     "@deepseek-ai/dsh-cmdline": {
+       "optional": true
+     },
+-    "@deepseek-ai/dsh-code-runtime-worker-thread": {
+-      "optional": true
+-    },
+     "@deepseek-ai/dsh-cordis-host-runner": {
+       "optional": true
+     },
+@@ -97,6 +94,9 @@
+     },
+     "@deepseek-ai/dsh-session-log-export": {
+       "optional": true
++    },
++    "@deepseek-ai/dsh-ptc-runtime-node": {
++      "optional": true
+     }
+   },
+   "dsh": {
+diff --git a/scripts/check-package.mjs b/scripts/check-package.mjs
+index 35d1b954ee9b098c9578d656b0493cb804cd6fb5..5906ba1a8a8cb3442d18640dc505364aed5c1dd8 100644
+--- a/scripts/check-package.mjs
++++ b/scripts/check-package.mjs
+@@ -42,9 +42,9 @@ for (const dependency of [
+ 
+ for (const [dependency, range] of Object.entries(manifest.peerDependencies)) {
+   if (dependency.startsWith('@deepseek-ai/dsh-')) {
+-    assert.equal(
++    assert.match(
+       range,
+-      "^0.1.3-alpha.2",
++      /\^0\.1\.6-alpha\.2/,
+       `${dependency} must target the supported DSH runtime`
+     )
+   }

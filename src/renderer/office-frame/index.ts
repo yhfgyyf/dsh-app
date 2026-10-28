@@ -2,6 +2,7 @@ import { renderAsync } from 'docx-preview';
 import { PptxViewer, RECOMMENDED_ZIP_LIMITS } from '@aiden0z/pptx-renderer';
 import { verifyOfficeArchive, OFFICE_ZIP_LIMITS } from '../../shared/office-preview.ts';
 import type { OfficeFormat } from '../../shared/office-preview.ts';
+import { contentMatches, scrollToContentMatch } from '../content-search.ts';
 
 const channel = document.documentElement.dataset.channel!;
 const parentOrigin = document.documentElement.dataset.parentOrigin!;
@@ -10,6 +11,22 @@ const cancellation = new AbortController();
 let viewer: PptxViewer | undefined;
 let disposeWord: (() => void) | undefined;
 let loaded = false, disposed = false, reportedBlocked = false;
+let findQuery = '', findActive = 0;
+function findContent(query: string, forward?: boolean) {
+  const result = contentMatches(container, query);
+  findActive = query === findQuery && forward !== undefined && result.matches.length ? (findActive + (forward ? 1 : result.matches.length - 1)) % result.matches.length : 0;
+  findQuery = query;
+  CSS.highlights.set('desktop-content-results', new Highlight(...result.matches.map(match => match.range)));
+  const match = result.matches[findActive];
+  if (match) { CSS.highlights.set('desktop-content-active', new Highlight(match.range)); scrollToContentMatch(match.range, document.body); }
+  else CSS.highlights.delete('desktop-content-active');
+  parent.postMessage({ type: 'office-preview:find-result', channel, query, matches: result.matches.length, active: match ? findActive + 1 : 0 }, parentOrigin === 'null' ? '*' : parentOrigin);
+}
+document.addEventListener('keydown', event => {
+  if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') {
+    event.preventDefault(); parent.postMessage({ type: 'office-preview:find-start', channel }, parentOrigin === 'null' ? '*' : parentOrigin);
+  }
+});
 const report = (state: string, extra: { message?: string; pages?: number } = {}) => {
   if (!disposed) parent.postMessage({ type: 'office-preview:status', channel, state, ...extra }, parentOrigin === 'null' ? '*' : parentOrigin);
 };
@@ -81,6 +98,7 @@ addEventListener('message', event => {
   const value = event.data;
   if (event.source !== parent || event.origin !== parentOrigin || value?.channel !== channel) return;
   if (value.type === 'office-preview:dispose') { dispose(); return; }
+  if (!disposed && value.type === 'office-preview:find' && typeof value.query === 'string' && value.query.length <= 4096 && (value.forward === undefined || typeof value.forward === 'boolean')) { findContent(value.query, value.forward); return; }
   if (disposed || loaded || value.type !== 'office-preview:load' || !(value.data instanceof ArrayBuffer) || !['docx', 'pptx'].includes(value.format)) return;
   loaded = true;
   void preview(value.data, value.format);

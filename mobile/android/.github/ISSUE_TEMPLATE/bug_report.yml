@@ -1,0 +1,100 @@
+name: Bug report
+description: Report a problem with DSH Mobile
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If the app named a connection failure, the fix is very likely in
+        [Troubleshooting](https://github.com/sorsama/deepseek-harness-mobile/wiki/Troubleshooting) —
+        it is keyed on the exact sentence the app shows.
+
+        **Do not report a security vulnerability here.** See
+        [SECURITY.md](https://github.com/sorsama/deepseek-harness-mobile/blob/main/docs/SECURITY.md).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched the existing issues.
+          required: true
+        - label: If this is a connection problem, I read the Troubleshooting page.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Settings → About shows the app version and the protocol baseline.
+      placeholder: e.g. 0.3.1
+    validations:
+      required: true
+  - type: input
+    id: harness-version
+    attributes:
+      label: Harness version
+      description: Shown on the connect screen and in Settings → Harness (`host.describe`).
+      placeholder: e.g. 0.1.1-rc.2
+    validations:
+      required: true
+  - type: input
+    id: android
+    attributes:
+      label: Android version and device
+      description: Several past bugs only happened on one API level or on an emulator.
+      placeholder: e.g. Android 13, Pixel 6a — or Android 12 emulator
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How are you connected?
+      options:
+        - Wi-Fi LAN mode (harness patch)
+        - adb reverse over USB or an emulator (loopback)
+        - Harness running on this device (loopback)
+        - Other / not connected yet
+    validations:
+      required: true
+  - type: dropdown
+    id: web-gui
+    attributes:
+      label: Does the harness's own web GUI do the same thing?
+      description: The fastest way to tell an app bug from a harness one.
+      options:
+        - "No — the web GUI is fine, only the app misbehaves"
+        - "Yes — the web GUI does it too"
+        - Haven't checked
+        - Not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Steps to reproduce, what you expected instead, and how often it happens.
+    validations:
+      required: true
+  - type: input
+    id: message
+    attributes:
+      label: Exact message shown
+      description: If the app named the failure or the error, paste that sentence verbatim.
+  - type: input
+    id: language
+    attributes:
+      label: App language
+      description: Only needed if the problem might be text, layout, or right-to-left related.
+      placeholder: e.g. English, or ไทย
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: |
+        Screenshots or a screen recording help a lot for UI problems. For a crash or a
+        silent failure, attach logcat:
+
+        ```sh
+        adb logcat --pid=$(adb shell pidof -s com.labteto.dshmobile)
+        ```
+
+        Use `com.labteto.dshmobile.debug` for a debug build. Please redact your LAN
+        addresses and anything private in your session content.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!--
+        What the window paints when no content is drawn over it yet.
+
+        It matches `DsLight.bgBase` (and `DsDark.bgBase` in values-night) on purpose. Changing the
+        app language recreates the activity, and a transparent window has nothing to show between
+        the old Compose tree going away and the new one's first frame — which is where the black
+        flash came from. An opaque background of the right colour makes that gap invisible.
+    -->
+    <color name="window_background">#FFFFFF</color>
+</resources>

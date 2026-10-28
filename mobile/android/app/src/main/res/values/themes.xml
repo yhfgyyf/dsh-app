@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.DshMobile" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+    <!--
+        The manifest theme, so it is what the window starts with on *every* creation of the
+        activity — including the recreate that applying a language forces, which happens long after
+        any splash. Its background was a hardcoded white, which is why that recreate flashed against
+        a dark app; it now follows the same token as the post-splash theme.
+    -->
+    <style name="Theme.DshMobile.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/window_background</item>
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.DshMobile</item>
+    </style>
+</resources>

@@ -1,0 +1,115 @@
+{
+  "baseVersion": "0.3.5-desktop.1",
+  "baseSha256": "addae45d4764c096bc4941e09dd6c231dd58906db26ce9f2df414cdec62f3d20",
+  "version": "0.3.5-universal.1",
+  "dsh": "0.2.1-rc.2",
+  "node": ">=22.16.0",
+  "optionalNative": [
+    "libsql",
+    "@univerjs-pro/engine-formula-rust-binding",
+    "@univerjs-pro/exchange-node-binding"
+  ],
+  "packageJsonBefore": "6515da32240a647f7ebdebcf5797a7e309f6a8b13491006655e67d690cc19571",
+  "packageJsonAfter": "67911fe991d51f4292d7bed92c75c3d5363675be9ba77faa2dd9a38cb4d92bf8",
+  "files": [
+    {
+      "path": "artifacts/unit-content-worker.mjs",
+      "before": "afe2ecb9a5a38ddc4462d58bfc073218d5af9dba0a2f965e605c8677d627378d",
+      "prepend": "import { createRequire as univerUniversalRequire } from 'node:module';\nconst { portableBackend: univerPortableBackend } = univerUniversalRequire(import.meta.url)('./universal-backend.cjs');\n",
+      "replacements": [
+        {
+          "before": "(UniverRustFormulaEnginePlugin),",
+          "after": "(UniverRustFormulaEnginePlugin, { useRustEngine: !univerPortableBackend }),",
+          "count": 1
+        }
+      ],
+      "after": "8b29dfc413618a67cb526c8a9361f69aa454ed0dce2ac2debb3a71c196722c96"
+    },
+    {
+      "path": "artifacts/gateway.cjs",
+      "before": "ef1ce4114e7d51f00bcd11efd9c34528ca51cf4f59105abd14aae37921045fb2",
+      "prepend": "var univerPortableBackend = require('./universal-backend.cjs').portableBackend;\n",
+      "replacements": [
+        {
+          "before": "[\"UniverRustFormulaEnginePlugin\"], {})",
+          "after": "[\"UniverRustFormulaEnginePlugin\"], { useRustEngine: !univerPortableBackend })",
+          "count": 1
+        },
+        {
+          "before": "require(\"libsql\")",
+          "after": "(univerPortableBackend ? require(\"./portable-sqlite.cjs\") : require(\"libsql\"))",
+          "count": 2
+        }
+      ],
+      "after": "feca47e771008fb46e199acc4539476dcecab149d5eed4a91ebdd072cb94cbfd"
+    },
+    {
+      "path": "artifacts/upgrade-worker.cjs",
+      "before": "160fea751e9311d672c9f7cb89d8d90214c76f588fb0123659eee7eef3ead8f0",
+      "prepend": "var univerPortableBackend = require('./universal-backend.cjs').portableBackend;\n",
+      "replacements": [
+        {
+          "before": "[\"UniverRustFormulaEnginePlugin\"], {})",
+          "after": "[\"UniverRustFormulaEnginePlugin\"], { useRustEngine: !univerPortableBackend })",
+          "count": 1
+        },
+        {
+          "before": "require(\"libsql\")",
+          "after": "(univerPortableBackend ? require(\"./portable-sqlite.cjs\") : require(\"libsql\"))",
+          "count": 2
+        }
+      ],
+      "after": "00246d2ddfde9173531fc360a3f88bb2533092eeaa93ff75960655bc3a3b3da7"
+    },
+    {
+      "path": "lib/index.js",
+      "before": "8f21e0d967edc660e83736ed62fec92ce6d02017415d95b46cb24bdff9e16ce6",
+      "prepend": "import { createRequire as univerUniversalRequire } from 'node:module';\nconst { portableBackend: univerPortableBackend } = univerUniversalRequire(import.meta.url)('../artifacts/universal-backend.cjs');\n",
+      "replacements": [
+        {
+          "before": "  async importUnitContent(request, signal) {\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.sourceWorkspace, request.source, true)\n    ]);\n    const gateway = await this.requireGateway();\n    await this.requireWorktreeStatus(gateway, request.file, request.worktreeId, \"draft\");\n    const imported = await this.unitContent.import(request.source, request.docType, signal);\n    const result2 = await new GatewayWorktreeApi(\n      new GatewayClient(gateway, this.config.gatewayMutationTimeoutMs)\n    ).createUnit(request.file, request.worktreeId, imported.kind, request.name, imported.snapshot);\n    requireGatewaySuccess(result2, \"Gateway rejected the imported Unit.\");\n    signal?.throwIfAborted();\n    this.invalidate(request.file, request.worktreeId);\n    return {\n      ok: true,\n      operation: \"import\",\n      file: request.file,\n      result: { sourcePath: request.source, ...asRecord(result2) }\n    };\n  }",
+          "after": "  async importUnitContent(request, signal) {\n    if (univerPortableBackend) throw new UniverError(\"当前龙芯平台缺少上游 Office 转换组件；可继续创建、编辑和保存 .univer 文件。\", \"KYLIN_EXCHANGE_UNAVAILABLE\");\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.sourceWorkspace, request.source, true)\n    ]);\n    const gateway = await this.requireGateway();\n    await this.requireWorktreeStatus(gateway, request.file, request.worktreeId, \"draft\");\n    const imported = await this.unitContent.import(request.source, request.docType, signal);\n    const result2 = await new GatewayWorktreeApi(\n      new GatewayClient(gateway, this.config.gatewayMutationTimeoutMs)\n    ).createUnit(request.file, request.worktreeId, imported.kind, request.name, imported.snapshot);\n    requireGatewaySuccess(result2, \"Gateway rejected the imported Unit.\");\n    signal?.throwIfAborted();\n    this.invalidate(request.file, request.worktreeId);\n    return {\n      ok: true,\n      operation: \"import\",\n      file: request.file,\n      result: { sourcePath: request.source, ...asRecord(result2) }\n    };\n  }",
+          "count": 1
+        },
+        {
+          "before": "  async exportUnitContent(request, signal) {\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.outputWorkspace, request.output, false)\n    ]);\n    const gateway = await this.requireGateway();\n    return this.unitContent.export(gateway, request, signal);\n  }",
+          "after": "  async exportUnitContent(request, signal) {\n    if (univerPortableBackend) throw new UniverError(\"当前龙芯平台缺少上游 Office 转换组件；可继续创建、编辑和保存 .univer 文件。\", \"KYLIN_EXCHANGE_UNAVAILABLE\");\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.outputWorkspace, request.output, false)\n    ]);\n    const gateway = await this.requireGateway();\n    return this.unitContent.export(gateway, request, signal);\n  }",
+          "count": 1
+        },
+        {
+          "before": "\"Export a .univer document or unit to a user-facing file format.\"",
+          "after": "(univerPortableBackend ? \"Unavailable on LoongArch: the pinned upstream Office converter has no compatible native module. Use .univer for local editing and saving.\" : \"Export a .univer document or unit to a user-facing file format.\")",
+          "count": 1
+        },
+        {
+          "before": "\"Import an xlsx, csv, tsv, docx, or pptx file as a new Unit inside an explicit draft worktree.\"",
+          "after": "(univerPortableBackend ? \"Unavailable on LoongArch: the pinned upstream Office converter has no compatible native module. Use .univer for local editing and saving.\" : \"Import an xlsx, csv, tsv, docx, or pptx file as a new Unit inside an explicit draft worktree.\")",
+          "count": 1
+        },
+        {
+          "before": "async function resolveBrowserExecutablePath2(configured) {\n  if (configured !== void 0) return configured;\n  if (process.platform !== \"win32\") return void 0;\n  const resolved = await C5({ env: process.env });\n  if (resolved.status !== \"missing\") return void 0;\n  return edgeBrowserCandidatePaths(process.env).find((candidate) => existsSync(candidate));\n}",
+          "after": "async function resolveBrowserExecutablePath2(configured) {\n  if (univerPortableBackend) {\n    const browser = configured ?? process.env.UNIVER_RENDER_BROWSER?.trim();\n    if (!browser) throw new UniverError(\"龙芯截图和 PDF 需要通过 browserExecutablePath 或 UNIVER_RENDER_BROWSER 指定兼容的本机浏览器。\", \"KYLIN_BROWSER_REQUIRED\");\n    return browser;\n  }\n  if (configured !== void 0) return configured;\n  if (process.platform !== \"win32\") return void 0;\n  const resolved = await C5({ env: process.env });\n  if (resolved.status !== \"missing\") return void 0;\n  return edgeBrowserCandidatePaths(process.env).find((candidate) => existsSync(candidate));\n}",
+          "count": 1
+        }
+      ],
+      "after": "e038bb38a9d3f0153c1416eafa15587430d819de2f65bf0e96e28c7cf06787f1"
+    }
+  ],
+  "copiedFiles": [
+    {
+      "source": "patches/univer-office-universal/backend.cjs",
+      "path": "artifacts/universal-backend.cjs",
+      "sha256": "ca0ab58f4e292df48e8762fd72fe1f5ac2e64302aedfe464a15c53168a9b0643"
+    },
+    {
+      "source": "patches/univer-office-kylin/sqlite.cjs",
+      "path": "artifacts/portable-sqlite.cjs",
+      "sha256": "8dfd8ac4262a6107334df4cb7fc79eb7b549b927297ef82e14adf8b339b53bf8"
+    },
+    {
+      "source": "patches/univer-office-universal/README.md",
+      "path": "docs/CROSS-PLATFORM.md",
+      "sha256": "dbc0f9ce6f11c58a3b40857b134df48d42a8e1effdcbf55d7be9fa356aaca28e"
+    }
+  ]
+}

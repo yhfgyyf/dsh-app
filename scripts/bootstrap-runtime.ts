@@ -26,14 +26,18 @@ await mkdir(build, { recursive: true });
 try { await access(prefix); await rename(prefix, join(build, `global-before-${Date.now()}`)); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 await mkdir(prefix, { recursive: true });
 for (const name of ['package.json', 'package-lock.json']) await copyFile(join(runtimePackageRoot, name), join(prefix, name));
-// Shallow installation keeps DSH's complete dependency tree inside its package for snapshotting.
-await run(process.execPath, [npmCli, 'ci', '--install-strategy=shallow', '--no-audit', '--no-fund'], { cwd: prefix });
-const env = { ...process.env, DSH_HOME: join(build, 'patch-backups'), DSH_PATCH_GLOBAL_ROOT: globalRoot, DSH_INSTALL_ROOT: installRoot, DSH_PLUGIN_ROOT: pluginRoot };
+// One install anchor lets the optional official Browser Use providers share the
+// core's Cordis and scoped registries rather than install a second runtime.
+await run(process.execPath, [npmCli, 'ci', '--install-strategy=hoisted', '--no-audit', '--no-fund'], { cwd: prefix });
+const env = { ...process.env, DSH_HOME: join(build, 'patch-backups'), DSH_PATCH_GLOBAL_ROOT: globalRoot, DSH_PATCH_NODE_MODULES_ROOT: globalRoot, DSH_NODE_MODULES_ROOT: globalRoot, DSH_INSTALL_ROOT: installRoot, DSH_PLUGIN_ROOT: pluginRoot };
 const patch = join(root, 'patches', `dsh-${pins.dsh}`, 'apply.mjs');
 await run(process.execPath, [patch, '--apply'], { env });
 await run(process.execPath, [patch, '--verify'], { env });
+// Every build applies hash-checked patches to clean pinned sources. Preserve
+// the preceding checkout so local investigation or edits are never discarded.
+try { await access(pluginRoot); await rename(pluginRoot, join(build, `plugins-before-${Date.now()}`)); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 await mkdir(pluginRoot, { recursive: true });
-await linkRuntimeDependencies(join(installRoot, 'node_modules'), join(pluginRoot, 'node_modules'));
+await linkRuntimeDependencies(globalRoot, join(pluginRoot, 'node_modules'));
 for (const [name, value] of Object.entries(pins.plugins) as [string, { repository: string; commit: string; version: string }][]) {
   if (!/^dsh-[a-z-]+$/.test(name) || !/^[a-zA-Z0-9_-]+\/[a-zA-Z0-9_-]+$/.test(value.repository) || !/^[a-f0-9]{40}$/.test(value.commit)) throw new Error('Invalid plugin pin');
   const directory = join(pluginRoot, name);
@@ -44,7 +48,9 @@ for (const [name, value] of Object.entries(pins.plugins) as [string, { repositor
   const pkg = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
   if (pkg.name !== name || pkg.version !== value.version) throw new Error(`Plugin identity differs: ${name}`);
 }
+const pluginUpgradesInstaller = await import(new URL('install-plugin-upgrades.mjs', import.meta.url).href);
+await pluginUpgradesInstaller.applyPluginUpgrades({ pluginRoot, backupHome: build });
 await writeFile(join(build, 'source.json'), JSON.stringify({ installRoot, pluginRoot }, null, 2));
 const auditInstaller = await import(new URL('install-audit-compat.mjs', import.meta.url).href);
-await auditInstaller.applyAuditCompat({ nodeModules: join(installRoot, 'node_modules'), pluginRoot: join(pluginRoot, 'dsh-audit-mode'), backupHome: build });
+await auditInstaller.applyAuditCompat({ nodeModules: globalRoot, pluginRoot: join(pluginRoot, 'dsh-audit-mode'), backupHome: build });
 await run(process.execPath, [join(root, 'scripts/prepare-runtime.ts')], { env });

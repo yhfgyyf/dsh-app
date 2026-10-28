@@ -1,8 +1,10 @@
 // Replay a historical, model-free session through the actual desktop UI.
 const { app, ipcMain, BrowserWindow, webContents } = require('electron');
+app.commandLine.appendSwitch('lang', 'en-US');
 const assert = require('node:assert/strict');
 const { mkdirSync, writeFileSync, readFileSync } = require('node:fs');
 const { join } = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { randomUUID, createHash } = require('node:crypto');
 const { zstdCompressSync } = require('node:zlib');
 const interactions = require('./desktop-interactions.cjs');
@@ -91,6 +93,8 @@ ipcMain.handle = (channel, listener) => originalHandle(channel, async (...args) 
     setTimeout(() => run(args[0]).then(() => finish()).catch(async error => {
       report.ui = await args[0].sender.executeJavaScript('document.body.innerText.slice(0, 3000)').catch(() => 'unavailable');
       report.layout = await args[0].sender.executeJavaScript(`({width:innerWidth,collapsed:!!document.querySelector('[data-sidebar-collapsed]'),buttons:Array.from(document.querySelectorAll('button')).map(b=>b.getAttribute('aria-label')||b.title||b.textContent).filter(Boolean).slice(0,25)})`).catch(() => null);
+      report.artifactElements = await args[0].sender.executeJavaScript(`Array.from(document.querySelectorAll('.hWmORq_body button[title], .hWmORq_body a, .hWmORq_body img')).map(element=>({tag:element.tagName,title:element.title,text:element.textContent,src:element.getAttribute('src')}))`).catch(() => null);
+      report.previews = await args[0].sender.executeJavaScript(`Array.from(document.querySelectorAll('[data-office-preview], [data-document-preview], iframe')).map(element=>({tag:element.tagName,dataset:{...element.dataset},text:element.innerText,visible:element.checkVisibility({checkVisibilityCSS:true}),rect:element.getBoundingClientRect().toJSON()}))`).catch(() => null);
       finish(error);
     }), 300);
   }
@@ -100,6 +104,7 @@ async function run(event) {
   const host = event.sender;
   const window = BrowserWindow.fromWebContents(host);
   window.setSize(980, 720);
+  host.setBackgroundThrottling(false);
   window.show(); window.focus();
   const js = code => host.executeJavaScript(code, true);
   await js(`Array.from(document.querySelectorAll('button')).find(b=>['继续','Continue'].includes(b.textContent))?.click()`);
@@ -116,7 +121,9 @@ async function run(event) {
   await js(`Array.from(document.querySelectorAll('.YDXeBa_sessionRow')).find(row=>row.textContent.includes('Artifact link acceptance')).click()`);
   await until(() => js(`!!document.querySelector('.hWmORq_body code button[title$="/pelican.svg"]')`), 'Bare SVG filename did not become a file link');
   const titles = await js(`Array.from(document.querySelectorAll('.hWmORq_body button[title]')).map(b=>b.title)`);
-  for (const name of ['pelican.svg', 'preview.png', 'report.md', 'canvas.html', 'my image.svg']) assert.ok(titles.includes(join(workspace, name).replaceAll('\\', '/')), name);
+  for (const name of ['pelican.svg', 'preview.png', 'report.md']) assert.ok(titles.includes(join(workspace, name).replaceAll('\\', '/')), name);
+  // Alpha.2's official Markdown file delegate retains authored relative destinations.
+  for (const name of ['canvas.html', 'my image.svg']) assert.ok(titles.includes(name), name);
   assert.equal(titles.some(path => path.endsWith('missing.png') || path.endsWith('missing-fenced.png')), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body pre button[title]')`), false);
   assert.equal(await js(`!!document.querySelector('.hWmORq_body button button')`), false);
@@ -132,10 +139,15 @@ async function run(event) {
     await until(() => { const view = window.contentView.children.find(view => view.webContents === contents); return view?.getVisible() && !contents.isLoading(); }, 'Sidebar preview invisible: ' + marker);
     return contents;
   };
-  const svgPage = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
+  await js(`document.querySelector('.hWmORq_body img[alt="Inline SVG"]').closest('button').click()`);
+  await until(() => js(`document.querySelector('[role="dialog"] img[alt="Inline SVG"]')?.naturalWidth > 0`), 'Official inline image preview did not load');
+  await js(`document.querySelector('[role="dialog"] img[alt="Inline SVG"]').closest('[role="dialog"]').querySelector('button').click()`);
+  await until(() => js(`!document.querySelector('[role="dialog"] img[alt="Inline SVG"]')`), 'Inline image preview did not close');
+  report.checks.push('Authored inline SVG opens and closes the official full-image preview');
+  const svgPage = await opened('.hWmORq_body code button[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await svgPage.executeJavaScript(`document.documentElement.localName`), 'svg');
   assert.equal(await svgPage.executeJavaScript(`document.querySelector('animate').getAttribute('dur')`), '2s');
-  report.checks.push('Clicking the actual inline SVG opens its animated document in the native right sidebar');
+  report.checks.push('Clicking the SVG file link opens its animated document in the native right sidebar');
   const svgVisible = () => window.contentView.children.find(view => view.webContents === svgPage)?.getVisible();
   await js(`document.querySelector('.desktop-computer summary').click()`);
   await sleep(250);
@@ -153,7 +165,7 @@ async function run(event) {
   await js(`document.querySelector('.desktop-computer summary').click()`);
   report.checks.push('PNG remains decoded and visible while the computer popover is open');
   await interactions.verifyLocalFile(host, workspace, 'preview.png', until);
-  const canvasPage = await opened('.hWmORq_body button[title$="/canvas.html"]', 'canvas.html');
+  const canvasPage = await opened('.hWmORq_body button[title="canvas.html"]', 'canvas.html');
   assert.equal(await canvasPage.executeJavaScript(`chart.getContext('2d').getImageData(0,0,1,1).data[3]`), 255);
   report.checks.push('Authored relative HTML link opens the working Canvas preview');
   await interactions.verifySelection(canvasPage, 'Preview selection', until);
@@ -166,7 +178,9 @@ async function run(event) {
   await interactions.verifyLocalFile(host, workspace, 'report.md', until);
   await interactions.verifyLocalMenu(host, workspace, until);
   report.checks.push('Text sidebar supports drag selection and Copy; header opens each active SVG, PNG, HTML and Markdown file instead of the workspace');
-  report.checks.push('Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
+  report.checks.push(process.platform === 'linux'
+    ? 'Local menu reveals the current file, explains the unsupported application chooser, and opens selected files or directories with OS defaults'
+    : 'Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
   await documents.run({ host, until, report, data });
   // rc.1 starts without a guide; closing every document leaves the column empty.
   await js(`Array.from(document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab-close]')).forEach(button=>button.click())`);
@@ -174,7 +188,7 @@ async function run(event) {
   await until(() => svgPage.isDestroyed() && pngPage.isDestroyed() && canvasPage.isDestroyed(), 'Closed sidebar retained native previews');
   await interactions.verifyNoActiveFile(host, workspace, until);
   report.checks.push('With no active file, local open uses the file picker rather than silently opening the workspace');
-  const reopened = await opened('.hWmORq_body .desktop-file-image[title$="/pelican.svg"]', 'pelican.svg');
+  const reopened = await opened('.hWmORq_body code button[title$="/pelican.svg"]', 'pelican.svg');
   assert.equal(await js(`!!document.querySelector('[data-sidebar-right-open]')`), true);
   assert.equal(await js(`document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab]').length`), 1, 'Reopening the empty sidebar should contain only the preview');
   await js(`document.querySelector('[data-sidebar-right-open] [data-dockkit-tab-close]').click()`);
@@ -189,6 +203,6 @@ async function run(event) {
 // Electron's CommonJS runtime cannot strip TypeScript, so generate the PNG
 // with the same source helper using the bundled Node before booting the app.
 const { execFileSync } = require('node:child_process');
-execFileSync(join(root, '.runtime/bin/node'), ['--input-type=module', '-e', `import {pngFixture} from ${JSON.stringify('file://' + join(root, 'tests/png-fixture.ts'))};import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(join(workspace, 'preview.png'))},pngFixture());`]);
+execFileSync(join(root, '.runtime/bin', process.platform === 'win32' ? 'node.exe' : 'node'), ['--input-type=module', '-e', `import {pngFixture} from ${JSON.stringify(pathToFileURL(join(root, 'tests/png-fixture.ts')).href)};import{writeFileSync}from'node:fs';writeFileSync(${JSON.stringify(join(workspace, 'preview.png'))},pngFixture());`]);
 app.setAppPath(root);
 require('../dist/main/index.cjs');

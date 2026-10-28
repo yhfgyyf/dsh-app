@@ -100,7 +100,9 @@ void app.whenReady().then(async () => {
   await until(async () => { previewWindow = BrowserWindow.getAllWindows().find(value => value !== window && value.getTitle() === 'DSH 电脑操作'); return !!previewWindow?.isVisible(); });
   assert.equal(previewWindow!.isFocusable(), false, 'Picture-in-picture can steal keyboard focus');
   assert.equal(previewWindow!.isFocused(), false, 'Picture-in-picture stole keyboard focus');
-  await until(async () => !!await previewWindow!.webContents.executeJavaScript('document.querySelector("img")?.naturalWidth'));
+  // The private preview worker starts cold; the initial state/poll race may
+  // discard its first frame before the next one-second poll.
+  await until(async () => !!await previewWindow!.webContents.executeJavaScript('document.querySelector("img")?.naturalWidth'), 10000);
   report.previewPid = driver.previewPid;
   assert.ok(report.previewPid && report.previewPid !== report.driverPid, 'PiP must capture in a separate native worker');
   assert.equal(await previewWindow!.webContents.executeJavaScript('typeof window.dshDesktop'), 'undefined');
@@ -231,6 +233,7 @@ void app.whenReady().then(async () => {
   report.checks.push('Resized 320px observations retain correct edge coordinates after repeated PiP captures');
   snapshot = await observe();
   const beforeMove = window.getBounds();
+  const beforeViewport = await window.webContents.executeJavaScript('({width: innerWidth, height: innerHeight})');
   const staleEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
   const stalePoint = {
     x: (staleEdge.frame.x + staleEdge.frame.w / 2 - snapshot.window_bounds.x) / snapshot.window_bounds.width,
@@ -238,7 +241,7 @@ void app.whenReady().then(async () => {
   };
   const requestedBounds = { x: beforeMove.x + 24, y: beforeMove.y + 20, width: beforeMove.width + 80, height: beforeMove.height + 40 };
   const nativeBounds: Record<string, unknown>[] = [];
-  const geometry: Record<string, unknown> = { observationId: snapshot.observation_id, observedBounds: snapshot.window_bounds, beforeMove, requestedBounds, stalePoint, nativeBounds };
+  const geometry: Record<string, unknown> = { observationId: snapshot.observation_id, observedBounds: snapshot.window_bounds, beforeMove, beforeViewport, requestedBounds, stalePoint, nativeBounds };
   let geometryStage = 'before-move';
   const callDriver = driver.call.bind(driver);
   driver.call = async (name, args, signal) => {
@@ -278,8 +281,25 @@ void app.whenReady().then(async () => {
     }, error => { geometry.staleAction = { status: 'rejected', error: String(error) }; throw error; });
     await assert.rejects(staleAction, /not_dispatched; observation_consumed/);
     assert.equal(await window.webContents.executeJavaScript('document.querySelector("#count").textContent'), '21', 'Rejected stale coordinates must not send a click');
+    // Native bounds can commit before Chromium publishes its resized viewport
+    // and accessibility layout. Establish a coherent new observation before
+    // sending the one fresh click; never retry an input to make the test pass.
+    geometryStage = 'renderer-resize-wait';
+    const expectedViewport = { width: beforeViewport.width + requestedBounds.width - beforeMove.width, height: beforeViewport.height + requestedBounds.height - beforeMove.height };
+    await until(() => window.webContents.executeJavaScript(`innerWidth === ${expectedViewport.width} && innerHeight === ${expectedViewport.height}`));
+    await window.webContents.executeJavaScript('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
     geometryStage = 'fresh-observation';
-    snapshot = await observe();
+    const freshLayouts: Record<string, unknown>[] = [];
+    geometry.freshLayouts = freshLayouts;
+    await until(async () => {
+      snapshot = await observe();
+      const edge = snapshot.elements.find((element: any) => element.label === 'Edge');
+      const rect = await window.webContents.executeJavaScript(`(() => { const rect = document.querySelector('#edge').getBoundingClientRect(); return { x: rect.x, y: rect.y, w: rect.width, h: rect.height }; })()`);
+      const content = window.getContentBounds();
+      const expected = { ...rect, x: content.x + rect.x, y: content.y + rect.y };
+      freshLayouts.push({ at: Date.now(), observationId: snapshot.observation_id, content, dom: expected, accessibility: edge?.frame });
+      return !!edge && (['x', 'y', 'w', 'h'] as const).every(key => Math.abs(edge.frame[key] - expected[key]) <= 2);
+    });
     geometry.freshObservedBounds = snapshot.window_bounds;
     const movedEdge = snapshot.elements.find((e: any) => e.label === 'Edge');
     geometryStage = 'fresh-action';
@@ -400,6 +420,14 @@ void app.whenReady().then(async () => {
       assert.equal(state.other.value, '', 'Remaining text leaked to another window');
       assert.equal(state.other.keys.length, 0, 'Keyboard events leaked to another window');
       report.checks.push('Long foreground typing aborts after focus changes to another fixture window, with a partial prefix and zero leaked keys/text');
+    } catch (error) {
+      const outcome = await completion;
+      await writeFile(join(data, 'focus-loss-during-typing-failure.json'), JSON.stringify({
+        failure: String(error), switched, nativeError: String(outcome.error ?? ''), result: outcome.result?.data,
+        original: await window.webContents.executeJavaScript('({ focused: document.hasFocus(), active: document.activeElement?.id, value: document.querySelector("#input").value, inputs: window.fixtureInputEvents })'),
+        other: await focusProbe.webContents.executeJavaScript('({ focused: document.hasFocus(), value: document.querySelector("#escaped").value, keys: window.escapedKeys })'),
+      }, null, 2));
+      throw error;
     } finally {
       // Wait for the bounded native request before removing the alternative
       // focus destination, so a failing test cannot leak input to a user app.

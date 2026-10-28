@@ -1,20 +1,35 @@
 import { WebContentsView, session } from 'electron';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, Session } from 'electron';
 import { randomUUID } from 'node:crypto';
 import { externalWebUrl } from '../shared/desktop-api.ts';
 import { browserBounds, validBrowserId } from '../shared/sidebar-browser.ts';
 import type { BrowserAction, BrowserState, BrowserTarget } from '../shared/sidebar-browser.ts';
 import { previewGrant } from './preview-files.ts';
 import { installTextContextMenu } from './context-menu.ts';
+import { browserHistory } from './browser-history.ts';
 
-type Page = { view: WebContentsView; targetKey: string; preview?: Awaited<ReturnType<typeof previewGrant>>; state: BrowserState };
+type Page = { view: WebContentsView; targetKey: string; preview?: Awaited<ReturnType<typeof previewGrant>>; state: BrowserState; findRequest?: number; findQuery?: string };
 
 /** Native web content is isolated from the DSH renderer, preload and cookies. */
 export class SidebarBrowser {
   private pages = new Map<string, Page>();
   private tickets = new Map<string, object>();
   private generation = 0;
+  private pdfSession: Session | undefined;
+  private pdfPreviews = new Map<string, Awaited<ReturnType<typeof previewGrant>>>();
   constructor(private window: BrowserWindow, private endpoint: () => string, private openLink: (url: string) => void) {}
+
+  private pdfPreviewSession(): Session {
+    if (this.pdfSession) return this.pdfSession;
+    // Electron 31 cannot load its component PDF extension in an in-memory
+    // session. Keep this one separate from both DSH and normal web browsing.
+    const ses = this.pdfSession = session.fromPartition('persist:dsh-pdf-preview', { cache: false });
+    ses.protocol.handle('dsh-preview', request => {
+      const grant = this.pdfPreviews.get(new URL(request.url).host);
+      return grant ? grant.read(request) : new Response(null, { status: 404 });
+    });
+    return ses;
+  }
 
   async open(id: unknown, target: BrowserTarget, navigation: string): Promise<BrowserState> {
     if (!validBrowserId(id) || !target || typeof navigation !== 'string' || navigation.length > 16384) throw new Error('浏览器参数无效。');
@@ -32,8 +47,12 @@ export class SidebarBrowser {
     const preview = target.kind === 'preview' ? await previewGrant(target) : undefined;
     const url = target.kind === 'web' ? externalWebUrl(target.url) : preview?.url;
     if (!url || generation !== this.generation || this.tickets.get(id) !== ticket || this.window.isDestroyed()) throw new Error('此页面无法打开。');
-    const ses = session.fromPartition(preview ? 'dsh-preview-' + randomUUID() : 'persist:dsh-browser');
-    if (preview) ses.protocol.handle('dsh-preview', request => preview.read(request));
+    const sharedPdf = !!preview && Number.parseInt(process.versions.electron, 10) < 42 && /\.pdf$/i.test(preview.path);
+    const ses = sharedPdf ? this.pdfPreviewSession() : session.fromPartition(preview ? 'dsh-preview-' + randomUUID() : 'persist:dsh-browser');
+    if (preview) {
+      if (sharedPdf) this.pdfPreviews.set(preview.host, preview);
+      else ses.protocol.handle('dsh-preview', request => preview.read(request));
+    }
     ses.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     ses.setPermissionCheckHandler(() => false);
     ses.webRequest.onBeforeRequest((details, callback) => {
@@ -42,7 +61,7 @@ export class SidebarBrowser {
         const address = new URL(details.url), core = new URL(this.endpoint());
         const loopback = ['localhost', '127.0.0.1', '[::1]'];
         blocked = ['file:', 'dsh:'].includes(address.protocol)
-          || (address.protocol === 'dsh-preview:' && address.host !== preview?.host)
+          || (address.protocol === 'dsh-preview:' && !(sharedPdf ? this.pdfPreviews.has(address.host) : address.host === preview?.host))
           || (address.port === core.port && (address.hostname === core.hostname || (loopback.includes(address.hostname) && loopback.includes(core.hostname))));
       } catch { blocked = true; }
       callback({ cancel: blocked });
@@ -53,6 +72,19 @@ export class SidebarBrowser {
     view.setVisible(false);
     this.window.contentView.addChildView(view);
     const contents = view.webContents;
+    contents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || input.alt || input.shift || input.isAutoRepeat || !(input.meta || input.control)) return;
+      const key = input.key.toLowerCase();
+      if (key !== 's' && key !== 'f') return;
+      event.preventDefault();
+      this.window.webContents.focus();
+      this.window.webContents.send('desktop:command', key === 's' ? 'find-content' : 'search', id);
+    });
+    contents.on('found-in-page', (_event, result) => {
+      if (this.pages.get(id) !== page || result.requestId !== page.findRequest || !result.finalUpdate) return;
+      this.window.webContents.send('desktop:browser-find-result', { id, query: page.findQuery ?? '', matches: result.matches, active: result.activeMatchOrdinal });
+    });
+    const history = browserHistory(contents);
     installTextContextMenu(contents, this.window);
     const allowed = (value: string) => externalWebUrl(value) !== undefined || (preview !== undefined && value.startsWith('dsh-preview://' + preview.host + '/'));
     contents.on('will-navigate', (event, value) => { if (!allowed(value)) event.preventDefault(); });
@@ -60,7 +92,7 @@ export class SidebarBrowser {
     contents.setWindowOpenHandler(({ url: value }) => { const link = externalWebUrl(value); if (link) this.openLink(link); return { action: 'deny' }; });
     const publish = () => {
       if (contents.isDestroyed() || this.pages.get(id) !== page) return;
-      Object.assign(page.state, { url: contents.getURL().startsWith('dsh-preview:') ? preview?.path ?? '' : contents.getURL() || url, title: contents.getTitle(), loading: contents.isLoading(), canGoBack: contents.navigationHistory.canGoBack(), canGoForward: contents.navigationHistory.canGoForward() });
+      Object.assign(page.state, { url: contents.getURL().startsWith('dsh-preview:') ? preview?.path ?? '' : contents.getURL() || url, title: contents.getTitle(), loading: contents.isLoading(), canGoBack: history.canGoBack(), canGoForward: history.canGoForward() });
       if (!this.window.webContents.isDestroyed()) this.window.webContents.send('desktop:browser-state', page.state);
     };
     contents.on('did-start-loading', publish);
@@ -93,12 +125,29 @@ export class SidebarBrowser {
     const page = validBrowserId(id) ? this.pages.get(id) : undefined;
     if (!page) return;
     const contents = page.view.webContents;
+    const history = browserHistory(contents);
     page.state.error = undefined;
-    if (action === 'back' && contents.navigationHistory.canGoBack()) contents.navigationHistory.goBack();
-    else if (action === 'forward' && contents.navigationHistory.canGoForward()) contents.navigationHistory.goForward();
+    if (action === 'back' && history.canGoBack()) history.goBack();
+    else if (action === 'forward' && history.canGoForward()) history.goForward();
     else if (action === 'reload') contents.reload();
     else if (action === 'stop') contents.stop();
     else if (!['back', 'forward', 'reload', 'stop'].includes(action)) throw new Error('浏览器操作无效。');
+  }
+
+  find(id: unknown, query: unknown, forward?: unknown): void {
+    if (!validBrowserId(id) || typeof query !== 'string' || query.length > 4096 || (forward !== undefined && typeof forward !== 'boolean')) throw new Error('查找参数无效。');
+    const page = this.pages.get(id);
+    if (!page || page.view.webContents.isDestroyed()) return;
+    const contents = page.view.webContents;
+    if (!query) { contents.stopFindInPage('clearSelection'); page.findRequest = undefined; page.findQuery = ''; return; }
+    // Electron's findNext flag starts a NEW search; subsequent navigation uses false.
+    const findNext = page.findQuery !== query || forward === undefined;
+    page.findQuery = query;
+    page.findRequest = contents.findInPage(query, { forward: forward !== false, findNext });
+  }
+
+  focusedId(): string | undefined {
+    return [...this.pages].find(([, page]) => !page.view.webContents.isDestroyed() && page.view.webContents.isFocused())?.[0];
   }
 
   close(id: string): void {
@@ -106,6 +155,7 @@ export class SidebarBrowser {
     const page = this.pages.get(id);
     if (!page) return;
     this.pages.delete(id);
+    if (page.preview) this.pdfPreviews.delete(page.preview.host);
     if (!this.window.isDestroyed()) this.window.contentView.removeChildView(page.view);
     if (!page.view.webContents.isDestroyed()) page.view.webContents.close({ waitForBeforeUnload: false });
   }

@@ -1,0 +1,50 @@
+{
+  "package": "dsh-univer-office",
+  "upstreamVersion": "0.3.5",
+  "version": "0.3.5-desktop.1",
+  "dsh": "0.2.0-rc.1",
+  "upstream": {
+    "package": "dsh-univer-office",
+    "version": "0.3.5",
+    "gitHead": "ce7f3e0bfa1e9b6bc4eb855e1c220b77fcdab806",
+    "url": "https://registry.npmjs.org/dsh-univer-office/-/dsh-univer-office-0.3.5.tgz",
+    "sha256": "4d31430f522880b0501b713e57f0b6c97d4d26e4838b53bdd2ba6193d9d85071",
+    "integrity": "sha512-kMfqAfKJBRUVETqZYLiGg5QVBgoOHkES1O8hhLFTTl9TiHUZEpVnB+1CUFeMjHAArp47QOElGe82iKETgAqDMw==",
+    "bytes": 49181214
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "before": "bb258a9d896ea284368c53570a06380ceb3bcc02b66338e963b1f3e049366665",
+      "after": "6515da32240a647f7ebdebcf5797a7e309f6a8b13491006655e67d690cc19571",
+      "patch": "package.json.patch",
+      "patchSha256": "0ea9f102930c4dacfe5e376dbe8ad26674c14b922af6c834d37bf063e603f47f"
+    },
+    {
+      "path": "lib/index.js",
+      "before": "7af6caa590625e3282a60db7be1bc7b04ba25727cea48aa98980c2b9f0fd0021",
+      "after": "8f21e0d967edc660e83736ed62fec92ce6d02017415d95b46cb24bdff9e16ce6",
+      "patch": "lib-index.js.patch",
+      "patchSha256": "bd0707b9efe5a4f190e8d24d8731e114c7934d798109d3b803a4c5b4c06e0f6e"
+    },
+    {
+      "path": "lib/client.js",
+      "before": "e607e231178e0e31b5964d875b19bd63a551ec5230c09948658f4a71709055fd",
+      "after": "7b84ae55c73441848bd9c64af7ea0d4b8bdb652b7ae65a22543291190b75292e",
+      "patch": "lib-client.js.patch",
+      "patchSha256": "5217e5f7b81d7eac734392037a76783b27f711fac2110da28f5fe7a98f362cfd"
+    },
+    {
+      "path": "artifacts/unit-content-worker.mjs",
+      "before": "c39aa71777ae8fbe261ede49f0b2017e313ec7c74fe8a147e71db461ae5c0759",
+      "after": "afe2ecb9a5a38ddc4462d58bfc073218d5af9dba0a2f965e605c8677d627378d",
+      "patch": "unit-content-worker.mjs.patch",
+      "patchSha256": "7c239941d1d95e1e3162ba2257edbe94ca886c88142f85e5372838ddacdf91a4"
+    }
+  ],
+  "alignmentPatch": {
+    "file": "alignment-replacements.json",
+    "sha256": "ecfa4bffd00bef8c4add17da66bde03fe2fd04d8f5849a8d0301ec88d40f6d14",
+    "reason": "Preserve the previously deployed local right alias and matching API docs; upstream 0.3.5 still accepts only normal."
+  }
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=DSH private mobile relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dsh-relay
+Group=dsh-relay
+WorkingDirectory=/opt/dsh-relay
+EnvironmentFile=/etc/dsh-relay.env
+ExecStart=/usr/bin/node dist/private-server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dsh-relay
+
+[Install]
+WantedBy=multi-user.target

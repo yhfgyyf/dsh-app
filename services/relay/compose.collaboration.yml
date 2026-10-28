@@ -1,0 +1,31 @@
+# Add to the existing Compose project; preserve its project name, relay volume and TLS proxy.
+services:
+  relay:
+    environment:
+      COLLAB_AUTH_SECRET: ${COLLAB_AUTH_SECRET:?Set a shared random secret of at least 32 bytes}
+  collaboration:
+    build: .
+    restart: unless-stopped
+    command: ["sh", "-c", "chown -R node:node /data && exec setpriv --reuid=node --regid=node --init-groups node dist/collab-server.js"]
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      COLLAB_PORT: 8788
+      COLLAB_DB_PATH: /data/collaboration.sqlite
+      RELAY_INTERNAL_URL: http://relay:8787
+      COLLAB_AUTH_SECRET: ${COLLAB_AUTH_SECRET:?Set a shared random secret of at least 32 bytes}
+    ports:
+      - "127.0.0.1:8788:8788"
+    volumes:
+      - collaboration-data:/data
+    depends_on:
+      relay:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  collaboration-data:

@@ -1,0 +1,13 @@
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -64,9 +64,7 @@
+ 			return "var(--dsw-alias-state-success-primary, #30a46c)";
+ 		}
+ 		function AuditDock (props) {
+-			var preset = props.useSessions(function (state) {
+-				return state.byId[props.sessionId]?.projectionValues?.agentPreset;
+-			});
++			var preset = props.useProjection("agentPreset");
+ 			// Retained audit history does not mean this session still uses Audit.
+ 			if (preset !== "audit" && preset !== "guardian") return null;
+ 			return h(AuditSessionDock, Object.assign({}, props, { key: props.sessionId }));

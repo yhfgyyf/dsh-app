@@ -1,0 +1,82 @@
+name: Verify universal Univer plugin on Windows
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  univer:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.15.0
+          cache: npm
+      - name: Prepare the pinned current Desktop runtime
+        run: |
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run setup:runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+      - name: Prepare the same universal archive
+        shell: pwsh
+        run: |
+          node scripts/prepare-univer-plugin.mjs --out .test-data/univer-base
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/prepare-univer-universal.mjs --archive .test-data/univer-base/dsh-univer-office-0.3.5-desktop.1.tgz --out .test-data/univer-universal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $inputs = Join-Path $PWD '.test-data/univer-inputs'
+          New-Item -ItemType Directory -Path "$inputs/candidate", "$inputs/old-desktop", "$inputs/old-kylin" -Force | Out-Null
+          tar -xzf .test-data/univer-universal/dsh-univer-office-0.3.5-universal.1.tgz -C "$inputs/candidate"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item tests/fixtures/univer-old-desktop.json "$inputs/old-desktop/package.json"
+          Copy-Item tests/fixtures/univer-old-kylin.json "$inputs/old-kylin/package.json"
+          node scripts/test-univer-universal.mjs "$inputs/candidate/package" .test-data/univer-universal/universal-provenance.json .test-data/univer-acceptance
+      - name: Upgrade both previous variants without an exemption
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          foreach ($variant in @('old-desktop', 'old-kylin')) {
+            $env:DSH_TEST_REPORTS = Join-Path $PWD ".test-data/univer-upgrade-$variant"
+            node scripts/test-univer-plugin-upgrade.mjs .test-data/univer-universal/dsh-univer-office-0.3.5-universal.1.tgz ".test-data/univer-inputs/$variant" .test-data/univer-inputs/candidate/package
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Exercise the native gateway and XLSX export
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $report = Get-Content .test-data/univer-upgrade-old-desktop/plugin-upgrade-report.json -Raw | ConvertFrom-Json
+          if ($report.status -ne 'pass') { throw 'Plugin upgrade did not pass' }
+          $env:DSH_TEST_UNIVER_PLUGIN = Join-Path $report.data 'home/profiles/test/node_modules/dsh-univer-office'
+          $env:DSH_TEST_UNIVER_PROVENANCE = Join-Path $PWD '.test-data/univer-universal/universal-provenance.json'
+          $env:DSH_TEST_REPORTS = Join-Path $PWD '.test-data/univer-host'
+          node scripts/test-univer-plugin-host.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify the real client startup and migrated history
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:DSH_TEST_UNIVER_PACKAGE = Join-Path $PWD '.test-data/univer-inputs/candidate/package'
+          $env:DSH_TEST_UNIVER_PROVENANCE = Join-Path $PWD '.test-data/univer-universal/universal-provenance.json'
+          npm run test:univer-client
+      - name: Save the universal archive and evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: univer-windows-universal
+          path: |
+            .test-data/univer-universal/*.tgz
+            .test-data/univer-universal/universal-provenance.json
+            .test-data/univer-acceptance/*.json
+            .test-data/univer-upgrade-*/plugin-upgrade-report.json
+            .test-data/univer-host/*.json
+            .test-data/univer-client-upgrade/report.json
+            .test-data/univer-client-upgrade/ready.png
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 14

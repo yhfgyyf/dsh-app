@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { runtimeManifest } from './runtime-manifest.ts';
+import { prepareReleaseRuntime } from './prepare-release-runtime.ts';
 
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Build this installer on Windows x64.');
 const root = fileURLToPath(new URL('..', import.meta.url));
+await prepareReleaseRuntime(join(root, '.runtime'));
 const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const output = join(root, 'release', new Date().toISOString().replace(/[:.]/g, '-'));
 const staging = join(output, 'staging');

@@ -1,0 +1,49 @@
+name: Copy verified Windows artifact to existing draft
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  copy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify existing CI artifact and upload only to the expected draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo='yhfgyyf/dsh-app'
+          release_id='398953158'
+          run_id='36538324507'
+          artifact_id='11019573782'
+          filename='DSH-Desktop-0.1.28-Windows-x64-Setup.exe'
+          expected_sha='721b0324652055f07a7718e727ae234c9a2ff1bdda0d489593456989759185a6'
+          expected_size='363461408'
+          gh api "repos/$repo/actions/runs/$run_id" > "$RUNNER_TEMP/source-run.json"
+          jq -e '.id == 36538324507 and .conclusion == "success" and .head_sha == "960f5304482045474c703ea52df22ee86ae3345c"' "$RUNNER_TEMP/source-run.json" > /dev/null
+          gh api "repos/$repo/actions/artifacts/$artifact_id" > "$RUNNER_TEMP/source-artifact.json"
+          jq -e '.id == 11019573782 and .expired == false and .name == "dsh-app-windows-x64" and .workflow_run.id == 36538324507' "$RUNNER_TEMP/source-artifact.json" > /dev/null
+          gh api "repos/$repo/releases/$release_id" > "$RUNNER_TEMP/release-before.json"
+          jq -e '.id == 398953158 and .draft == true and .tag_name == "v0.1.28"' "$RUNNER_TEMP/release-before.json" > /dev/null
+          if jq -e --arg name "$filename" '.assets[] | select(.name == $name)' "$RUNNER_TEMP/release-before.json" > /dev/null; then
+            jq -e --arg name "$filename" --arg digest "sha256:$expected_sha" --argjson size "$expected_size" '[.assets[] | select(.name == $name)] | length == 1 and .[0].state == "uploaded" and .[0].size == $size and .[0].digest == $digest' "$RUNNER_TEMP/release-before.json" > /dev/null
+            echo 'Existing Windows asset already matches; nothing overwritten.'
+          else
+            gh run download "$run_id" --repo "$repo" --name dsh-app-windows-x64 --dir "$RUNNER_TEMP/verified-windows"
+            mapfile -t matches < <(find "$RUNNER_TEMP/verified-windows" -type f -name "$filename")
+            test "${#matches[@]}" -eq 1
+            file="${matches[0]}"
+            test "$(stat -c %s "$file")" = "$expected_size"
+            printf '%s  %s\n' "$expected_sha" "$file" | sha256sum --check --status
+            gh api "repos/$repo/releases/$release_id" --jq '.draft' | grep -x true > /dev/null
+            gh release upload v0.1.28 --repo "$repo" "$file"
+          fi
+          gh api "repos/$repo/releases/$release_id" > "$RUNNER_TEMP/release-after.json"
+          jq -e --arg name "$filename" --arg digest "sha256:$expected_sha" --argjson size "$expected_size" '.draft == true and ([.assets[] | select(.name == $name)] | length == 1 and .[0].state == "uploaded" and .[0].size == $size and .[0].digest == $digest)' "$RUNNER_TEMP/release-after.json" > /dev/null
+          jq --arg name "$filename" '{id,tag_name,draft,assets:[.assets[] | select(.name == $name) | {id,name,state,size,digest}]}' "$RUNNER_TEMP/release-after.json"

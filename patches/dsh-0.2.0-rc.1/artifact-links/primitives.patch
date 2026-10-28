@@ -1,0 +1,53 @@
+--- a/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
++++ b/@deepseek-ai/dsh-client-ui-primitives/lib/index.js
+@@ -11216,7 +11216,7 @@
+ 		case "link": return renderAnchor(node.url, renderChildren(node.children, {
+ 			...context,
+ 			inLink: true
+-		}), key, !anchorWrapsOnlyImages(node.children), context.streaming);
++		}), key, !anchorWrapsOnlyImages(node.children), context.streaming, context);
+ 		case "linkReference": return renderLinkReference(node, key, context);
+ 		case "image": return renderImage(node.url, node.alt ?? "", key, context);
+ 		case "imageReference": return renderImageReference(node, key, context);
+@@ -11353,12 +11353,23 @@
+ 	});
+ }
+ /** Local destinations use the scoped file delegate after settlement. */
+-function renderAnchor(url, children, key, glyph = true, streaming = false) {
++function localDestinationMention(url, context, kind) {
++	let decoded;
++	try { decoded = decodeURIComponent(url); } catch { decoded = url; }
++	return context?.fileMentions?.resolve(decoded, kind);
++}
++function renderAnchor(url, children, key, glyph = true, streaming = false, context) {
+ 	const file = streaming ? void 0 : parseFileLink(url);
++	// Collect previews while the official delegate retains file and line navigation.
++	const mention = streaming ? void 0 : localDestinationMention(file?.path ?? url, context);
+ 	if (file !== void 0) return jsx(MarkdownFileLink, {
+ 		file,
+ 		glyph,
+ 		children
++	}, key);
++	if (mention) return jsx("button", {
++		type: "button", className: markdownCss.fileMention, title: mention.title,
++		"aria-label": mention.label, onClick: mention.open, children
+ 	}, key);
+ 	return renderSafeLink(normalizeUri(url), children, key, glyph);
+ }
+@@ -11408,6 +11419,7 @@
+ 	}
+ }
+ function renderImage(url, alt, key, context) {
++	if (!context.streaming) localDestinationMention(url, context, "image");
+ 	return jsx(MarkdownImage, {
+ 		destination: url,
+ 		alt,
+@@ -11486,7 +11498,7 @@
+ 		...context,
+ 		inLink: true
+ 	});
+-	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming);
++	return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children), context.streaming, context);
+ }
+ function renderImageReference(node, key, context) {
+ 	const definition = context.targets.definitions.get(node.identifier.toUpperCase());
