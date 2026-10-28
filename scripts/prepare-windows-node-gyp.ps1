@@ -22,8 +22,12 @@ foreach ($taskFile in $taskFiles) {
 & tar -xzf (Join-Path $taskSdk 'headers.tar.gz') -C $taskSdk
 if ($LASTEXITCODE -ne 0) { throw 'Could not extract Node headers' }
 $taskNodeRoot = Join-Path $taskSdk "node-v$taskVersion"
-New-Item -ItemType Directory -Force -Path (Join-Path $taskNodeRoot 'x64') | Out-Null
-Copy-Item (Join-Path $taskSdk 'node.lib') (Join-Path $taskNodeRoot 'x64/node.lib')
+# node-gyp uses $(Configuration)/node.lib with an explicit --nodedir.
+# Keep the usual architecture location for tools that consume the SDK directly.
+foreach ($taskLibDir in @('x64', 'Release')) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $taskNodeRoot $taskLibDir) | Out-Null
+    Copy-Item (Join-Path $taskSdk 'node.lib') (Join-Path $taskNodeRoot "$taskLibDir/node.lib")
+}
 $taskPythonRoot = Get-ChildItem (Join-Path $env:AGENT_TOOLSDIRECTORY 'Python') -Directory -Filter '3.12.*' | Sort-Object Name -Descending | Select-Object -First 1
 if (-not $taskPythonRoot) { throw 'The Windows build needs the installed Python 3.12 toolchain' }
 $taskPython = Join-Path $taskPythonRoot.FullName 'x64/python.exe'
