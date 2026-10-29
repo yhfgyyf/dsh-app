@@ -403,13 +403,13 @@ else {
     installIpc();
     installMenu();
     await createWindow();
+    app.on('activate', () => { if (!window) void createWindow().then(() => connect()); else restoreWindow(); });
     await connect();
     updates.start();
   }).catch(() => {
     console.error('DSH Desktop 无法启动。请检查应用资源和配置目录。');
     app.quit();
   });
-  app.on('activate', () => { if (!window) void createWindow().then(() => connect()); else restoreWindow(); });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !quitting) app.quit(); });
   app.on('before-quit', (event) => {
     if (quitting || !preferencesFile) return;

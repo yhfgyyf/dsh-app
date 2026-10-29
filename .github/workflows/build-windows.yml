@@ -79,6 +79,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Startup activation ordering regression
+        timeout-minutes: 2
+        run: npx --no-install electron tests/startup-activation.cjs
       - name: Microphone capture and permission isolation
         timeout-minutes: 2
         run: npm run test:voice-input

@@ -1,8 +1,9 @@
-.desktop-selection-toolbar{position:fixed;z-index:1000;display:flex;align-items:center;max-width:calc(100vw - 16px);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);box-shadow:0 5px 18px #0002;overflow:hidden}
-.desktop-selection-toolbar button{padding:9px 12px;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
-.desktop-selection-toolbar button+button{border-left:1px solid var(--dsw-alias-border-l2)}
-.desktop-selection-toolbar button:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.desktop-selection-toolbar [role=alert]{max-width:280px;padding:8px;font-size:12px}
+.desktop-quote-actions{display:flex;flex-wrap:wrap;align-items:center;max-width:calc(100vw - 16px);border:1px solid var(--dsw-alias-border-l3);border-radius:14px;background:var(--dsw-alias-button-floating-fill);color:var(--dsw-alias-label-primary);font:var(--dsw-font-xs-13);box-shadow:var(--dsw-elevation-panel);overflow:hidden}
+.desktop-quote-actions button{padding:5px 10px;border:0;background:transparent;color:inherit;font:inherit;white-space:nowrap;cursor:pointer}
+.desktop-quote-actions button+button{border-left:1px solid var(--dsw-alias-border-l3)}
+.desktop-quote-actions button:hover,.desktop-quote-actions button:focus-visible{background:var(--dsw-alias-button-floating-hover)}
+.desktop-quote-actions [role=alert]{max-width:280px;padding:8px;font-size:12px}
+.desktop-file-quote-actions{position:fixed;z-index:1000}
 [data-composer-chip="desktop-selected-text"]{cursor:pointer}
 .desktop-selected-text-preview{width:640px;max-width:calc(100vw - 32px)}
 .desktop-selected-text-preview pre{margin:8px 0;max-height:45vh;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.6;user-select:text}

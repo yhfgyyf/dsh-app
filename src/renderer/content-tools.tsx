@@ -3,24 +3,69 @@ import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { BrowserContext } from './sidebar-browser.tsx';
 import { contentMatches, contentRoot, visibleContent, scrollToContentMatch } from './content-search.ts';
-import { readSelectedText, selectedTextQuote, selectedTextReference, SELECTED_TEXT_SOURCE } from '../shared/selected-text.ts';
+import { readSelectedText, selectedTextQuote, SELECTED_TEXT_SOURCE } from '../shared/selected-text.ts';
 import type { SelectedText } from '../shared/selected-text.ts';
+import { insertSelectionQuote } from './quote-actions.ts';
 import './content-tools.css';
 
 type Dispose = () => void;
-type Span = { start: number; end: number; draftRev: number };
-type InputActions = { captureInsertion(): Span };
+type InputActions = { insertQuote(text: string): boolean };
 interface ContentContext {
   slots: BrowserContext['slots'];
   effect(factory: () => Dispose, label?: string): void;
   get(name: string): any;
   sessions: { scope(id: string): unknown };
-  conversation: { input: { for(scope: unknown): { insertReference(reference: ReturnType<typeof selectedTextReference>, span: Span): boolean; focus(): void; notify(level: string, text: string): void } } };
+  conversation: { input: { for(scope: unknown): { insertQuote(text: string): boolean; focus(): void; notify(level: string, text: string): void } } };
   inputTriggers: { registerSource(source: object): Dispose };
   sidebarRight: { mounted: { getSnapshot(): string | undefined; subscribe(listener: () => void): Dispose } };
 }
 type Selection = { owner: string; root: HTMLElement; anchor: Node; value: SelectedText; x: number; y: number };
 type Search = { owner: string; root: HTMLElement; revision: number };
+type QuoteSurface = { readText(): string | null; clearSelection(): void; dismiss(): void };
+type WaitForInput = (id: string, owner: string) => Promise<InputActions>;
+
+function SelectionQuoteActions({ ctx, owner, sourceId, readText, clearSelection, dismiss, waitForInput }: QuoteSurface & {
+  ctx: ContentContext; owner: string; sourceId: string; waitForInput: WaitForInput;
+}) {
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const add = async (target: 'main' | 'side') => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true); setError('');
+    try {
+      const text = readText();
+      if (text === null) { dismiss(); return; }
+      await insertSelectionQuote(ctx, waitForInput, { target, owner, sourceId, text });
+      // insertQuote establishes the editor caret; do not clear that new range.
+      const anchor = document.getSelection()?.anchorNode;
+      if (!(anchor instanceof Element ? anchor : anchor?.parentElement)?.closest('[contenteditable="true"]')) clearSelection();
+      dismiss();
+    } catch (reason) {
+      const message = reason instanceof Error ? reason.message : String(reason);
+      setError(message);
+      const scope = ctx.sessions.scope(owner);
+      if (scope) ctx.conversation.input.for(scope).notify('error', message);
+    } finally { pending.current = false; setBusy(false); }
+  };
+  return <div data-desktop-content-tools className="desktop-quote-actions" role="toolbar" aria-label="选中内容操作" onPointerDown={event => event.preventDefault()}>
+    <button type="button" disabled={busy} onClick={() => { void add('main'); }}>引用文本到主会话</button>
+    <button type="button" disabled={busy} onClick={() => { void add('side'); }}>在侧边聊天中提问</button>
+    {error && <span role="alert">{error}</span>}
+  </div>;
+}
+
+/** Replace only the native Quote action renderer; keep its admission and placement. */
+function NativeQuoteActions({ ctx, sessionId, useSession, waitForInput, ...surface }: QuoteSurface & {
+  ctx: ContentContext; sessionId: string; waitForInput: WaitForInput;
+  useSession<T>(select: (state: { removed: boolean; subagent: null | { address: { mode: string }; parentAvailable: boolean } }) => T): T;
+}) {
+  const owner = useSyncExternalStore(ctx.sidebarRight.mounted.subscribe, ctx.sidebarRight.mounted.getSnapshot);
+  const enabled = useSession(state => !state.removed && (state.subagent === null || state.subagent.address.mode === 'continuable' && state.subagent.parentAvailable === true));
+  useEffect(() => { if (!enabled) surface.dismiss(); }, [enabled, surface.dismiss]);
+  if (!enabled || !owner) return null;
+  return <SelectionQuoteActions {...surface} ctx={ctx} owner={owner} sourceId={sessionId} waitForInput={waitForInput} />;
+}
 
 function SelectedTextPreview({ value, close }: { value: SelectedText; close(): void }) {
   const [expanded, setExpanded] = useState(false);
@@ -119,57 +164,16 @@ function ContentFind({ root, revision, close, error }: Search & { close(): void;
   return null;
 }
 
-function ContentTools({ ctx, inputs, waitForInput, previews }: { ctx: ContentContext; inputs: Map<string, InputActions>; waitForInput(id: string, owner: string): Promise<InputActions>; previews: SnapshotStore<SelectedText | null> }) {
+function ContentTools({ ctx, waitForInput, previews }: { ctx: ContentContext; waitForInput: WaitForInput; previews: SnapshotStore<SelectedText | null> }) {
   const preview = useSyncExternalStore(previews.subscribe, previews.getSnapshot);
   const [selection, setSelection] = useState<Selection>();
   const [search, setSearch] = useState<Search>();
-  const [busy, setBusy] = useState(false);
-  const pending = useRef(false);
-  const [error, setError] = useState('');
   const lastRoot = useRef<HTMLElement>();
   const serial = useRef(0);
   const notify = (owner: string, reason: unknown) => {
     const message = reason instanceof Error ? reason.message : String(reason);
-    setError(message);
     const scope = ctx.sessions.scope(owner);
     if (scope) ctx.conversation.input.for(scope).notify('error', message);
-  };
-  const add = async (target: 'main' | 'side', captured: Selection) => {
-    if (pending.current) return;
-    pending.current = true;
-    setBusy(true); setError('');
-    let opened: { chats: any; id: string; fresh: boolean } | undefined;
-    try {
-      const owner = captured.owner;
-      if (ctx.sidebarRight.mounted.getSnapshot() !== owner || !visibleContent(captured.root) || !captured.anchor.isConnected) throw new Error('会话或面板已切换，请重新选择内容。');
-      let id = owner;
-      if (target === 'side') {
-        const chats = ctx.get('sideChats');
-        if (!chats) throw new Error('请先启用新版侧聊插件，再使用“在侧边聊天中提问”。');
-        const previous = chats.getSnapshot()[owner]?.childId;
-        const entry = await chats.open(owner);
-        id = entry.childId;
-        opened = { chats, id, fresh: previous !== id };
-        await waitForInput(id, owner);
-        if (!chats.owns(owner, id)) throw new Error('侧聊已关闭，请重新选择内容。');
-      }
-      if (ctx.sidebarRight.mounted.getSnapshot() !== owner) throw new Error('主会话已切换，选中内容未加入其他会话。');
-      const actions = inputs.get(id), scope = ctx.sessions.scope(id);
-      if (!actions || !scope) throw new Error('目标输入框尚未就绪，请稍后重试。');
-      const input = ctx.conversation.input.for(scope), span = actions.captureInsertion();
-      // A reference is an attachment-like chip. Never replace selected draft text.
-      if (!input.insertReference(selectedTextReference(captured.value), { ...span, start: span.end })) throw new Error('输入框正在提交或内容已变化，请重试；原草稿已保留。');
-      captured.root.ownerDocument.getSelection()?.removeAllRanges();
-      setSelection(undefined);
-      input.focus();
-    } catch (reason) {
-      if (opened?.fresh && ctx.sidebarRight.mounted.getSnapshot() !== captured.owner && opened.chats.owns(captured.owner, opened.id)) {
-        try { await opened.chats.close(captured.owner, opened.id); }
-        catch (cleanup) { notify(captured.owner, cleanup); }
-      }
-      notify(captured.owner, reason);
-    }
-    finally { pending.current = false; setBusy(false); }
   };
   useEffect(() => {
     const owner = () => ctx.sidebarRight.mounted.getSnapshot();
@@ -185,6 +189,9 @@ function ContentTools({ ctx, inputs, waitForInput, previews }: { ctx: ContentCon
         const selected = document.getSelection(), id = owner();
         const start = selected?.anchorNode?.parentElement, end = selected?.focusNode?.parentElement;
         const root = contentRoot(start ?? null);
+        // Chat and /side use the native Quote interaction. This fallback only
+        // supplies the same actions for document previews outside a Chat view.
+        if (start?.closest('[data-conversation-content]')) { setSelection(undefined); return; }
         if (!id || !selected || selected.isCollapsed || !selected.rangeCount || !root || !end || contentRoot(end) !== root || !visibleContent(root)
           || start?.closest('input, textarea, [contenteditable], [data-desktop-content-tools]')) { setSelection(undefined); return; }
         const text = selected.toString();
@@ -194,7 +201,6 @@ function ContentTools({ ctx, inputs, waitForInput, previews }: { ctx: ContentCon
         if (rect.bottom < viewport.top || rect.top > viewport.bottom) { setSelection(undefined); return; }
         const source = root.querySelector('[data-side-chat-session]') ? '侧聊' : root.hasAttribute('data-dockkit-content') ? '文件 / 右侧面板' : '主对话';
         setSelection({ owner: id, root, anchor: selected.anchorNode!, value: { text, source }, x: Math.max(8, Math.min(rect.left, innerWidth - 330)), y: Math.max(8, rect.top - 44) });
-        setError('');
       });
     };
     const find = (event: Event) => {
@@ -209,7 +215,7 @@ function ContentTools({ ctx, inputs, waitForInput, previews }: { ctx: ContentCon
       if (event.key === 'Escape') setSelection(undefined);
       if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 's') { event.preventDefault(); event.stopPropagation(); find(new Event('dsh:find-content')); }
     };
-    const unsubscribe = ctx.sidebarRight.mounted.subscribe(() => { lastRoot.current = undefined; setSelection(undefined); setSearch(undefined); setError(''); previews.set(null); });
+    const unsubscribe = ctx.sidebarRight.mounted.subscribe(() => { lastRoot.current = undefined; setSelection(undefined); setSearch(undefined); previews.set(null); });
     const observer = new MutationObserver(() => {
       setSearch(current => current && visibleContent(current.root) ? current : undefined);
       setSelection(current => current && visibleContent(current.root) && current.anchor.isConnected ? current : undefined);
@@ -228,10 +234,12 @@ function ContentTools({ ctx, inputs, waitForInput, previews }: { ctx: ContentCon
     };
   }, [ctx, previews]);
   return <>
-    {selection && <div data-desktop-content-tools className="desktop-selection-toolbar" role="toolbar" aria-label="选中内容操作" style={{ left: selection.x, top: selection.y }} onMouseDown={event => event.preventDefault()}>
-      <button disabled={busy} onClick={() => { void add('main', selection); }}>添加到主对话</button>
-      <button disabled={busy} onClick={() => { void add('side', selection); }}>在侧边聊天中提问</button>
-      {error && <span role="alert">{error}</span>}
+    {selection && <div className="desktop-file-quote-actions" style={{ left: selection.x, top: selection.y }}>
+      <SelectionQuoteActions ctx={ctx} owner={selection.owner} sourceId={selection.owner} waitForInput={waitForInput}
+        readText={() => {
+          if (!visibleContent(selection.root) || !selection.anchor.isConnected) return null;
+          return selection.value.text;
+        }} clearSelection={() => selection.root.ownerDocument.getSelection()?.removeAllRanges()} dismiss={() => setSelection(undefined)} />
     </div>}
     {search && <ContentFind key={`${search.owner}:${search.root.dataset.dockkitContent ?? 'main'}`} {...search} error={reason => notify(search.owner, reason)} close={() => { setSearch(undefined); search.root.querySelector<HTMLElement>('[contenteditable="true"]')?.focus(); }} />}
     {preview && <SelectedTextPreview value={preview} close={() => previews.set(null)} />}
@@ -248,11 +256,17 @@ export function installContentTools(ctx: ContentContext) {
     return () => { if (inputs.get(id) === actions) inputs.delete(id); changed(); };
   };
   const waitForInput = (id: string, owner: string): Promise<InputActions> => new Promise((resolve, reject) => {
-    const stop = () => { clearTimeout(timer); listeners.delete(check); unsubscribe(); };
+    const stop = () => { clearTimeout(timer); listeners.delete(check); unsubscribe(); observer.disconnect(); };
     const check = () => {
       if (disposed || ctx.sidebarRight.mounted.getSnapshot() !== owner) { stop(); reject(new Error('会话已切换，选中内容未加入其他会话。')); }
-      else if (inputs.has(id)) { stop(); resolve(inputs.get(id)!); }
+      else if (inputs.has(id) && [...document.querySelectorAll<HTMLElement>('[data-conversation-content]')].some(root =>
+        root.dataset.conversationSession === id && root.querySelector<HTMLElement>('[contenteditable="true"]')?.checkVisibility({ checkVisibilityCSS: true })
+      )) { stop(); resolve(inputs.get(id)!); }
     };
+    // Existing /side tabs stay mounted while hidden. Wait for the tab switch to
+    // commit before inserting/focusing, so subsequent typing reaches that draft.
+    const observer = new MutationObserver(check);
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'aria-hidden', 'style'] });
     const timer = setTimeout(() => { stop(); reject(new Error('侧聊输入框未就绪，请稍后重试。')); }, 8000);
     const unsubscribe = ctx.sidebarRight.mounted.subscribe(check);
     listeners.add(check); check();
@@ -267,5 +281,6 @@ export function installContentTools(ctx: ContentContext) {
     codec: { clipboardText: (ref: string) => selectedTextQuote(readSelectedText(ref)), serialize: async (ref: string) => selectedTextQuote(readSelectedText(ref)) },
   }), 'desktop: selected text references');
   ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({ name: 'conversation.composer.dock', id: 'desktop-draft-bridge', inject: () => ({ bind }) }, DraftBridge));
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'desktop-content-tools', inject: () => ({ ctx, inputs, waitForInput, previews }) }, ContentTools));
+  ctx.slots.inject('conversation.chat.text-interaction', () => ctx.slots.register({ name: 'conversation.chat.text-interaction', key: 'quote', priority: -100, inject: () => ({ ctx, waitForInput }) }, NativeQuoteActions));
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'desktop-content-tools', inject: () => ({ ctx, waitForInput, previews }) }, ContentTools));
 }
