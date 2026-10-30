@@ -47,3 +47,15 @@ jobs:
           gh api "repos/$repo/releases/$release_id" > "$RUNNER_TEMP/release-after.json"
           jq -e --arg name "$filename" --arg digest "sha256:$expected_sha" --argjson size "$expected_size" '.draft == true and ([.assets[] | select(.name == $name)] | length == 1 and .[0].state == "uploaded" and .[0].size == $size and .[0].digest == $digest)' "$RUNNER_TEMP/release-after.json" > /dev/null
           jq --arg name "$filename" '{id,tag_name,draft,assets:[.assets[] | select(.name == $name) | {id,name,state,size,digest}]}' "$RUNNER_TEMP/release-after.json"
+
+  transfer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Receive only the pinned public release files and verify before upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/release-transfer.py .github/release-transfer-0.1.45.json
