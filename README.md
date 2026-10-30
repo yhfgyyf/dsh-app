@@ -8,9 +8,9 @@
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
 
-## v0.1.45：适配最新 DSH 0.2.2-alpha.2
+## v0.1.45：适配 DSH 0.2.2 Alpha 通道
 
-截至 2026-10-30，适配官方最新预发布内核 [DSH 0.2.2-alpha.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2)。[v0.1.45 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) 同时提供 Mac Apple Silicon、Windows x64 和麒麟 V10 LoongArch64 旧 ABI 安装包。
+适配 [DSH 0.2.2-alpha.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2)，截至 2026-10-30 为 0.2.2 Alpha 通道最新版。官方同日另发布 [0.2.1-rc.5](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5)（RC 通道）；本安装包采用已验证的 0.2.2-alpha.2。[v0.1.45 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) 同时提供 Mac Apple Silicon、Windows x64 和麒麟 V10 LoongArch64 旧 ABI 安装包。
 
 - **统一原生引用**：框选聊天文字只显示“引用文本到主会话”和“在侧边聊天中提问”，使用原生引用节点及原文预览；已有侧聊直接复用，引用不会自动发送。侧聊需单独安装 [dsh-side-chat 0.1.6](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.6)。
 - **独立内容搜索**：`Ctrl+S` / `Command+S` 搜索当前对话、侧聊或文件；浮窗不挤占内容布局，`Ctrl+F` / `Command+F` 继续搜索左侧会话。

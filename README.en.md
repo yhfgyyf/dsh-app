@@ -10,7 +10,7 @@ The app bundles Node.js and the DSH core, with its own Electron main process, Re
 
 ## v0.1.45: current DSH 0.2.2-alpha.2 compatibility
 
-Desktop **0.1.45** bundles [DSH **0.2.2-alpha.2**](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2), the latest upstream prerelease checked on 2026-10-30. The [v0.1.45 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) includes macOS Apple Silicon, Windows x64 and Kylin V10 LoongArch64 old-world installers.
+Desktop **0.1.45** bundles [DSH **0.2.2-alpha.2**](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2), the latest upstream 0.2.2 alpha-channel release checked on 2026-10-30. Upstream also published [0.2.1-rc.5](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) in the parallel RC channel that day; this installer uses the tested 0.2.2-alpha.2 core. The [v0.1.45 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) includes macOS Apple Silicon, Windows x64 and Kylin V10 LoongArch64 old-world installers.
 
 - Selected chat text now has only two native quote actions: quote to the main conversation or ask in side chat. Existing side chats are reused, and quoting does not send a message. Install [dsh-side-chat 0.1.6](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.6) separately.
 - Content search remains an external modeless window on Ctrl/Cmd+S; Ctrl/Cmd+F keeps session search separate.
