@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
 const assert = require('node:assert/strict');
 const { join } = require('node:path');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+// Xvfb has no desktop detection; select the fixture's real Secret Service.
+if (process.platform === 'linux') app.commandLine.appendSwitch('password-store', 'gnome-libsecret');
 const root = join(__dirname, '..');
 const data = process.env.DSH_BROWSER_SETTINGS_TEST_DATA;
 assert.ok(data, 'Run through scripts/test-browser-use-settings.ts');
@@ -63,33 +65,35 @@ async function run(event) {
       return false;
     }
     return document.getElementById('root')?.inert === false
-      && document.querySelector('[data-conversation-content][data-conversation-session]:not([data-conversation-session=""]) [contenteditable="true"][data-phase="plain"]') !== null
+      && (document.querySelector('[data-conversation-content][data-conversation-session]:not([data-conversation-session=""]) [contenteditable="true"][data-phase="plain"]') !== null
+        || ['选择一个工作区开始', 'Choose a workspace to start'].some(text => document.body.innerText.includes(text)))
       && document.querySelector('button.VOzbGW_trigger, button[aria-label="账号菜单"], button[aria-label="Account menu"]') !== null;
   })()`), 'Onboarding did not release the Settings controls');
   // DSH 0.2 skips the web welcome notice when the native dshDesktop bridge is
   // present. Wait for usable Settings instead, still dismissing any optional
   // credential onboarding that the provider contributes.
   await finishOnboarding();
-  // The account menu mounts before the initial session. Its later blank-session
-  // onboarding transition can close Settings even when native onboarding renders
-  // nothing. Wait for the live composer above and let that React commit finish.
+  // A profile without workspaces legitimately stays at the workspace chooser.
+  // The first blank-session onboarding step can arrive after its composer. The
+  // upstream coordinator then closes Settings even when native onboarding renders
+  // nothing. Reopen through the actual account menu if that startup transition wins.
   await js('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
-  const openedDirectly = await js(`(() => {
-    const trigger = document.querySelector('button.VOzbGW_trigger');
-    if (trigger) { trigger.click(); return true; }
-    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
-    return false;
-  })()`);
-  if (!openedDirectly) await until(() => js(`(() => {
+  const selector = '.desktop-browser-use-settings [role="switch"]';
+  await until(() => js(`(() => {
+    const foreground = Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]')).at(-1);
+    if (foreground?.dataset.shortcutModal === 'settings'
+      && document.querySelector(${JSON.stringify(selector)})) return true;
     const settings = Array.from(document.querySelectorAll('button[role="menuitem"]')).find(button =>
       Array.from(button.querySelectorAll('span')).some(span => ['设置', 'Settings'].includes(span.textContent)));
-    if (!settings) return false;
-    settings.click(); return true;
-  })()`), 'Settings entry missing from the account menu');
-  const selector = '.desktop-browser-use-settings [role="switch"]';
-  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'Browser Use is missing from Settings');
-  await until(() => js(`Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"], [role="menu"]'))
-    .at(-1)?.dataset.shortcutModal === 'settings'`), 'Settings did not become the foreground dialog');
+    if (settings) { settings.click(); return false; }
+    if (foreground || document.getElementById('root')?.inert) return false;
+    window.__browserSettingsOpenAttempts = (window.__browserSettingsOpenAttempts ?? 0) + 1;
+    const trigger = document.querySelector('button.VOzbGW_trigger');
+    if (trigger) { trigger.click(); return false; }
+    document.querySelector('button[aria-label="账号菜单"], button[aria-label="Account menu"]').click();
+    return false;
+  })()`), 'Settings did not become the foreground dialog');
+  report.settingsOpenAttempts = await js('window.__browserSettingsOpenAttempts');
   await js(`(() => {
     window.__browserSettingsTransitions = [];
     const record = () => {

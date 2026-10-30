@@ -38,9 +38,11 @@ test('released system-prompt projection preserves the historical prefix only for
     assert.equal(JSON.stringify(session.deriveMessages().slice(0, 2)), prefix);
     assert.deepEqual(session.deriveMessages().map((m: { role: string }) => m.role), ['system', 'user', 'system']);
     assert.deepEqual(commit('new complete prompt'), []);
-    commit('new complete prompt', { inHistory: true, startsSeries: true });
+    assert.deepEqual(commit('new complete prompt', { inHistory: true, startsSeries: true }), []);
+    assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['system', 'user', 'system']);
+    commit('new series prompt', { inHistory: true, startsSeries: true });
     assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['system', 'user']);
-    assert.equal(session.deriveMessages()[0].content[0].text, 'new complete prompt');
+    assert.equal(session.deriveMessages()[0].content[0].text, 'new series prompt');
     commit('next prompt');
     commit('leading only', { inHistory: false, startsSeries: false });
     assert.deepEqual(effectiveMessages().map((m: { role: string }) => m.role), ['system', 'user']);

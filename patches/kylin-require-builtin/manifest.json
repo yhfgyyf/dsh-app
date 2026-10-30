@@ -1,0 +1,12 @@
+{
+  "package": "node-addon-require-builtin",
+  "version": "0.1.9",
+  "upstreamRepository": "https://github.com/deepseek-ai/dsh-node-addon-require-builtin",
+  "upstreamCommit": "a58d3599a2e551d7d706d1ff796c9fd4bbaff63c",
+  "node": "22.16.0",
+  "nodeAbi": 127,
+  "target": "linux-loong64-gnu old-world ABI1 glibc<=2.28",
+  "nativeSha256": "20aa0f5357ce39ad309f15e8c4da2d91eff50af8c287a6f6ff6490ea511cb3c5",
+  "sourceArchive": "https://github.com/yhfgyyf/dsh-app/releases/download/v0.1.45/node-addon-require-builtin-0.1.9-loongarch-source.tar.gz",
+  "physicalGuiTested": false
+}

@@ -1,0 +1,4 @@
+# Replace relay.example.com with the same origin used in PUBLIC_RELAY_URL.
+relay.example.com {
+    reverse_proxy 127.0.0.1:8787
+}

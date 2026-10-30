@@ -16,7 +16,13 @@ async function fixture(t: any) {
   t.after(() => ctx.fiber.dispose());
   await ctx.plugin(LlmRuntime);
   await ctx.plugin(SystemPrompt, {});
-  await ctx.plugin(ToolRuntime, { mode: 'native' });
+  await ctx.plugin(ToolRuntime);
+  await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native'));
+  const execute = async (input: any) => {
+    const { signal, callId: id, ...call } = input;
+    const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id, ...call }], signal });
+    return batch.results[0].result;
+  };
   const names = ['fixture_alpha', 'fixture_beta', 'fixture_delta', 'fixture_gamma', 'fixture_omega'];
   for (const name of names) ctx.tools.register(defineTool({
     name, description: 'Synthetic discovery fixture.',
@@ -26,7 +32,7 @@ async function fixture(t: any) {
   }));
   await ctx.plugin(plugin, { maxSearchResults: 2 });
   let call = 0;
-  const search = (args: { query?: string; limit?: number; cursor?: string }) => ctx.tools.execute({
+  const search = (args: { query?: string; limit?: number; cursor?: string }) => execute({
     callId: ToolCallId('discovery-test-' + ++call), name: 'search_tools', arguments: args,
     signal: new AbortController().signal,
   });
@@ -70,6 +76,36 @@ test('built plugin returns an empty page for an unmatched query', async t => {
   assert.equal(result.truncated, false);
   assert.equal(result.next_cursor, undefined);
   assert.match(result.instructions, /No tools matched/);
+});
+
+test('step presentation keeps business tools discoverable without declaring their schemas', async t => {
+  const { ctx, names } = await fixture(t);
+  const scope = {};
+  const assembly = await ctx.systemPrompt.assemble({ scope });
+  assert.deepEqual(assembly.tools.map((tool: any) => tool.name).sort(), ['describe_tools', 'invoke_tool', 'search_tools']);
+  assert.ok(assembly.sections.some((section: any) => section.text.includes('Discovery changes presentation only')));
+  assert.ok(names.every(name => ctx.tools.get(name, scope) !== undefined));
+});
+
+test('step admission excludes conditional business tools from discovery and nested dispatch', async t => {
+  const { ctx } = await fixture(t);
+  let enabled = false;
+  ctx.tools.register(defineTool({
+    name: 'conditional_fixture', description: 'Available only in an admitted step.', parameters: {},
+    output: { schema: { type: 'json' }, render: () => [] }, execute: async () => ({ accepted: true }),
+  }), { when: () => enabled });
+  const agent = {} as any;
+  for (const allowed of [false, true]) {
+    enabled = allowed;
+    const signal = new AbortController().signal;
+    const toolSet = await ctx.tools.resolve({ agent, modelSelection: { provider: 'fixture', model: 'fixture' }, signal });
+    try {
+      const assembly = await ctx.systemPrompt.assemble({ scope: agent, toolSet });
+      assert.ok(!assembly.tools.some((tool: any) => tool.name === 'conditional_fixture'));
+      const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: ToolCallId('conditional-' + allowed), name: 'invoke_tool', arguments: { name: 'conditional_fixture', arguments: {} } }], agent, toolSet, signal });
+      assert.equal(batch.results[0].result.isError, !allowed);
+    } finally { toolSet.dispose(); }
+  }
 });
 
 test('built plugin rejects invalid and schema-stale cursors with restart guidance', async t => {

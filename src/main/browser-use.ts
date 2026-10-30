@@ -14,6 +14,11 @@ export function browserCandidates(platform: string, home: string, env: NodeJS.Pr
     { name: 'Google Chrome', path: win32.join(directory, 'Google/Chrome/Application/chrome.exe') },
     { name: 'Microsoft Edge', path: win32.join(directory, 'Microsoft/Edge/Application/msedge.exe') },
   ]);
+  if (platform === 'linux') return [
+    { name: 'Google Chrome', path: '/usr/bin/google-chrome' },
+    { name: 'Google Chrome', path: '/opt/google/chrome/chrome' },
+    { name: 'Microsoft Edge', path: '/usr/bin/microsoft-edge' },
+  ];
   return [];
 }
 
@@ -21,6 +26,7 @@ export function browserProfileRoot(browser: string, platform: string, home: stri
   const edge = browser === 'Microsoft Edge';
   if (platform === 'darwin') return posix.join(home, 'Library/Application Support', edge ? 'Microsoft Edge' : 'Google/Chrome');
   if (platform === 'win32') return win32.join(env.LOCALAPPDATA ?? win32.join(home, 'AppData/Local'), edge ? 'Microsoft/Edge/User Data' : 'Google/Chrome/User Data');
+  if (platform === 'linux') return posix.join(env.XDG_CONFIG_HOME || posix.join(home, '.config'), edge ? 'microsoft-edge' : 'google-chrome');
   throw new Error('当前系统不支持浏览器操作。');
 }
 

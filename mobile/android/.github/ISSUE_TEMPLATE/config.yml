@@ -1,0 +1,19 @@
+# Blank issues stay enabled on purpose: docs fixes, questions and anything the two
+# forms do not fit still need somewhere to go, and Discussions are not enabled.
+blank_issues_enabled: true
+contact_links:
+  - name: Project website
+    url: https://dshm.zyphite.com
+    about: What the app is, what it looks like and how to get it running, on one page.
+  - name: Cannot connect to the harness
+    url: https://github.com/sorsama/deepseek-harness-mobile/wiki/Troubleshooting
+    about: Every failure the app names, with its cause and its fix. Almost always the computer's firewall, a harness still bound to loopback, or a different subnet.
+  - name: Setting up Wi-Fi (LAN) mode
+    url: https://github.com/sorsama/deepseek-harness-mobile/wiki/LAN-Mode
+    about: The one-file harness patch, trusted hosts, and the firewall rule.
+  - name: Questions about using the app
+    url: https://github.com/sorsama/deepseek-harness-mobile/wiki
+    about: The wiki covers install, connection, features, notifications, security and an FAQ.
+  - name: Security vulnerability
+    url: https://github.com/sorsama/deepseek-harness-mobile/security/policy
+    about: Report privately to sor@zyphite.com — please do not open a public issue. The harness having no authentication is a known, documented property rather than a vulnerability in this app.

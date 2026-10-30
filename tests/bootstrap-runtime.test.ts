@@ -10,7 +10,7 @@ test('runtime lock fixes every DSH subpackage and preserves the snapshot depende
   const manifest = JSON.parse(await readFile(new URL('../runtime/dsh/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(await readFile(new URL('../runtime/dsh/package-lock.json', import.meta.url), 'utf8'));
   const patch = JSON.parse(await readFile(new URL(`../patches/dsh-${pins.dsh}/manifest.json`, import.meta.url), 'utf8'));
-  assert.deepEqual(manifest.dependencies, Object.fromEntries(['@deepseek-ai/dsh', '@deepseek-ai/dsh-browser-use', '@deepseek-ai/dsh-experimental-browser-use-playwright-mcp'].map(name => [name, pins.dsh])));
+  assert.deepEqual(manifest.dependencies, Object.fromEntries(['@deepseek-ai/dsh', '@deepseek-ai/dsh-browser-use', '@deepseek-ai/dsh-experimental-browser-use-playwright-mcp', '@deepseek-ai/dsh-client-store', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-ui-slots'].map(name => [name, pins.dsh])));
   assert.deepEqual(lock.packages[''].dependencies, manifest.dependencies);
   const install = 'node_modules/@deepseek-ai/dsh';
   assert.equal(lock.packages[install].version, pins.dsh);

@@ -18,7 +18,7 @@ async function until(predicate: () => boolean) { for (let i = 0; i < 30 && !pred
 function harness(options: { review?: (spec: string, signal: AbortSignal) => Promise<any>; prepare?: (signal: AbortSignal) => Promise<any>; prepareDirect?: (signal: AbortSignal) => Promise<any>; install?: (spec: string, options: any) => Promise<any>; inspect?: () => any } = {}) {
   let now = Date.now();
   const dependencies: Record<string, unknown> = {
-    react: {}, 'react/jsx-runtime': {}, '@deepseek-ai/dsh-client-ui-primitives': {},
+    react: {}, 'react/jsx-runtime': { jsx: (type: any, props: any) => ({ type, props }), jsxs: (type: any, props: any) => ({ type, props }) }, '@deepseek-ai/dsh-client-ui-primitives': {},
     '@deepseek-ai/dsh-client-ui-slots': {}, '@deepseek-ai/dsh-client-store': stores,
   };
   let plugin: any;
@@ -27,6 +27,8 @@ function harness(options: { review?: (spec: string, signal: AbortSignal) => Prom
   });
   const registrations: any[] = [], disposers: (() => void)[] = [], reviews: { spec: string; signal: AbortSignal }[] = [], prepares: AbortSignal[] = [], directPrepares: { spec: string; signal: AbortSignal }[] = [], installs: { spec: string; options: any }[] = [];
   const context = {
+    provide() { return () => {}; },
+    remoteAccess: { whenAccess(_method: string, factory: () => Generator<() => void>) { for (const dispose of factory()) disposers.push(dispose); } },
     effect(factory: () => () => void) { disposers.push(factory()); }, on() { return () => {}; },
     configForms: { describe: () => stores.createSnapshotStore([]), get() {} },
     locale: { resolveText: (text: string) => text, register() { return () => {}; }, bind() { return (key: string) => key; } },
@@ -51,7 +53,7 @@ function harness(options: { review?: (spec: string, signal: AbortSignal) => Prom
       async installBundle(spec: string, settings: any) { installs.push({ spec, options: settings }); return options.install ? options.install(spec, settings) : { ok: true, value: { application: 'applied', bundle: 'dsh-review-test' } }; },
       async listBundles() { return { ok: true, value: [] }; }, async listPlugins() { return { ok: true, value: [] }; },
     } },
-    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory() { return () => {}; } },
+    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); return () => {}; }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory() { return () => {}; } },
     layout: { panelInfo: { subscribe() { return () => {}; }, getSnapshot() { return { activePanelId: 'plugins' }; } }, selectPanel() {} },
     reflect: { provide() { return () => {}; } },
   };

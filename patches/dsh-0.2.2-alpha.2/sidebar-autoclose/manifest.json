@@ -1,0 +1,7 @@
+{
+  "dsh": "0.2.2-alpha.2",
+  "package": "@deepseek-ai/dsh-client-ui-sidebar-right",
+  "path": "@deepseek-ai/dsh-client-ui-sidebar-right/lib/client.js",
+  "upstream": true,
+  "sha256": "d06aecad7520abcacab4e406480cff5d3e94c7dae6bd533b20690a8c1dbe7fde"
+}

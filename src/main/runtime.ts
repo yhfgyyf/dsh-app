@@ -5,15 +5,17 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
 import { assertBootGraph, type BootGraph } from '../shared/dsh-boot.ts';
 import { isComputerRequest, type ComputerRequest, type ComputerResult } from '../shared/computer-use.ts';
+import type { LocalRemoteAction, RemoteRuntimeConfig, RemoteRuntimeState } from '../shared/remote-access.ts';
 import type { BrowserUseConfig } from '../shared/browser-use.ts';
 
 export type RuntimeReady = { type: 'ready'; endpoint: string; launchUrl: string; graph: BootGraph; hostPlugins: string[] };
-type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
+type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; remoteState?: (state: RemoteRuntimeState) => void; localRemoteAction?: (action: LocalRemoteAction) => Promise<unknown>; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
 export async function availableDesktopPort(port: number): Promise<number> {
   if (!port) return 0;
   return new Promise((resolve, reject) => {
     const probe = createServer();
-    probe.once('error', (error: NodeJS.ErrnoException) => error.code === 'EADDRINUSE' ? resolve(0) : reject(error));
+    // Windows may reserve a previously usable port; let the OS choose another.
+    probe.once('error', (error: NodeJS.ErrnoException) => error.code === 'EADDRINUSE' || error.code === 'EACCES' ? resolve(0) : reject(error));
     probe.listen(port, '127.0.0.1', () => probe.close(error => error ? reject(error) : resolve(port)));
   });
 }
@@ -23,6 +25,19 @@ export class DesktopRuntime {
   private stopping = false;
   private options: RuntimeOptions;
   constructor(options: RuntimeOptions) { this.options = options; }
+  async configureRemote(config: RemoteRuntimeConfig): Promise<void> {
+    const child = this.child;
+    if (!this.ready || !child?.connected) throw new Error('DSH 核心尚未就绪。');
+    await new Promise<void>((resolve, reject) => {
+      const id = randomUUID();
+      const cleanup = () => { clearTimeout(timer); child.off('message', receive); child.off('exit', failed); };
+      const failed = () => { cleanup(); reject(new Error('远程模块未响应。')); };
+      const receive = (m: any) => { if (m?.type !== 'remote-result' || m.id !== id) return; cleanup(); m.error ? reject(new Error(m.error)) : resolve(); };
+      const timer = setTimeout(failed, 15000);
+      child.on('message', receive); child.once('exit', failed);
+      child.send({ type: 'remote-configure', id, config });
+    });
+  }
   async configureBrowserUse(config: BrowserUseConfig): Promise<void> {
     const child = this.child;
     if (!this.ready || !child?.connected) throw new Error('DSH 核心尚未就绪。');
@@ -68,7 +83,9 @@ export class DesktopRuntime {
     } catch { /* A first launch asks the OS for an unused loopback port. */ }
     port = await availableDesktopPort(port);
     this.stopping = false;
-    const child = spawn(join(this.options.runtimeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), [this.options.entry], {
+    // The old-world LoongArch runtime needs explicit TypeScript stripping.
+    const nodeArguments = process.platform === 'linux' && process.arch === 'loong64' ? ['--experimental-strip-types', this.options.entry] : [this.options.entry];
+    const child = spawn(join(this.options.runtimeRoot, 'bin', process.platform === 'win32' ? 'node.exe' : 'node'), nodeArguments, {
       cwd: this.options.cwd,
       windowsHide: true,
       env: { ...process.env, DSH_HOME: this.options.configHome ?? this.options.home, DSH_DESKTOP_CONFIG_HOME: this.options.configHome ?? this.options.home, DSH_DESKTOP_STATE_HOME: this.options.home, DSH_DESKTOP_RUNTIME_ROOT: this.options.runtimeRoot, DSH_DESKTOP_PORT: String(port), DSH_TELEMETRY_DISABLED: '1' },
@@ -79,6 +96,15 @@ export class DesktopRuntime {
     const stopComputer = () => { for (const controller of computerRequests.values()) controller.abort(); void this.options.computerStop?.().catch(() => {}); };
     child.once('disconnect', stopComputer);
     child.on('message', async (message: any) => {
+      if (message?.type === 'remote-state') { this.options.remoteState?.(message.state); return; }
+      if (message?.type === 'remote-local-action' && typeof message.id === 'string') {
+        try {
+          if (!this.options.localRemoteAction || !['pair', 'unbind'].includes(message.action?.type)) throw new Error('invalid_action');
+          const result = await this.options.localRemoteAction(message.action);
+          if (child.connected) child.send({ type: 'remote-local-result', id: message.id, result });
+        } catch { if (child.connected) child.send({ type: 'remote-local-result', id: message.id, error: '手机绑定操作失败。' }); }
+        return;
+      }
       if (message?.type === 'computer-cancel' && typeof message.id === 'string') { computerRequests.get(message.id)?.abort(); return; }
       if (message?.type === 'computer-request') {
         if (!isComputerRequest(message) || computerRequests.has(message.id)) return;

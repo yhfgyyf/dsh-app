@@ -1,0 +1,29 @@
+{
+  "dsh": "0.2.2-alpha.2",
+  "files": [
+    {
+      "kind": "chat",
+      "package": "@deepseek-ai/dsh-client-ui-chat",
+      "path": "@deepseek-ai/dsh-client-ui-chat/lib/client.js",
+      "before": "c1d39200c1d971a8b6cdbf103b7ec44b6c459b5dc7e367a295759e6833d28ef9",
+      "after": "783d639e2a1215d93918140d548176f25d2626bead5d55277342e308ead34b5a",
+      "patchSha256": "876c993cdc5f1402f23db67b3a52d638cdaf207812db671e809b6d669c32c962"
+    },
+    {
+      "kind": "primitives",
+      "package": "@deepseek-ai/dsh-client-ui-primitives",
+      "path": "@deepseek-ai/dsh-client-ui-primitives/lib/index.js",
+      "before": "a99bb4d6ad65114298d6377da55fbc97066a4f08f9d957f575259612dd9fb076",
+      "after": "d870019a8a2c5c3db40b84d29ff66f89311e3cc6a710078a8287b3e332f14b4c",
+      "patchSha256": "540515e867149a53a116d36092d117290dbfdf08d0d66fcb81e2c2c4d675ce81"
+    },
+    {
+      "kind": "documentpreview",
+      "package": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+      "path": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview/lib/client.js",
+      "before": "083144f615d3b415c6a3dc3d7d9e441def9f1eccbd4d9b1fb96d314375973c6a",
+      "after": "dc2ce1e41b92b8383dca4c5d73da70388597f6b6fb39cd2a30ec7482de0d048a",
+      "patchSha256": "8b9e6cb1c0851767125eecb7d64440362511ea0af182331b3039f92836728ff9"
+    }
+  ]
+}

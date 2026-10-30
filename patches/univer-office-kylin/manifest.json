@@ -1,0 +1,89 @@
+{
+  "baseVersion": "0.3.5-desktop.1",
+  "baseSha256": "addae45d4764c096bc4941e09dd6c231dd58906db26ce9f2df414cdec62f3d20",
+  "version": "0.3.5-kylin.1",
+  "status": "limited-preview",
+  "dsh": "0.2.0-rc.1",
+  "node": ">=22.16.0",
+  "removedDependencies": [
+    "libsql",
+    "@univerjs-pro/engine-formula-rust-binding",
+    "@univerjs-pro/exchange-node-binding"
+  ],
+  "files": [
+    {
+      "path": "artifacts/unit-content-worker.mjs",
+      "before": "afe2ecb9a5a38ddc4462d58bfc073218d5af9dba0a2f965e605c8677d627378d",
+      "replacements": [
+        {
+          "before": "(UniverRustFormulaEnginePlugin),",
+          "after": "(UniverRustFormulaEnginePlugin, { useRustEngine: false }),",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "path": "artifacts/gateway.cjs",
+      "before": "ef1ce4114e7d51f00bcd11efd9c34528ca51cf4f59105abd14aae37921045fb2",
+      "replacements": [
+        {
+          "before": "[\"UniverRustFormulaEnginePlugin\"], {})",
+          "after": "[\"UniverRustFormulaEnginePlugin\"], { useRustEngine: false })",
+          "count": 1
+        },
+        {
+          "before": "require(\"libsql\")",
+          "after": "require(\"./kylin-sqlite.cjs\")",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "artifacts/upgrade-worker.cjs",
+      "before": "160fea751e9311d672c9f7cb89d8d90214c76f588fb0123659eee7eef3ead8f0",
+      "replacements": [
+        {
+          "before": "[\"UniverRustFormulaEnginePlugin\"], {})",
+          "after": "[\"UniverRustFormulaEnginePlugin\"], { useRustEngine: false })",
+          "count": 1
+        },
+        {
+          "before": "require(\"libsql\")",
+          "after": "require(\"./kylin-sqlite.cjs\")",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "path": "lib/index.js",
+      "before": "8f21e0d967edc660e83736ed62fec92ce6d02017415d95b46cb24bdff9e16ce6",
+      "replacements": [
+        {
+          "before": "  async importUnitContent(request, signal) {\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.sourceWorkspace, request.source, true)\n    ]);\n    const gateway = await this.requireGateway();\n    await this.requireWorktreeStatus(gateway, request.file, request.worktreeId, \"draft\");\n    const imported = await this.unitContent.import(request.source, request.docType, signal);\n    const result2 = await new GatewayWorktreeApi(\n      new GatewayClient(gateway, this.config.gatewayMutationTimeoutMs)\n    ).createUnit(request.file, request.worktreeId, imported.kind, request.name, imported.snapshot);\n    requireGatewaySuccess(result2, \"Gateway rejected the imported Unit.\");\n    signal?.throwIfAborted();\n    this.invalidate(request.file, request.worktreeId);\n    return {\n      ok: true,\n      operation: \"import\",\n      file: request.file,\n      result: { sourcePath: request.source, ...asRecord(result2) }\n    };\n  }",
+          "after": "  async importUnitContent(request, signal) {\n    throw new UniverError(\"\\u9e92\\u9e9f\\u9f99\\u82af\\u6d4b\\u8bd5\\u7248\\u6682\\u4e0d\\u652f\\u6301 Office \\u6587\\u4ef6\\uff08xlsx\\u3001docx\\u3001pptx\\u3001csv\\u3001tsv\\uff09\\u5bfc\\u5165\\u5bfc\\u51fa\\uff1b\\u5b98\\u65b9\\u8f6c\\u6362\\u6a21\\u5757\\u5c1a\\u65e0\\u9f99\\u82af\\u7248\\u672c\\u3002\\u53ef\\u7ee7\\u7eed\\u521b\\u5efa\\u3001\\u7f16\\u8f91\\u548c\\u4fdd\\u5b58 .univer \\u6587\\u4ef6\\u3002\", \"KYLIN_EXCHANGE_UNAVAILABLE\");\n  }",
+          "count": 1
+        },
+        {
+          "before": "  async exportUnitContent(request, signal) {\n    await Promise.all([\n      assertAuthorizedPath(request.workspace, request.file, true),\n      assertAuthorizedPath(request.outputWorkspace, request.output, false)\n    ]);\n    const gateway = await this.requireGateway();\n    return this.unitContent.export(gateway, request, signal);\n  }",
+          "after": "  async exportUnitContent(request, signal) {\n    throw new UniverError(\"\\u9e92\\u9e9f\\u9f99\\u82af\\u6d4b\\u8bd5\\u7248\\u6682\\u4e0d\\u652f\\u6301 Office \\u6587\\u4ef6\\uff08xlsx\\u3001docx\\u3001pptx\\u3001csv\\u3001tsv\\uff09\\u5bfc\\u5165\\u5bfc\\u51fa\\uff1b\\u5b98\\u65b9\\u8f6c\\u6362\\u6a21\\u5757\\u5c1a\\u65e0\\u9f99\\u82af\\u7248\\u672c\\u3002\\u53ef\\u7ee7\\u7eed\\u521b\\u5efa\\u3001\\u7f16\\u8f91\\u548c\\u4fdd\\u5b58 .univer \\u6587\\u4ef6\\u3002\", \"KYLIN_EXCHANGE_UNAVAILABLE\");\n  }",
+          "count": 1
+        },
+        {
+          "before": "Export a .univer document or unit to a user-facing file format.",
+          "after": "Unavailable in the Kylin preview build: upstream Office conversion has no LoongArch native module. Use .univer files for local editing and saving.",
+          "count": 1
+        },
+        {
+          "before": "Import an xlsx, csv, tsv, docx, or pptx file as a new Unit inside an explicit draft worktree.",
+          "after": "Unavailable in the Kylin preview build: upstream Office conversion has no LoongArch native module. Use .univer files for local editing and saving.",
+          "count": 1
+        },
+        {
+          "before": "async function resolveBrowserExecutablePath2(configured) {\n  if (configured !== void 0) return configured;\n  if (process.platform !== \"win32\") return void 0;\n  const resolved = await C5({ env: process.env });\n  if (resolved.status !== \"missing\") return void 0;\n  return edgeBrowserCandidatePaths(process.env).find((candidate) => existsSync(candidate));\n}",
+          "after": "async function resolveBrowserExecutablePath2(configured) {\n  const kylinBrowser = configured ?? process.env.UNIVER_RENDER_BROWSER?.trim();\n  if (!kylinBrowser) throw new UniverError(\"麒麟龙芯截图和 PDF 输出需要通过 browserExecutablePath 或 UNIVER_RENDER_BROWSER 指定兼容的本机浏览器；此测试版不会自动下载浏览器。\", \"KYLIN_BROWSER_REQUIRED\");\n  return kylinBrowser;\n}",
+          "count": 1
+        }
+      ]
+    }
+  ]
+}

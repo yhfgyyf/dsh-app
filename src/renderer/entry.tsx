@@ -8,6 +8,8 @@ import * as ClientStore from '@deepseek-ai/dsh-client-store';
 import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots';
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives';
 import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit';
+import * as Zod from 'zod';
+import * as ReactVirtual from '@tanstack/react-virtual';
 import { ArtifactMarkdown } from './artifact-markdown.tsx';
 import { createDesktopModuleFacade, DesktopSlotCore } from './univer-slot-compat.ts';
 import './updates.css';
@@ -39,12 +41,16 @@ async function bootDesktop() {
   const [registration] = queue.splice(index, 1);
   const exports = registration.factory(name => { throw new Error(`Unexpected bootstrap external: ${name}`); });
   const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: {
-    react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient,
+    react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient, zod: Zod,
+    '@tanstack/react-virtual': ReactVirtual,
     '@deepseek-ai/cordis': Cordis, '@deepseek-ai/dsh-client-store': ClientStore,
     '@deepseek-ai/dsh-client-ui-slots': { ...UiSlots, SlotCore: DesktopSlotCore }, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
     '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
   } });
   const ctx = context = new Cordis.Context();
+  ctx.logger.exporter({ colors: false, export(message) {
+    if (message.type === 'error') console.error('DSH 模块：', ...message.args);
+  } });
   await ctx.plugin(Loader);
   ctx.loader.internal = modules;
   await Promise.all(modules.manifest.plugins.filter((row: { immediately?: boolean }) => row.immediately).map((row: { id: string }) => modules.prefetch(row.id)));
@@ -58,7 +64,8 @@ async function bootDesktop() {
     const details = await Promise.all(failed.map(async entry => {
       try { await entry.fiber?.await(); }
       catch (error) { return `${entry.options.name}: ${error instanceof Error ? error.message : String(error)}`; }
-      return entry.options.name;
+      const missing = Object.keys(entry.fiber?.inject ?? {}).filter(name => ctx.get(name) === undefined);
+      return `${entry.options.name}${missing.length ? ` (等待 ${missing.join(', ')})` : ''}`;
     }));
     throw new Error(`DSH 模块未激活：${details.join(', ')}`);
   }

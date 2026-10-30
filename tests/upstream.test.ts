@@ -14,7 +14,7 @@ const classMap = {
   'ui-sidebar': ['hHd-Xa_root', 'hHd-Xa_logoRow', 'hHd-Xa_newSession', 'hHd-Xa_collapsed'],
   'ui-workspace': ['YDXeBa_sessionRow', 'YDXeBa_projectRow', 'bhn1Oq_searchButton'],
   'ui-settings-general': ['VOzbGW_trigger', 'VOzbGW_panel', 'VOzbGW_nav', 'VOzbGW_navCell'],
-  'ui-chat': ['Sixlwa_bubble'],
+  'ui-chat': ['Sixlwa_userStack'],
 };
 
 test('the installed DSH version still exports every CSS-module control used by the desktop adapter', async () => {
@@ -31,7 +31,7 @@ test('Host graph changes and rebuilt code preserve the page-owned desktop shell'
   const evaluate = async (packageName: string, extra: object = {}) => {
     let exports: any;
     runInNewContext(await readFile(upstream + packageName + '/lib/client.js', 'utf8'), {
-      console, URL, queueMicrotask,
+      console, URL, queueMicrotask, TransformStream, TextDecoderStream, AbortController,
       document: { querySelectorAll: () => [], head: { querySelectorAll: () => [] } },
       window: { __ModuleLoader__: { load(entry: any) { exports = entry.factory((name: string) => { throw new Error('Unexpected bootstrap dependency: ' + name); }); } } },
       ...extra,

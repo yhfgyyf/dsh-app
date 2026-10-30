@@ -23,8 +23,8 @@ export function apply(ctx) {
     const agent = ctx.agents.get(payload.args.sessionId);
     if (!agent) throw new Error('Fixture session not found');
     if (method === 'catalog') return { ok: true, value: { provider: ctx.get('browserUse')?.providerName ?? null, tools: ctx.tools.schemas(agent).map(tool => tool.name) } };
-    const result = await ctx.tools.execute({ agent, signal, callId: randomUUID(), name: payload.args.name, arguments: payload.args.arguments });
-    return { ok: true, value: result };
+    const batch = await ctx.tools.execute({ agent, signal, calls: [{ type: 'tool-call', id: randomUUID(), name: payload.args.name, arguments: payload.args.arguments }] });
+    return { ok: true, value: batch.results[0].result };
   });
 }
 `);

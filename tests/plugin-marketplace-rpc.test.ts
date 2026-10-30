@@ -5,12 +5,13 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { dirname, join } from 'node:path';
 import { apply, inject } from '../src/runtime/plugin-marketplace.ts';
 
 const runtimeRequire = createRequire(new URL('../.runtime/package.json', import.meta.url));
 const { Context } = await import(pathToFileURL(runtimeRequire.resolve('@deepseek-ai/cordis')).href);
 const { HostConnectionService } = await import(pathToFileURL(runtimeRequire.resolve('@deepseek-ai/dsh-client-connection')).href);
-const clientSource = await readFile(runtimeRequire.resolve('@deepseek-ai/dsh-client-connection/client'), 'utf8');
+const clientSource = await readFile(join(dirname(runtimeRequire.resolve('@deepseek-ai/dsh-client-connection/package.json')), 'lib/client.browser.js'), 'utf8');
 
 test('marketplace uses the installed current client and host RPC contracts, authentication and cancellation', { timeout: 10000 }, async t => {
   const networkFetch = globalThis.fetch;
@@ -22,6 +23,7 @@ test('marketplace uses the installed current client and host RPC contracts, auth
   } });
   const host = ctx.plugin((owner: any) => { new HostConnectionService(owner, [], {
     isAuthenticated: (request: any) => request.headers.cookie === 'market-test=allowed',
+    authenticateApi: () => undefined,
   }); });
   await host.await();
   const marketplace = ctx.plugin({ name: 'test-marketplace', inject, apply });

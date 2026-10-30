@@ -4,6 +4,7 @@ import { copyFile, mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyComputerDriverBuild } from './build-computer-driver.ts';
+import { buildCollabPlugin } from './build-collab-plugin.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 if (process.platform === 'darwin') await verifyComputerDriverBuild(resolve(root, '.runtime/computer-use'));
@@ -21,7 +22,7 @@ await progressiveImageInstaller.applyProgressiveImages();
 const workspaceInstaller = await import(new URL('install-workspace-dependencies.mjs', import.meta.url).href);
 await workspaceInstaller.applyWorkspaceDependencies();
 
-for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload']) {
+for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload', 'content-find-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 
@@ -46,7 +47,7 @@ const pluginBuild = await build({
     emptyOutDir: true,
     lib: { entry: resolve(root, 'src/renderer/plugin.tsx'), formats: ['cjs'], fileName: () => 'plugin.js' },
     rolldownOptions: {
-      external: ['react', 'react/jsx-runtime', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'],
+      external: ['react', 'react/jsx-runtime', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-client-store'],
       output: {
         banner: 'window.__ModuleLoader__.load({id:"dsh-desktop-shell",factory:(require)=>{const module={exports:{}};const exports=module.exports;',
         footer: 'return module.exports;}});',
@@ -56,14 +57,16 @@ const pluginBuild = await build({
 });
 
 await mkdir(resolve(root, 'dist/renderer'), { recursive: true });
+await copyFile(resolve(root, 'assets/readme/app-icon.png'), resolve(root, 'dist/renderer/tray.png'));
 const pluginOutput = Array.isArray(pluginBuild) ? pluginBuild[0] : pluginBuild;
 if (!('output' in pluginOutput)) throw new Error('Desktop plugin build returned no output.');
 const documentStyles = pluginOutput.output.filter(item => item.type === 'asset' && item.fileName.endsWith('.css')).map(item => item.type === 'asset' ? Buffer.from(item.source).toString('utf8') : '').join('\n');
 await writeFile(resolve(root, 'dist/renderer/theme.css'), await readFile(resolve(root, 'src/renderer/theme.css'), 'utf8') + '\n' + documentStyles);
 for (const [packagePath, files] of [
-  ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
+  ['qrcode', ['license']], ['pngjs', ['LICENSE']], ['dijkstrajs', ['LICENSE.md']], ['docx-preview', ['LICENSE']], ['@aiden0z/pptx-renderer', ['LICENSE']], ['xlsx', ['LICENSE', 'dist/LICENSE']],
   ['echarts', ['LICENSE', 'NOTICE', 'licenses']], ['zrender', ['LICENSE']],
-  ['echarts/node_modules/tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
+  ['tslib', ['LICENSE.txt', 'CopyrightNotice.txt']],
+  ['@tanstack/react-virtual', ['LICENSE']], ['@tanstack/virtual-core', ['LICENSE']], ['zod', ['LICENSE']],
   ['jszip', ['LICENSE.markdown']], ['pako', ['LICENSE']], ['lie', ['license.md']], ['immediate', ['LICENSE.txt']],
   ['readable-stream', ['LICENSE']], ['core-util-is', ['LICENSE']], ['inherits', ['LICENSE']], ['isarray', ['README.md']],
   ['process-nextick-args', ['license.md']], ['safe-buffer', ['LICENSE']], ['string_decoder', ['LICENSE']],
@@ -80,9 +83,10 @@ await build({
   build: { outDir: resolve(root, 'dist/renderer/setup'), target: 'chrome148', emptyOutDir: true },
 });
 await build({ configFile: false, root: resolve(root, 'src/renderer/computer-preview'), base: './', build: { outDir: resolve(root, 'dist/renderer/computer-preview'), target: 'chrome148', emptyOutDir: true } });
+await build({ configFile: false, root: resolve(root, 'src/renderer/content-find'), base: './', build: { outDir: resolve(root, 'dist/renderer/content-find'), target: 'chrome126', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
 // Reuse the official preset declarations without mounting the Web App surface.
 const desktopPatchPath = resolve(root, 'dist/runtime/desktop.patch.yml');
 let desktopPatch = await readFile(desktopPatchPath, 'utf8');
@@ -101,7 +105,12 @@ await build({ configFile: false, plugins: [{
   },
 }], root: resolve(root, 'src/renderer'), base: '/__dsh_desktop__/app/', build: { outDir: resolve(root, 'dist/renderer/app'), target: 'chrome148', emptyOutDir: true } });
 
+await cp(resolve(root, 'src/runtime/remote'), resolve(root, 'dist/runtime/remote'), { recursive: true });
 await cp(resolve(root, 'dist/runtime'), resolve(root, '.runtime/app'), { recursive: true });
+await mkdir(resolve(root, '.runtime/local-plugins'), { recursive: true });
+await writeFile(resolve(root, '.runtime/local-plugins/package.json'), '{\n  "private": true\n}\n', { flag: 'wx' }).catch(error => {
+  if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+});
 // Keep the built-in surface discoverable to Plugin Manager on every platform.
 const surfaceRoot = resolve(root, '.runtime/node_modules/dsh-desktop-surface');
 await cp(resolve(root, 'dist/runtime'), surfaceRoot, { recursive: true });
@@ -117,3 +126,4 @@ const runtimeManifestPath = resolve(root, '.runtime/package.json');
 const runtimeManifest = JSON.parse(await readFile(runtimeManifestPath, 'utf8'));
 runtimeManifest.dependencies['dsh-desktop-surface'] = 'file:./app';
 await writeFile(runtimeManifestPath, JSON.stringify(runtimeManifest, null, 2));
+await buildCollabPlugin(root);

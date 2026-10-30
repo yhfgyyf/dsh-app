@@ -1,0 +1,19 @@
+{
+  "key": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE",
+  "clientRandom": "AgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgI",
+  "session": "kotlin-node-interop",
+  "proof": "V9cKnyOpgVhgovB_u-b7mYTKk74eypjbl-3Yp8sia7k",
+  "hello": {
+    "accessSessionId": "kotlin-node-interop",
+    "serverRandomB64": "AwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwM",
+    "serverProofB64": "APk-pgWh7ZNELUiJtOUiEmqo-2bPJMJdampWwfx-45o"
+  },
+  "c2d": {
+    "seq": "0",
+    "ciphertextB64": "mGWrqW14HoH6gxK9KAOu_0qp1GndVgenm3qc2ICBIDV4QWwMRl141xfHgmz9iA"
+  },
+  "d2c": {
+    "seq": "0",
+    "ciphertextB64": "RFxnPNtu0P4vHVgwrMXBr1oTVDZgdRbrlAMm"
+  }
+}

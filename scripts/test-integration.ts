@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { randomUUID, createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import { connectFixture } from '../tests/fixture-client.ts';
 import { withDesktopPlugin } from '../src/shared/dsh-boot.ts';
@@ -32,7 +32,8 @@ try {
     assert.equal(extended.entries.length, graph.entries.length + 1);
     assert.deepEqual(extended.entries.slice(0, -1), graph.entries);
     assert.ok(graph.entries.some((entry: any) => entry.id === 'dsh-audit-mode'));
-    assert.equal(graph.entries.some((entry: any) => entry.id.includes('ui-schedule')), false);
+    assert.ok(graph.entries.some((entry: any) => entry.id.includes('ui-schedule')));
+    assert.deepEqual(await rpc('schedule/catalog'), []);
     const bytes: { entries: string[]; sha256: string; bytes: number }[] = [];
     for (const batch of graph.batches) {
       const response = await fetch(new URL(batch.url, client.endpoint + '/'), { headers: client.headers });
@@ -158,7 +159,10 @@ try {
   });
   await check('preset declarations can be copied and removed through the official profile configuration', async () => {
     const id = 'desktop-test-' + randomUUID().slice(0, 8);
-    const yaml = createRequire(new URL('../.runtime/package.json', import.meta.url))('yaml');
+    const requireRuntime = createRequire(new URL('../.runtime/package.json', import.meta.url));
+    const patchYaml = requireRuntime('js-yaml');
+    const { entryListSchema } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/cordis-plugin-include')).href);
+    const yaml = { parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }), stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }) };
     const file = join(root, '.test-data/fixture-owned/profiles/desktop/cordis.patch.yml');
     const original = await readFile(file, 'utf8');
     const declaration = yaml.parse(await readFile(join(root, '.runtime/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml'), 'utf8'))[0].insert[0];
@@ -226,7 +230,9 @@ try {
     const frames = JSON.stringify(session.frames.slice(before));
     const id = frames.match(/"attachmentId":"([^"]+)"/)?.[1];
     assert.ok(id);
-    const attachment = await rpc('session/attachment', { request: { sessionId, attachmentId: id } });
+    const reference = session.frames.slice(before).filter(frame => frame.type === 'event' && frame.event.type === 'user/message').flatMap(frame => frame.event.data.content).find((block: any) => block.type === 'image' && block.attachment?.attachmentId === id)?.attachment;
+    assert.ok(reference, 'Read back the complete durable attachment reference');
+    const attachment = await rpc('session/attachment', { request: { sessionId, attachment: reference } });
     assert.equal(attachment.data, png);
     assert.equal(attachment.attachment.mediaType, 'image/png');
   });

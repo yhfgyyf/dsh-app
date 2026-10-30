@@ -13,7 +13,7 @@ const clientNodeModules = process.env.DSH_OVERLAY_TEST_CLIENT ?? fileURLToPath(n
 const paths = await import(pathToFileURL(join(runtimeNodeModules, '@deepseek-ai/dsh-util-workspace-path/lib/index.js')).href);
 const source = await readFile(join(runtimeNodeModules, '@deepseek-ai/dsh-client-ui-chat/lib/client.js'), 'utf8');
 const start = source.indexOf('function localArtifactPath(');
-const end = source.indexOf('/** Reasoning block', start);
+const end = source.indexOf('const AssistantMarkdown =', start);
 assert.ok(start > 0 && end > start, 'Install the artifact adapter before testing');
 const { localArtifactPath, localPathMediaUrl } = new Function('isAbsoluteWorkspacePath', 'fileMediaUrl', source.slice(start, end) + '; return {localArtifactPath, localPathMediaUrl};')(paths.isAbsoluteWorkspacePath, paths.fileMediaUrl);
 const { fileAddressFor } = new Function(source.slice(source.indexOf('const FILE_ADDRESS_PREFIX'), source.indexOf('const EMPTY_LIST$1')) + '; return {fileAddressFor};')();

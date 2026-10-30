@@ -1,0 +1,19 @@
+{
+  "name": "dsh-mobile-capture",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Captures DSH Mobile traffic against a running DeepSeek Harness into capture-output/",
+  "bin": {
+    "dsh-capture": "./capture.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node capture.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -19,7 +19,13 @@ async function fixture(t: any, failed = false) {
   t.after(() => ctx.fiber.dispose());
   await ctx.plugin(LlmRuntime);
   await ctx.plugin(SystemPrompt, {});
-  await ctx.plugin(ToolRuntime, { mode: 'native' });
+  await ctx.plugin(ToolRuntime);
+  await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native'));
+  const execute = async (input: any) => {
+    const { signal, callId: id, ...call } = input;
+    const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id, ...call }], signal });
+    return batch.results[0].result;
+  };
   const content = [{ type: 'text', text: 'Screenshot' }, { type: 'image', attachment: { attachmentId: 'fixture-image', mediaType: 'image/png', bytes: 1, width: 1, height: 1 } }];
   const value = { content: [{ type: 'image', mimeType: 'image/png', data: 'FIXTURE_BASE64_MUST_NOT_BE_TEXT' }], structuredContent: { captured: true } };
   const extra = createUserMessage({ content: [{ type: 'text', text: 'Details' }], source: { kind: 'plugin', plugin: 'capture' } });
@@ -34,7 +40,7 @@ async function fixture(t: any, failed = false) {
     },
   }));
   await ctx.plugin(plugin, {});
-  const result = await ctx.tools.execute({ callId: ToolCallId('image-test'), name: 'invoke_tool', arguments: { name: 'capture', arguments: {} }, signal: new AbortController().signal });
+  const result = await execute({ callId: ToolCallId('image-test'), name: 'invoke_tool', arguments: { name: 'capture', arguments: {} }, signal: new AbortController().signal });
   return { result, value, content, extra };
 }
 

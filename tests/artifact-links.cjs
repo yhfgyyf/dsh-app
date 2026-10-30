@@ -178,7 +178,9 @@ async function run(event) {
   await interactions.verifyLocalFile(host, workspace, 'report.md', until);
   await interactions.verifyLocalMenu(host, workspace, until);
   report.checks.push('Text sidebar supports drag selection and Copy; header opens each active SVG, PNG, HTML and Markdown file instead of the workspace');
-  report.checks.push('Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
+  report.checks.push(process.platform === 'linux'
+    ? 'Local menu reveals the current file, explains the unsupported application chooser, and opens selected files or directories with OS defaults'
+    : 'Local menu reveals the current file, selects another application, and opens selected files or directories with OS defaults');
   await documents.run({ host, until, report, data });
   // rc.1 starts without a guide; closing every document leaves the column empty.
   await js(`Array.from(document.querySelectorAll('[data-sidebar-right-open] [data-dockkit-tab-close]')).forEach(button=>button.click())`);

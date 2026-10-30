@@ -50,7 +50,10 @@ const mock = createServer(async (req, res) => {
     sequence.push({ name: 'invoke_tool', arguments: { name: 'cordis_inspect_query', arguments: { platform: 'host', provider: 'Tool', method: 'listTools' } } });
   }
   if (approval) sequence.push({ name: 'invoke_tool', arguments: { name: target, arguments: { file_path: join(data, `approval-${approval}.txt`), content: 'Desktop one-time approval verified.\n', sandbox_permissions: 'danger-full-access', justification: '仅在隔离测试目录创建这个验收文件，以验证桌面单次审批。' } } } as typeof sequence[number]);
-  const call = (question || approval || advanced || prompt.includes('[desktop-tools]')) && step < sequence.length ? sequence[step] : undefined;
+  const nativeCall = (question || approval || advanced || prompt.includes('[desktop-tools]')) && step < sequence.length ? sequence[step] : undefined;
+  const ptc = request.tools?.some((tool: any) => tool.name === 'run_code');
+  const nested = nativeCall?.name === 'invoke_tool' ? { name: nativeCall.arguments.name, arguments: nativeCall.arguments.arguments } : nativeCall;
+  const call = ptc && nested ? { name: 'run_code', arguments: { code: `const result = await tools.${nested.name}(${JSON.stringify(nested.arguments)}); console.log(JSON.stringify(result)); return result;`, description: 'Execute the isolated progressive tool acceptance call' } } : nativeCall;
   const content = prompt.includes('长消息') ? '这是一条用于滚动测试的消息。\n\n'.repeat(150) : '已收到桌面测试消息。\n\n**中文与 Markdown 渲染正常。**\n\n```typescript\nconst message = "Hello, DSH Desktop";\nconsole.log(message);\n```\n\n- 会话与工作空间已连接\n- 流式回复已完成\n\n这是本地确定性测试响应。';
   if (!request.stream) {
     res.writeHead(200, { 'content-type': 'application/json' });

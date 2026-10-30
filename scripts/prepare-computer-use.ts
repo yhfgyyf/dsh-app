@@ -13,6 +13,10 @@ const run = (command: string, args: string[], cwd: string) => new Promise<void>(
 });
 
 export async function prepareComputerUse() {
+  if (process.platform === 'linux') {
+    console.log('Native computer use is unavailable on Linux; no driver payload is bundled.');
+    return;
+  }
   if (process.platform !== 'darwin' && process.platform !== 'win32') throw new Error('Computer use requires macOS or Windows.');
   if (process.platform === 'win32' && process.arch !== 'x64') throw new Error('The pinned Windows driver requires x64.');
   const pin = JSON.parse(await readFile(join(root, 'runtime/computer-use/driver.json'), 'utf8'));

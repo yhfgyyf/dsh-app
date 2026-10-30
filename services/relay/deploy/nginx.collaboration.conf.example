@@ -1,0 +1,12 @@
+# Add inside EACH existing TLS server block for the same relay. Keep its CA and other locations.
+location /collab/v1/ {
+    proxy_pass http://127.0.0.1:8788;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 90s;
+    proxy_send_timeout 90s;
+    proxy_buffering off;
+    client_max_body_size 12m;
+}

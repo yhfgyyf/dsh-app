@@ -147,6 +147,7 @@ export function apply(ctx) {
         } catch (error) { finish(error as Error); }
       });
     });
+    assert.deepEqual(JSON.parse(await readFile(join(profileDir, 'local-plugins', 'package.json'), 'utf8')), { private: true });
   } finally {
     if (child && child.exitCode === null && child.signalCode === null) {
       const core = child;

@@ -1,0 +1,43 @@
+name: Feature request
+description: Suggest an improvement for DSH Mobile
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This app mirrors the DeepSeek Harness web GUI, so the most persuasive requests are
+        either "the GUI does this and the app does not" or "a phone needs this differently
+        from a desktop".
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched the existing issues.
+          required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Feature
+      description: What should the app do, and why is it useful?
+    validations:
+      required: true
+  - type: textarea
+    id: harness-parity
+    attributes:
+      label: Harness parity
+      description: Does the DeepSeek Harness web GUI already do this? If so, where?
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Where does this have to change?
+      description: >
+        Some things the app cannot do alone — the harness pins settings, credentials,
+        model discovery, host file pickers and preset authoring to loopback, and it has no
+        authentication layer.
+      options:
+        - App only
+        - Needs something from the harness
+        - Not sure
+    validations:
+      required: true

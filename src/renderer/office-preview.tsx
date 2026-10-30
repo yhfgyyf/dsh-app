@@ -34,7 +34,9 @@ function OfficeDocument({ resourceAddress, content, format }: DocumentProps & { 
     }, 45000);
     const receive = (event: MessageEvent) => {
       const value = event.data;
-      if (!active || event.source !== target || event.origin !== 'null' || value?.type !== 'office-preview:status' || value.channel !== channel) return;
+      if (!active || event.source !== target || event.origin !== 'null' || value?.channel !== channel) return;
+      if (value.type === 'office-preview:find-start') { window.dispatchEvent(new Event('dsh:find-content')); return; }
+      if (value.type !== 'office-preview:status') return;
       if (value.state === 'blocked') {
         setStatus(previous => ({ ...(previous?.channel === channel ? previous : { channel, state: 'loading' }), blocked: true }));
       } else if (!settled && ['ready', 'error'].includes(value.state)) {
@@ -67,7 +69,7 @@ function OfficeDocument({ resourceAddress, content, format }: DocumentProps & { 
       {current.blocked && <span role="status"> 已阻止文档请求的外部内容。</span>}
     </div>
     {current.state === 'error' ? <div style={{ padding: 16 }}><p role="alert">{current.message || '文档已损坏、受密码保护，或包含不支持的内容。可在本地应用中打开。'}</p><button onClick={() => setAttempt(value => value + 1)}>重试预览</button></div>
-      : <iframe key={document.channel} ref={frame} title={title} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={document.html} onLoad={load} style={{ flex: 1, width: '100%', minHeight: 280, border: 0, visibility: current.state === 'ready' ? 'visible' : 'hidden' }} />}
+      : <iframe key={document.channel} ref={frame} data-desktop-office-channel={document.channel} title={title} sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc={document.html} onLoad={load} style={{ flex: 1, width: '100%', minHeight: 280, border: 0, visibility: current.state === 'ready' ? 'visible' : 'hidden' }} />}
   </section>;
 }
 

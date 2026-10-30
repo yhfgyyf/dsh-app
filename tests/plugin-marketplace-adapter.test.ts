@@ -34,6 +34,8 @@ test('Settings marketplace and sidebar share the official controller with only o
   const disposers: (() => void)[] = [];
   const inspected: string[] = [];
   const context = {
+    provide() { return () => {}; },
+    remoteAccess: { whenAccess(_method: string, factory: () => Generator<() => void>) { for (const dispose of factory()) disposers.push(dispose); } },
     get() { return undefined; },
     effect(factory: () => () => void) { disposers.push(factory()); },
     on() { return () => {}; },
@@ -43,7 +45,7 @@ test('Settings marketplace and sidebar share the official controller with only o
       inspected.push(spec);
       return { ok: true, value: { status: 'refused', problem: 'not-bundle', reason: 'fixture refuses installation' } };
     } } },
-    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory(options: any, component: any) { factories.set(options.name, { options, component }); return () => {}; }, getVersion() { return 1; }, entries() { return []; } },
+    slots: { inject(_name: string, factory: () => unknown) { const result = factory(); if (result && typeof (result as any).next === 'function') for (const dispose of result as Generator<() => void>) disposers.push(dispose); return () => {}; }, register(options: any, component: any) { registrations.push({ options, component }); return () => {}; }, registerFactory(options: any, component: any) { factories.set(options.name, { options, component }); return () => {}; }, getVersion() { return 1; }, entries() { return []; } },
     layout: { panelInfo: { subscribe() { return () => {}; }, getSnapshot() { return { activePanelId: 'plugins' }; } }, selectPanel() {} },
     reflect: { provide() { return () => {}; } },
   };
@@ -66,6 +68,9 @@ test('Settings marketplace and sidebar share the official controller with only o
         usePluginManager: (select: any) => select(face.hooks.pluginManager.getSnapshot()),
         useConfigurations: (select: any) => select([]),
         useConfigLedger: (select: any) => select(face.hooks.configLedger.getSnapshot()),
+        usePluginTabs: (select: any) => select(face.hooks.pluginTabs.getSnapshot()),
+        useBundleDetails: (select: any) => select(face.hooks.bundleDetails.getSnapshot()),
+        useLocale: (select: any) => select({ active: 'en' }),
         renderSlot: (name: string, props: any) => { slots.push({ name, props }); return null; },
         renderFactorySlot: (name: string, props: any) => element(factories.get(name).component, props),
       });
@@ -123,6 +128,18 @@ test('marketplace adapter is pinned, idempotent, backs up the original and refus
     assert.equal(await readFile(join(applied.backup, relativeClient), 'utf8'), before);
     assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
     assert.equal(await readFile(target, 'utf8'), source);
+    const { files } = JSON.parse(await readFile(join(root, 'patches', `dsh-${version}`, 'plugin-marketplace/manifest.json'), 'utf8'));
+    for (const upgrade of files[0].upgrades ?? []) {
+      const reversedUpgrade = spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'apply', '--reverse', '--unsafe-paths', '--directory=' + runtimeNodeModules.replaceAll('\\', '/'), join(root, 'patches', `dsh-${version}`, 'plugin-marketplace', upgrade.patch)], { cwd: scratch, encoding: 'utf8' });
+      assert.equal(reversedUpgrade.status, 0, reversedUpgrade.stderr);
+      const previous = await readFile(target, 'utf8');
+      assert.deepEqual(await applyPluginMarketplace({ ...options, mode: 'check' }), { pending: 1 });
+      const upgraded = await applyPluginMarketplace(options);
+      assert.equal(upgraded.changed, 1);
+      assert.equal(await readFile(join(upgraded.backup, relativeClient), 'utf8'), previous);
+      assert.equal(await readFile(target, 'utf8'), source);
+      assert.deepEqual(await applyPluginMarketplace(options), { changed: 0, verified: true });
+    }
     const unknown = source + '\n// local change\n';
     await writeFile(target, unknown);
     await assert.rejects(applyPluginMarketplace(options), /Unrecognized changes preserved/);

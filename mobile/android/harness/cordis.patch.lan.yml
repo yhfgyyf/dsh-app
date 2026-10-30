@@ -1,0 +1,14 @@
+# DSH Mobile — LAN-mode patch for the DeepSeek Harness web profile.
+# Merge this row into $DSH_HOME/profiles/web/cordis.patch.yml (default
+# ~/.dsh/profiles/web/cordis.patch.yml). A patch row replaces the targeted
+# row's whole config, so name/inject are restated.
+#
+# SECURITY: the harness authenticates API requests, but this listener uses plain
+# HTTP. Use only on trusted networks. See harness/README.md.
+
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  inject: [webStartup]
+  config:
+    host: '0.0.0.0'
+    port: 3080

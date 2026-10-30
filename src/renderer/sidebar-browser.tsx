@@ -93,7 +93,7 @@ function BrowserTab({ sessionId, useSessions, useTabInfo, retain, openSource }: 
     if (target) void window.dshDesktop?.browserNavigate(id, url).catch(reason => setError(reason.message));
     else tab.actions.openResource(webAddress(url), { replaceTab: true });
   };
-  return <section className="desktop-browser" aria-label={preview ? '文件预览' : '侧栏浏览器'}>
+  return <section className="desktop-browser" data-desktop-browser-id={id} aria-label={preview ? '文件预览' : '侧栏浏览器'}>
     <div className="desktop-browser-toolbar">
       <button title="后退" aria-label="后退" disabled={!state?.canGoBack} onClick={() => { void window.dshDesktop?.browserAction(id, 'back'); }}>←</button>
       <button title="前进" aria-label="前进" disabled={!state?.canGoForward} onClick={() => { void window.dshDesktop?.browserAction(id, 'forward'); }}>→</button>

@@ -14,14 +14,17 @@ const { clientUrl } = require('./fixtures/univer-client-download.cjs');
 app.commandLine.appendSwitch('lang', 'en-US');
 const root = join(__dirname, '..');
 const candidatePackage = process.env.DSH_TEST_UNIVER_PACKAGE && resolve(process.env.DSH_TEST_UNIVER_PACKAGE);
-const compatibility = candidatePackage && require('../patches/univer-office-0.3.5-dsh-rc1/manifest.json');
+const compatibility = candidatePackage && (process.env.DSH_TEST_UNIVER_PROVENANCE
+  ? JSON.parse(readFileSync(process.env.DSH_TEST_UNIVER_PROVENANCE, 'utf8'))
+  : require('../patches/univer-office-0.3.5-dsh-rc1/manifest.json'));
 const reports = join(root, '.test-data', candidatePackage ? 'univer-client-upgrade' : 'univer-client');
 const data = join(reports, String(Date.now()));
 const home = join(data, 'core');
 const workspace = join(data, 'workspace');
 const profile = join(home, 'profiles', 'desktop');
 const bundle = join(profile, 'node_modules', 'dsh-univer-office');
-const clientSha256 = candidatePackage ? compatibility.files.find(file => file.path === 'lib/client.js').after : 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7';
+const clientEntry = candidatePackage && compatibility.files.find(file => file.path === 'lib/client.js');
+const clientSha256 = candidatePackage ? clientEntry.sha256 ?? clientEntry.after : 'df478f1ee572440e0b779728c9684b36c61809c36961e42d659a3486894b4ac7';
 const clientBytes = candidatePackage ? readFileSync(join(candidatePackage, 'lib/client.js')).length : 1101122;
 const clientVersion = candidatePackage ? compatibility.version : '0.3.2';
 const sessionId = 'session-' + randomUUID();
@@ -162,7 +165,8 @@ async function run(event) {
   let bytes;
   if (candidatePackage) {
     const manifestBytes = readFileSync(join(candidatePackage, 'package.json'));
-    assert.equal(createHash('sha256').update(manifestBytes).digest('hex'), compatibility.files.find(file => file.path === 'package.json').after);
+    const manifestEntry = compatibility.files.find(file => file.path === 'package.json');
+    assert.equal(createHash('sha256').update(manifestBytes).digest('hex'), manifestEntry.sha256 ?? manifestEntry.after);
     assert.equal(JSON.parse(manifestBytes).version, clientVersion);
     report.clientSource = 'SHA-pinned Desktop compatibility package';
     bytes = readFileSync(join(candidatePackage, 'lib/client.js'));

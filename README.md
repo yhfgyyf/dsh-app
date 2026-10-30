@@ -4,9 +4,61 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前桌面版 **0.1.28** 支持 **DSH 0.2.0-rc.1**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前桌面版 **0.1.45** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.45：适配最新 DSH 0.2.2-alpha.2
+
+截至 2026-10-30，适配官方最新预发布内核 [DSH 0.2.2-alpha.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2)。[v0.1.45 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) 同时提供 Mac Apple Silicon、Windows x64 和麒麟 V10 LoongArch64 旧 ABI 安装包。
+
+- **统一原生引用**：框选聊天文字只显示“引用文本到主会话”和“在侧边聊天中提问”，使用原生引用节点及原文预览；已有侧聊直接复用，引用不会自动发送。侧聊需单独安装 [dsh-side-chat 0.1.6](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.6)。
+- **独立内容搜索**：`Ctrl+S` / `Command+S` 搜索当前对话、侧聊或文件；浮窗不挤占内容布局，`Ctrl+F` / `Command+F` 继续搜索左侧会话。
+- **启动修复**：修复 macOS 初始化未完成时再次激活窗口的竞态，以及 Windows 缓存端口被拒绝时的恢复。
+- **麒麟修订 2**：请使用 `DSH-Desktop-0.1.45-2-Kylin-V10-loongarch64.deb`，修复 `node-addon-require-builtin` 遗漏。系统包版本为 `0.1.45-2`，App 界面版本仍为 `0.1.45`。
+
+Mac 已完成实际安装与界面验证；Windows 通过原生 CI 及最终 EXE 安装、更新、卸载验证。麒麟最终 DEB 已在真实 LoongArch Node22.16 的 QEMU 仿真中通过 101 个必需依赖、Worker、Host 冷启动/重启和会话持久化验证，**未做麒麟真机 Chromium 图形界面测试**。Mac 为 ad-hoc 签名且未公证，Windows 未签名；麒麟继续使用 Electron31.7.7 / Node22.16 的旧 ABI 移植，低于内核官方 Node>=24.9 的要求。完整范围和 SHA-256 见 Release。
+
+安装包包含匿名 `local-plugins/package.json`，不预装 P2P、Side、Univer 等用户扩展，也不删除用户已安装的插件与配置。麒麟原生依赖的来源、补丁和启动门禁见 [旧 ABI 构建说明](patches/kylin-require-builtin/README.md)。
+
+## v0.1.44：DSH 0.2.2-alpha.2
+
+适配新版独立 Native/PTC 工具执行器、按步骤的工具可用性和会话观察接口。更新 Auto、Audit、Progressive Tools、TUI 的兼容补丁；已有用户扩展需使用对应兼容版，安装包保留匿名本地插件目录且不预装用户扩展。麒麟 V10 旧 ABI 的 Node 运行时需单独验证。
+
+## v0.1.43：独立内容搜索浮窗
+
+`Ctrl+S` / `Command+S` 在应用上方打开独立的非模态搜索浮窗，不再将搜索框嵌入主对话或右侧面板，也不添加页面占位。主对话、侧聊、文件和原生网页预览的布局与尺寸保持不变；搜索仍作用于当前选中的面板。`Enter` / `Shift+Enter` 跳转，`Esc` 关闭，原有 `Ctrl+F` / `Command+F` 继续搜索左侧会话。
+
+## v0.1.42：紧凑搜索框与选文原文预览
+
+内容搜索框缩小至当前面板右上角。点击输入框中的“@选中内容”即可查看原文；长文先显示开头片段，可展开或收起全文，预览不会修改或发送草稿。侧聊插件继续使用 `0.1.5`，已有侧聊仍直接追加引用。
+
+## v0.1.41：选文引用与当前内容搜索
+
+选中主对话或 `/side` 中的文字后，可以“添加到主对话”或“在侧边聊天中提问”。选文作为引用片段加入原生输入框，保留已有草稿与附件，确认发送前不调用模型。侧聊入口需要启用 `dsh-side-chat 0.1.5`；它与 `/side` 使用同一个临时会话，关闭后重新打开仍是新的空侧聊。
+
+点击或聚焦主对话、右侧文件或 `/side` 后，按 Windows/Linux `Ctrl+S`、macOS `Command+S` 搜索当前面板已载入的文字。匹配内容会高亮，`Enter` / `Shift+Enter` 跳转，`Esc` 关闭。原有 `Ctrl+F` / `Command+F` 继续查找左侧会话。
+
+## dsh-p2p-collab 0.1.3（未发布）
+
+手机远程控制入口移至“插件 → dsh-p2p-collab”详情，可设置中继地址、注册码、扫码绑定和解绑手机。详情页沿用官方插件的表单、按钮与开关；插件关闭时仍可配置和进行局域网配对。协作空间仅在插件启用且中继已注册时显示，解除注册后收起；现有手机连接方式与后台运行行为不变。
+
+## v0.1.32：手机预览、下载共享、终端与语音输入
+
+Android 0.12.5-dsh.4 按文件格式预览：Office 在电脑转换为 PDF，手机翻页查看；GIF 保留动画，音视频分块下载到手机私有缓存播放。文件可保存到手机或通过系统分享面板共享原件。控制权限的手机可使用电脑上的交互终端。单次语音录音交给电脑本地模型转写，结束后自动发送文字；可取消，切换会话或进入后台会停止本次语音输入。
+
+## v0.1.31 修复：手机连接稳定性
+
+修复扫码后任务状态订阅被误拒绝、导致整条 WebSocket 反复断开的问题。单个被拒绝的订阅现在只返回该订阅的错误，其他会话继续连接；Android 0.12.4-dsh.3 同时将隧道网络异常转为界面错误，避免闪退。已有绑定可继续使用。
+
+## v0.1.30 更新：扫码绑定手机
+
+- 管理连接集中显示中继注册、一次性扫码和手机绑定状态，按钮与“编辑快捷键”一致。
+- 同一局域网无需中继即可扫码；注册中继后，手机自动优先直连并在需要时回退中继。手机无需输入账号密码或手工连接参数。
+- 两端均可解绑，离线撤销会保留并同步。手机侧栏显示远程主机、地球标记及切换/解绑入口。
+- 关闭窗口默认继续运行：Windows/麒麟托盘、macOS Dock 与菜单栏。应用菜单“退出”才停止 Host。
+
+构建、配对及中继升级说明见 [远程接入说明](docs/REMOTE-ACCESS.md)。
 
 ## v0.1.28 更新：DSH 0.2.0-rc.1 与全平台语音输入
 
@@ -15,7 +67,7 @@
 - **Mac / Windows**：使用 Electron **44.4.5**，macOS 最低要求 **13**；支持 Browser Use 和 Computer Use。
 - **银河麒麟龙芯**：保留 Electron 31.7.7 和 Node 22.16.0 的旧 ABI 环境，新增不依赖 SIMD 的离线语音识别库，随包附带 SenseVoiceSmall INT8 和 Silero VAD 模型。
 
-本次 [v0.1.28 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) 发布 Windows 和麒麟安装包及校验信息；macOS 可从当前源码构建。麒麟新版已通过构建主机测试和安装包校验，**尚待龙芯实机验证**；Browser Use、Computer Use 目前仅在 macOS / Windows 提供，麒麟可使用独立的侧边栏网页预览。
+历史 [v0.1.28 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) 发布 Windows 和麒麟安装包及校验信息；macOS 可从当前源码构建。麒麟新版已通过构建主机测试和安装包校验，**尚待龙芯实机验证**；Browser Use、Computer Use 目前仅在 macOS / Windows 提供，麒麟可使用独立的侧边栏网页预览。
 
 ## v0.1.12 预览版更新
 
@@ -81,7 +133,7 @@ Windows 从 v0.1.6 起将旧安装目录整体保留在相邻备份目录，再�
 - 聊天与右侧栏支持选中文字后右键复制，输入框提供剪切、粘贴、撤销与全选。
 - “在本地打开”使用系统默认应用打开右侧当前文件；菜单可选择其他应用、在文件夹中显示、选择文件或文件夹。没有当前文件时弹出文件选择器，工作区文件夹作为单独菜单项保留。
 
-Desktop `0.1.28` 内置 DSH `0.2.0-rc.1`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`，包含这些插件针对新核心的兼容补丁。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
+Desktop `0.1.45` 内置 DSH `0.2.2-alpha.2`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`，包含这些插件针对新核心的兼容补丁。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
 
 部分能力依赖所选模型或外部工具：MP4 需要提供方支持 `video_url`；Audit 的 Codex / Claude Code 后端需要对应 CLI，也可配置 DSH 模型后端。安装包不包含模型账号、密钥或这些外部 CLI。
 
@@ -93,15 +145,15 @@ Codex 登录通过 DSH 自己的授权服务保存到共享凭据文件，过期
 
 使用官方会话生命周期锁：同一会话同时只有一个进程可以写入。其他端尝试恢复、修改或删除占用中的会话会收到占用错误；持有端退出后可以接手。切换页面不保证释放会话，跨进程实时跟随活动流也不属于当前功能。
 
-本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.2.0-rc.1)。
+本地补丁提供删除、MP4 和部分旧事件兼容，**没有替换官方会话写锁，也没有放宽工具调用一致性校验**。旧日志如已损坏，仍可能需要单独修复。补丁及其校验清单位于 [patches](patches/dsh-0.2.2-alpha.2)。
 
 升级到核心 0.2 时，App 会备份并迁移 profile 中显式引用的旧 DeepSeek 插件名，保留模型与密钥配置。第三方插件须通过新版兼容性检查；不会自动豁免不兼容插件。旧会话读取可能生成新的 V4 日志文件，原日志保留，因此降级时应使用升级前备份。
 
 ## Univer Office 插件升级
 
-DSH `0.2.0-rc.1` 会检查第三方插件的版本兼容性。官方 `dsh-univer-office` `0.3.2` 和 `0.3.5` 尚未声明支持该核心；升级 App 不会自动替换用户安装的插件。
+DSH `0.2.2-alpha.2` 检查第三方插件兼容性；升级 App 不会替换用户独立安装的插件。[v0.1.45 Release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) 附带 `dsh-univer-office-0.3.5-universal.2.tgz` 兼容包，声明适配当前内核，并保留 `telemetry: false` 默认值及 `right` 对齐修复。
 
-本仓库提供基于官方 `0.3.5` 的 `0.3.5-desktop.1` 兼容包构建方法，保留 `telemetry: false` 默认值和 `right` 对齐修复，并适配新版客户端注册。使用设置中的“插件市场 → 手动添加”安装生成的 `.tgz` 后重启 App。来源、构建、测试范围和回退说明见 [Univer 兼容包说明](patches/univer-office-0.3.5-dsh-rc1/README.md)。这是本项目的适配版本，不是官方 npm 新版本。
+通过“设置 → 插件市场 → 手动添加”安装 `.tgz`，然后完整退出并重启 App。该包为本项目基于官方 `0.3.5` 的兼容构建，不是上游 npm 新版本；兼容层源码见 [universal overlay](patches/univer-office-universal/README.md)。插件单独提供，不预装进 App。
 
 ## 全平台语音输入
 
@@ -148,7 +200,7 @@ Windows 需要已登录的交互桌面；锁屏和 UAC 安全桌面不能操作�
 
 ## 从源码构建
 
-当前 `main` 源码为 Desktop `0.1.28`，内置 DSH `0.2.0-rc.1`，包含三平台语音适配与兼容补丁。下面的标准构建命令用于 macOS / Windows；麒麟使用独立的旧 ABI 环境，离线语音构建与固定来源见 [麒麟语音适配](patches/loongarch-speech/README.md)，安装使用 Release 的 `.deb` 及随包说明。
+当前 `main` 源码为 Desktop `0.1.45`，内置 DSH `0.2.2-alpha.2`，包含三平台语音适配与兼容补丁。下面的标准构建命令用于 macOS / Windows；麒麟使用独立的旧 ABI 环境，离线语音构建与固定来源见 [麒麟语音适配](patches/loongarch-speech/README.md)，安装使用 Release 的 `.deb` 及随包说明。
 
 需要 Git、Node.js **24.15.0** 与 npm：
 

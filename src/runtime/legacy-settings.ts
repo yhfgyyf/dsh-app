@@ -5,6 +5,22 @@ import { join } from 'node:path';
 type Sections = Record<string, Record<string, unknown>>;
 type Yaml = { parse(text: string): Sections | null; stringify(value: unknown): string };
 
+/** Scheduling is built in from 0.2.2; retain the former activation list for rollback. */
+export async function migrateRetiredScheduleBundle(profileDir: string) {
+  const file = join(profileDir, 'package.json');
+  const original = await readFile(file, 'utf8');
+  const manifest = JSON.parse(original);
+  const bundles = manifest.dsh?.profile?.bundles;
+  if (!Array.isArray(bundles) || !bundles.includes('@deepseek-ai/dsh-experimental-schedule-bundle')) return;
+  manifest.dsh.profile.bundles = bundles.filter((name: string) => name !== '@deepseek-ai/dsh-experimental-schedule-bundle');
+  await copyFile(file, `${file}.before-0.2.2-alpha.2`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'EEXIST') throw error;
+  });
+  const temporary = `${file}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(manifest, null, 2) + '\n', { mode: 0o600 });
+  await rename(temporary, file);
+}
+
 /** The former DeepSeek plugin became a transport library in DSH 0.2. */
 export async function migrateRuntimePluginNames(files: string[], yaml: { parse(text: string): any; stringify(value: unknown): string }) {
   for (const file of files) {

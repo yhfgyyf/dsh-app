@@ -1,3 +1,4 @@
+import { RemoteAccessSettings } from './remote-access.tsx';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { modalSelector } from '@deepseek-ai/dsh-client-ui-primitives';
 import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
@@ -13,6 +14,7 @@ import { installPluginMarketplace } from './plugin-marketplace.tsx';
 import type { MarketplaceConnection } from './plugin-marketplace.tsx';
 import { installPluginSecurityReview } from './plugin-security.tsx';
 import { installSessionDelete } from './session-delete.tsx';
+import { installContentTools } from './content-tools.tsx';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
@@ -25,6 +27,11 @@ interface DesktopContext extends BrowserContext, DocumentContext {
   get(name: 'uiWorkspace'): { startSession(): void };
   get(name: 'sessions'): { delete(sessionId: string): Promise<void> };
   get(name: 'connection'): MarketplaceConnection & { state: StateSource; reconnect(): void };
+  get(name: string): any;
+  sessions: Parameters<typeof installContentTools>[0]['sessions'];
+  conversation: Parameters<typeof installContentTools>[0]['conversation'];
+  inputTriggers: Parameters<typeof installContentTools>[0]['inputTriggers'];
+  sidebarRight: BrowserContext['sidebarRight'] & Parameters<typeof installContentTools>[0]['sidebarRight'];
   layout: { toggleSidebar(): void };
   shortcuts: {
     // DSH 0.2.0-rc.1 has no public invoke method; its native menu adapter uses
@@ -38,7 +45,7 @@ interface DesktopContext extends BrowserContext, DocumentContext {
 }
 
 export const name = 'dsh-desktop-shell';
-export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews', 'sessions', 'shortcuts'];
+export const inject = ['slots', 'theme', 'layout', 'sidebarRight', 'sidebarRightTabs', 'uiWorkspace', 'connection', 'documentPreviews', 'sessions', 'shortcuts', 'conversation', 'inputTriggers'];
 
 const palette: Record<string, [string, string]> = {
   '--dsw-alias-bg-base': ['#ffffff', '#181818'],
@@ -100,12 +107,16 @@ function ConnectionAction({ wide }: { wide: boolean }) {
 
 function DesktopSettings() {
   const [info, setInfo] = useState<DesktopInfo>();
+  const [showConnections, setShowConnections] = useState(false);
   useEffect(() => { void window.dshDesktop?.getInfo().then(setInfo); }, []);
-  return <div><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div><UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
+  return <div className="desktop-general-settings"><div className="desktop-settings-row"><div><strong>桌面应用</strong><p>{info ? `DSH Desktop ${info.version} · 独立本机运行` : 'DSH Desktop'}</p></div><button onClick={() => { void window.dshDesktop?.showConnection(); }}>运行状态</button></div>
+    <div className="desktop-settings-row"><div><strong>手机远程连接</strong><p>注册中继并扫码绑定手机。</p></div><button aria-expanded={showConnections} onClick={() => setShowConnections(!showConnections)}>管理连接</button></div>
+    {showConnections && <RemoteAccessSettings />}
+    <UpdateScheduleSettings /><ComputerSettings /><BrowserUseSettings /></div>;
 }
 
 /** Route menu actions to their owners; search still uses a version-pinned UI control. */
-export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
+export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext, browserId?: string) {
   switch (command) {
     case 'new-session': ctx.get('uiWorkspace').startSession(); break;
     case 'sidebar': ctx.layout.toggleSidebar(); break;
@@ -119,6 +130,7 @@ export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext) {
       break;
     }
     case 'search': document.querySelector<HTMLButtonElement>('button.bhn1Oq_searchButton')?.click(); break;
+    case 'find-content': window.dispatchEvent(new CustomEvent('dsh:find-content', { detail: browserId })); break;
   }
 }
 
@@ -130,13 +142,16 @@ export async function apply(ctx: DesktopContext) {
   installPluginMarketplace(ctx);
   installPluginSecurityReview(ctx);
   installSessionDelete(ctx);
+  installContentTools(ctx);
+  // Configuration stays available while the collaboration workspace is disabled.
+  ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: 'dsh-p2p-collab' }, RemoteAccessSettings));
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
   ctx.effect(() => {
     const sync = (snapshot: ThemeSnapshot) => { void window.dshDesktop?.setColorScheme(snapshot.active.colorScheme); };
     sync(ctx.theme.getTheme());
     return ctx.on('theme/change', sync);
   }, 'desktop: native appearance');
-  ctx.effect(() => window.dshDesktop?.onCommand(command => dispatchCommand(command, ctx)) ?? (() => {}), 'desktop: menu commands');
+  ctx.effect(() => window.dshDesktop?.onCommand((command, browserId) => dispatchCommand(command, ctx, browserId)) ?? (() => {}), 'desktop: menu commands');
   const connection = ctx.get('connection');
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: name, inject: () => ({ state: connection.state, reconnect: () => connection.reconnect() }) }, TitleBar));
   ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name', priority: -100 }, () => <span className="desktop-brand">DSH</span>));

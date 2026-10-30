@@ -46,11 +46,17 @@ test('the registered model tool reports the actual payload and its executable ex
   t.after(() => ctx.fiber.dispose());
   await ctx.plugin(LlmRuntime);
   await ctx.plugin(SystemPrompt, {});
-  await ctx.plugin(ToolRuntime, { mode: 'native' });
+  await ctx.plugin(ToolRuntime);
+  await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native'));
+  const execute = async (input: any) => {
+    const { signal, callId: id, ...call } = input;
+    const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id, ...call }], signal });
+    return batch.results[0].result;
+  };
   await ctx.plugin(plugin, { source: join(root, '.runtime') });
   const description = ctx.tools.get('load_workspace_dependencies').description;
   assert.ok(!description.includes('Python includes numpy'));
-  const result = await ctx.tools.execute({ callId: ToolCallId('workspace-runtime-test'), name: 'load_workspace_dependencies', arguments: {}, signal: new AbortController().signal });
+  const result = await execute({ callId: ToolCallId('workspace-runtime-test'), name: 'load_workspace_dependencies', arguments: {}, signal: new AbortController().signal });
   assert.equal(result.isError, false, result.error?.message);
   assert.equal(result.value.pythonDistributions.openpyxl, '3.1.5');
   assert.ok(result.value.officeExample.endsWith('office-smoke.py'));

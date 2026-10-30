@@ -1,7 +1,7 @@
 // Real DSH ToolRuntime and Univer native gateway, using a disposable workspace.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, realpath, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, realpath, symlink, writeFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,7 +16,7 @@ await mkdir(reportRoot, { recursive: true });
 const data = await mkdtemp(join(reportRoot, 'host-fixture-'));
 const workspace = join(data, 'workspace'); await mkdir(workspace);
 const report = { data, runtime, installed, platform: process.platform, architecture: process.arch,
-  scope: 'Real DSH 0.2.0-rc.1 ToolRuntime, Univer gateway/worker and freshly installed native dependencies; no LLM, browser, user profile or telemetry requests', dependencies: {}, calls: [], checks: [], failures: [] };
+  scope: 'Real selected DSH ToolRuntime, Univer gateway/worker and installed native dependencies; no LLM, browser, user profile or telemetry requests', dependencies: {}, calls: [], checks: [], failures: [] };
 let ctx;
 async function freePort() {
   const server = createServer();
@@ -34,11 +34,11 @@ async function packageDirectory(require, name) {
   throw new Error(`Cannot locate ${name}`);
 }
 try {
-  const manifest = JSON.parse(await readFile(join(root, 'patches/univer-office-0.3.5-dsh-rc1/manifest.json'), 'utf8'));
+  const manifest = JSON.parse(await readFile(process.env.DSH_TEST_UNIVER_PROVENANCE ?? join(root, 'patches/univer-office-0.3.5-dsh-rc1/manifest.json'), 'utf8'));
   const metadata = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
   assert.equal(metadata.version, manifest.version);
   for (const entry of manifest.files) {
-    assert.equal(createHash('sha256').update(await readFile(join(installed, entry.path))).digest('hex'), entry.after, `Unreviewed plugin file: ${entry.path}`);
+    assert.equal(createHash('sha256').update(await readFile(join(installed, entry.path))).digest('hex'), entry.sha256 ?? entry.after, `Unreviewed plugin file: ${entry.path}`);
   }
   // Keep the installed profile read-only. The isolated package resolves peers from
   // the selected DSH runtime and all direct dependencies from this exact install.
@@ -46,7 +46,7 @@ try {
   const modules = join(data, 'node_modules'); await mkdir(modules);
   await symlink(join(runtime, 'node_modules/@deepseek-ai'), join(modules, '@deepseek-ai'), process.platform === 'win32' ? 'junction' : 'dir');
   const pluginRequire = createRequire(join(installed, 'package.json'));
-  for (const name of Object.keys(metadata.dependencies)) {
+  for (const name of Object.keys({ ...metadata.dependencies, ...metadata.optionalDependencies })) {
     const directory = await packageDirectory(pluginRequire, name);
     const target = join(modules, name); await mkdir(dirname(target), { recursive: true });
     await symlink(directory, target, process.platform === 'win32' ? 'junction' : 'dir');
@@ -57,6 +57,10 @@ try {
   assert.equal(typeof pluginRequire('@univerjs-pro/exchange-node-binding').exchangeExportSnapshot, 'function');
   assert.equal(typeof pluginRequire('@univerjs-pro/engine-formula-rust-binding').formulaEngineExecute, 'function');
   report.checks.push('Both exact 1.0.1 native bindings load on this platform');
+  if (metadata.version.includes('universal')) {
+    assert.equal(createRequire(join(candidate, 'package.json'))('./artifacts/universal-backend.cjs').portableBackend, false);
+    report.checks.push('The universal archive selects the native backend on this real platform');
+  }
   process.env.DSH_HOME = join(data, 'home');
   process.env.DSH_TELEMETRY_DISABLED = '1';
   process.env.NODE_PATH = [modules, join(runtime, 'node_modules')].join(delimiter);
@@ -73,7 +77,7 @@ try {
   assert.equal(Univer.Config({}).telemetry, false);
   report.checks.push('Reviewed candidate and both default telemetry=false paths verified');
   ctx = new Context();
-  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime, { mode: 'native' }); await ctx.plugin(SkillRegistry);
+  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime); await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native')); await ctx.plugin(SkillRegistry);
   await ctx.plugin(Univer, { telemetry: false, skills: true, gatewayPort: await freePort(), gatewayStartupTimeoutMs: 60_000, resourceCacheRoot: join(data, 'resource-cache') });
   const schemas = ctx.tools.schemas();
   const names = schemas.filter(x => x.name.startsWith('univer_')).map(x => x.name);
@@ -92,7 +96,8 @@ try {
   const agent = { id: session.id, session };
   let n = 0;
   async function execute(name, args) {
-    return ctx.tools.execute({ callId: ToolCallId('univer-rc1-' + (++n)), name, arguments: args, agent, signal: AbortSignal.timeout(90_000) });
+    const batch = await ctx.tools.execute({ calls: [{ type: 'tool-call', id: ToolCallId('univer-rc1-' + (++n)), name, arguments: args }], agent, signal: AbortSignal.timeout(90_000) });
+    return batch.results[0].result;
   }
   const rejected = await execute('univer_api', { action: 'find', queries: '["border"]' });
   assert.equal(rejected.isError, true); assert.match(JSON.stringify(rejected), /INVALID_ARGS/);
@@ -123,6 +128,16 @@ try {
   const final = await call('univer_execute', { ...common, code: "const sheet = univerAPI.getActiveWorkbook().getSheets()[0]; return { right: sheet.getRange('A1').getHorizontalAlignment(), legacy: sheet.getRange('B1').getHorizontalAlignment(), values: sheet.getRange('A1:B2').getValues() };" });
   assert.deepEqual(final.result.value, { right: 'normal', legacy: 'normal', values: [['right', 'legacy'], [1, 2]] });
   report.checks.push('Nine real tool calls create file/worktree/sheet, preserve right+normal behavior and reject invalid alignment');
+  if (metadata.version.includes('universal')) {
+    await call('univer_worktree', { action: 'ready', file, worktreeId });
+    const merged = await ctx.univer.worktree({ action: 'merge', workspace, file, worktreeId }, AbortSignal.timeout(90000));
+    assert.equal(merged.ok, true, JSON.stringify(merged));
+    const output = join(workspace, 'native-export.xlsx');
+    await call('univer_export', { file, unitId, output });
+    assert.ok((await stat(output)).size > 0);
+    assert.equal((await readFile(output)).subarray(0, 2).toString(), 'PK');
+    report.checks.push('The universal archive preserves real native XLSX export on this platform');
+  }
 } catch (error) { report.failures.push(error.stack ?? String(error)); process.exitCode = 1; }
 finally {
   await ctx?.fiber.dispose();

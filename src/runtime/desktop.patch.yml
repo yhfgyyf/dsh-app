@@ -5,17 +5,19 @@
     dshHome: !!js process.env.DSH_DESKTOP_CONFIG_HOME
 - id: system-prompt
   config:
-    personaSuffix: Your working directory is {{cwd}}.
     personaPrefix: >-
       You are a coding agent powered by the {{model}} model.
 - id: session-query-sqlite
   config:
     path: ':memory:'
     openAt: never
-- id: tools
-  config:
-    mode: !!js process.env.DSH_TOOLS_MODE
+- id: tool-executor-native
+  disabled: !!js process.env.DSH_TOOLS_MODE === 'ptc'
+- id: tool-executor-ptc
+  disabled: !!js process.env.DSH_TOOLS_MODE !== 'ptc' 
 - insert:
+    - id: schedule
+      name: '@deepseek-ai/dsh-schedule'
     - id: workspace-dependencies
       name: '@deepseek-ai/dsh-tool-workspace-dependencies'
       config:
@@ -62,6 +64,18 @@
       name: '@deepseek-ai/dsh-api-workspace-files'
     - id: terminal-controller
       name: '@deepseek-ai/dsh-api-terminal-controller'
+    - id: speech-to-text
+      name: '@deepseek-ai/dsh-experimental-speech-to-text'
+      config:
+        defaultProvider: sensevoice-local
+    - id: speech-to-text-sensevoice
+      name: '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+      config:
+        dataRoot: !!js dshHomePath('speech-to-text', 'sensevoice')
+    - id: api-speech-to-text
+      name: '@deepseek-ai/dsh-experimental-api-speech-to-text'
+    - id: ui-voice-input
+      name: '@deepseek-ai/dsh-experimental-client-ui-voice-input'
     - id: job-controller
       name: '@deepseek-ai/dsh-api-job-controller'
     - id: cordis-host-runner
@@ -149,6 +163,12 @@
       name: '@deepseek-ai/dsh-client-ui-brand-official'
     - id: ui-attachment
       name: '@deepseek-ai/dsh-client-ui-attachment'
+    - id: ui-file-drag
+      name: '@deepseek-ai/dsh-client-ui-file-drag'
+    - id: message-quotes
+      name: '@deepseek-ai/dsh-message-quotes'
+    - id: deliverable-file-references
+      name: '@deepseek-ai/dsh-deliverable-file-references'
     - id: ui-tool
       name: '@deepseek-ai/dsh-client-ui-tool'
     - id: ui-cordis
@@ -173,7 +193,6 @@
       name: '@deepseek-ai/dsh-client-ui-reference'
     - id: ui-schedule
       name: '@deepseek-ai/dsh-client-ui-schedule'
-      disabled: true
     - id: ui-jobs
       name: '@deepseek-ai/dsh-client-ui-jobs'
     - id: ui-goal

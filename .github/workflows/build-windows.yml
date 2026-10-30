@@ -16,12 +16,51 @@ jobs:
         with:
           node-version: 24.15.0
           cache: npm
+      - name: Validate Windows lifecycle test syntax
+        shell: pwsh
+        run: |
+          Get-ChildItem scripts/*.ps1 | ForEach-Object {
+            $tokens = $null; $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }
+      - name: Recover from a denied cached Windows port
+        timeout-minutes: 1
+        shell: pwsh
+        run: ./scripts/test-windows-port.ps1
+      - name: Prepare verified native addon toolchain
+        timeout-minutes: 6
+        shell: pwsh
+        run: ./scripts/prepare-windows-node-gyp.ps1
       - name: Install frontend dependencies
+        timeout-minutes: 8
         run: npm ci --no-audit --no-fund
+      - name: Build relay native dependencies
+        timeout-minutes: 8
+        env:
+          npm_config_build_from_source: 'true'
+        run: npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
+      - name: Windows menu Quit helper preflight
+        timeout-minutes: 1
+        run: npx --no-install electron tests/windows-quit-smoke.cjs
       - name: Build pinned runtime and apply verified patch
         run: npm run setup:runtime
       - name: Typecheck, unit tests and production build
         run: npm run check
+      - name: Remote pairing, native settings and shared Host sessions
+        timeout-minutes: 4
+        run: |
+          npm run build --prefix services/relay
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:remote
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:remote-ui
+      - name: Collaboration publishing, attachments, Markdown and voice input
+        timeout-minutes: 4
+        run: |
+          node services/relay/node_modules/tsx/dist/cli.mjs scripts/test-collaboration.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx --no-install electron tests/collaboration.cjs
       - name: Plugin marketplace review and explicit installation consent
         timeout-minutes: 4
         run: npm run test:plugin-marketplace
@@ -40,6 +79,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Startup activation ordering regression
+        timeout-minutes: 2
+        run: npx --no-install electron tests/startup-activation.cjs
       - name: Microphone capture and permission isolation
         timeout-minutes: 2
         run: npm run test:voice-input
@@ -97,6 +139,7 @@ jobs:
           npm run test:workspace-dependencies
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install, launch, close and uninstall
+        timeout-minutes: 6
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
       - name: Collect verified installer and reports
@@ -123,6 +166,7 @@ jobs:
             .test-data/univer-client/report.json
             .test-data/univer-client/*.png
             .test-data/workspace-dependencies-latest.json
+            .test-data/remote-settings-latest.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

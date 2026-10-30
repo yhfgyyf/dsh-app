@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const originalHash = '9e86429fa1f7c4d759b5e4690e091574227305f452391c2e101311ac73b2d8bd';
+const originalHash = 'b8478381a1501a11c1f7f8db7810bb4389694851ecad6131ac7d09055431a0b2';
 const marker = '// DSH Desktop workspace payload layout v1';
 const sha = text => createHash('sha256').update(text).digest('hex');
 const replacements = [
-  ['import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm, stat }', 'import { cp, lstat, mkdir, mkdtemp, open, readFile, rename, rm, stat }'],
+  ['import { cp, lstat, mkdir, mkdtemp, readFile, readlink, rename, rm, stat, symlink }', 'import { cp, lstat, mkdir, mkdtemp, open, readFile, readlink, rename, rm, stat, symlink }'],
   ['!["x64", "arm64"].includes(arch)', '!["x64", "arm64", "loong64"].includes(arch) || arch === "loong64" && (platform !== "linux" || value.abi !== "loongarch64-old-world")'],
   ['\t\tarch,\n', '\t\tarch,\n\t\t...arch === "loong64" ? { abi: "loongarch64-old-world" } : {},\n'],
   ['join(dependencies, "node", "bin", windows ? "node.exe" : "node")', 'join(root, "bin", windows ? "node.exe" : "node")'],

@@ -4,9 +4,45 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames } from '../src/runtime/legacy-settings.ts';
+import { pathToFileURL } from 'node:url';
+import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames, migrateRetiredScheduleBundle } from '../src/runtime/legacy-settings.ts';
 
 const yaml = createRequire(new URL('../.runtime/package.json', import.meta.url))('yaml');
+test('0.2.2 profile migration preserves live YAML expressions through the Include dialect', async () => {
+  const requireRuntime = createRequire(new URL('../.runtime/package.json', import.meta.url));
+  const { entryListSchema } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/cordis-plugin-include')).href);
+  const patchYaml = requireRuntime('js-yaml');
+  const dialect = { parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }), stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }) };
+  const home = await mkdtemp(join(tmpdir(), 'dsh-profile-expression-'));
+  const file = join(home, 'cordis.patch.yml');
+  const original = "- id: llm-deepseek\n  name: '@deepseek-ai/dsh-llm-deepseek'\n  disabled: !!js process.platform === 'win32'\n";
+  await writeFile(file, original);
+  try {
+    const before = dialect.parse(original);
+    await migrateRuntimePluginNames([file], dialect);
+    const after = dialect.parse(await readFile(file, 'utf8'));
+    assert.deepEqual(after[0].disabled, before[0].disabled);
+    assert.equal(after[0].name, '@deepseek-ai/dsh-llm-deepseek-api-key');
+    assert.equal(await readFile(file + '.before-0.2.0-rc.1', 'utf8'), original);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+test('schedule promotion removes only its retired bundle and preserves an exact rollback document', async () => {
+  const home = await mkdtemp(join(tmpdir(), 'dsh-profile-v022-'));
+  const file = join(home, 'package.json');
+  const manifest = { private: true, dependencies: { custom: 'file:custom' }, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-experimental-schedule-bundle', 'custom'] } } };
+  const original = JSON.stringify(manifest, null, 4) + '\n';
+  await writeFile(file, original);
+  try {
+    await migrateRetiredScheduleBundle(home);
+    const migrated = JSON.parse(await readFile(file, 'utf8'));
+    assert.deepEqual(migrated, { ...manifest, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'custom'] } } });
+    assert.equal(await readFile(file + '.before-0.2.2-alpha.2', 'utf8'), original);
+    const once = await readFile(file, 'utf8');
+    await migrateRetiredScheduleBundle(home);
+    assert.equal(await readFile(file, 'utf8'), once);
+    assert.equal(await readFile(file + '.before-0.2.2-alpha.2', 'utf8'), original);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
 test('0.2 upgrades the explicit DeepSeek plugin name while preserving models, secrets and the original profile', async () => {
   const home = await mkdtemp(join(tmpdir(), 'dsh-profile-v020-'));
   const file = join(home, 'cordis.patch.yml');

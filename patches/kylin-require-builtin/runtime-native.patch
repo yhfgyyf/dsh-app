@@ -1,0 +1,89 @@
+diff --git a/packages/native/src/native_types.cc b/packages/native/src/native_types.cc
+index 5063e80..5c22ccb 100644
+--- a/packages/native/src/native_types.cc
++++ b/packages/native/src/native_types.cc
+@@ -83,6 +83,8 @@ std::string ArchName() {
+   return "arm64";
+ #elif defined(__x86_64__) || defined(_M_X64)
+   return "x64";
++#elif defined(__loongarch64)
++  return "loong64";
+ #elif defined(__arm__)
+   return "arm";
+ #elif defined(__i386__) || defined(_M_IX86)
+diff --git a/packages/native/src/runtime_probe/linux_loong64.cc b/packages/native/src/runtime_probe/linux_loong64.cc
+new file mode 100644
+index 0000000..7b8e1ed
+--- /dev/null
++++ b/packages/native/src/runtime_probe/linux_loong64.cc
+@@ -0,0 +1,33 @@
++#include "parser.h"
++#include "platform.h"
++
++#include <cstring>
++
++namespace esplus::node::require_builtin {
++
++Result<GetterPattern> ParseLinuxLoong64BuiltinModuleRequireGetterOffset(
++    void* getter) {
++  const auto failure = [] {
++    return Result<GetterPattern>::Failure(Status::Failure(
++        ProbeStatus::kUnsupportedNoGetter,
++        "linux-loong64 getter is not the validated framed ld.d a0,this,imm; ret"));
++  };
++  // Decode the shipped old-world Node22 getter; never substitute a fixed field
++  // offset. Unknown compiler prologues and instructions remain unsupported.
++  uint32_t code[7];
++  if (!IsPlatformReadableRange(getter, sizeof(code))) return failure();
++  std::memcpy(code, getter, sizeof(code));
++  if (code[0] != 0x02ffc063 || code[1] != 0x29c02076 ||
++      code[2] != 0x02c04076 || code[3] != 0x28c02076 ||
++      (code[4] & 0xffc003ff) != 0x28c00084 ||
++      code[5] != 0x02c04063 || code[6] != 0x4c000020) return failure();
++  const size_t offset = (code[4] >> 10) & 0xfff;
++  if (offset == 0 || offset >= 0x800 || offset % sizeof(void*) != 0)
++    return failure();
++  GetterPattern pattern;
++  pattern.offset = offset;
++  pattern.pattern = "linux-loong64-framed-ld.d-a0-this-ret";
++  return Result<GetterPattern>::Ok(pattern);
++}
++
++}  // namespace esplus::node::require_builtin
+diff --git a/packages/native/src/runtime_probe/parser.h b/packages/native/src/runtime_probe/parser.h
+index 25ff87f..2145452 100644
+--- a/packages/native/src/runtime_probe/parser.h
++++ b/packages/native/src/runtime_probe/parser.h
+@@ -8,6 +8,7 @@ Result<GetterPattern> ParseDarwinArm64BuiltinModuleRequireGetterOffset(void* get
+ Result<GetterPattern> ParseDarwinX64BuiltinModuleRequireGetterOffset(void* getter);
+ Result<GetterPattern> ParseLinuxArm64BuiltinModuleRequireGetterOffset(void* getter);
+ Result<GetterPattern> ParseLinuxX64BuiltinModuleRequireGetterOffset(void* getter);
++Result<GetterPattern> ParseLinuxLoong64BuiltinModuleRequireGetterOffset(void* getter);
+ Result<GetterPattern> ParseWin32Arm64BuiltinModuleRequireGetterOffset(void* getter);
+ Result<GetterPattern> ParseWin32X64BuiltinModuleRequireGetterOffset(void* getter);
+ Result<GetterPattern> ParseWin32Ia32BuiltinModuleRequireGetterOffset(void* getter);
+diff --git a/packages/native/src/runtime_probe/platform.cc b/packages/native/src/runtime_probe/platform.cc
+index 6044662..f63559a 100644
+--- a/packages/native/src/runtime_probe/platform.cc
++++ b/packages/native/src/runtime_probe/platform.cc
+@@ -12,6 +12,8 @@ Result<GetterPattern> ParseBuiltinModuleRequireGetterOffset(void* getter) {
+   return ParseLinuxArm64BuiltinModuleRequireGetterOffset(getter);
+ #elif defined(__linux__) && defined(__x86_64__)
+   return ParseLinuxX64BuiltinModuleRequireGetterOffset(getter);
++#elif defined(__linux__) && defined(__loongarch64)
++  return ParseLinuxLoong64BuiltinModuleRequireGetterOffset(getter);
+ #elif defined(__linux__)
+   return Result<GetterPattern>::Failure(Status::Failure(
+       ProbeStatus::kUnsupportedNoGetter,
+diff --git a/scripts/build.ts b/scripts/build.ts
+index da4030c..48f467f 100644
+--- a/scripts/build.ts
++++ b/scripts/build.ts
+@@ -60,6 +60,7 @@ const commonSources = [
+   path.join(packageRoot, 'src', 'runtime_probe', 'darwin_x64.cc'),
+   path.join(packageRoot, 'src', 'runtime_probe', 'linux_arm64.cc'),
+   path.join(packageRoot, 'src', 'runtime_probe', 'linux_x64.cc'),
++  path.join(packageRoot, 'src', 'runtime_probe', 'linux_loong64.cc'),
+   path.join(packageRoot, 'src', 'runtime_probe', 'win32_arm64.cc'),
+   path.join(packageRoot, 'src', 'runtime_probe', 'win32_x64.cc'),
+   path.join(packageRoot, 'src', 'runtime_probe', 'win32_ia32.cc'),

@@ -18,12 +18,15 @@ test('Browser Use stays off for existing preferences and rejects invalid switch 
   assert.throws(() => parsePreferences({ ...old, browserUseEnabled: 'true' }));
 });
 
-test('finds supported Mac and Windows browsers without relying on the host path format', () => {
+test('finds supported Mac, Windows and Linux browsers without relying on the host path format', () => {
   assert.equal(browserCandidates('darwin', '/Users/test', {})[0].path, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
   assert.deepEqual(browserCandidates('win32', '', { PROGRAMFILES: 'C:\\Program Files' })[0], { name: 'Google Chrome', path: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' });
   assert.equal(browserProfileRoot('Google Chrome', 'darwin', '/Users/test', {}), '/Users/test/Library/Application Support/Google/Chrome');
   assert.equal(browserProfileRoot('Microsoft Edge', 'win32', 'C:\\Users\\test', {}), 'C:\\Users\\test\\AppData\\Local\\Microsoft\\Edge\\User Data');
-  assert.deepEqual(browserCandidates('linux', '/home/test', {}), []);
+  assert.equal(browserCandidates('linux', '/home/test', {})[0].path, '/usr/bin/google-chrome');
+  assert.equal(browserProfileRoot('Google Chrome', 'linux', '/home/test', {}), '/home/test/.config/google-chrome');
+  assert.equal(browserProfileRoot('Microsoft Edge', 'linux', '/home/test', { XDG_CONFIG_HOME: '/tmp/custom-config' }), '/tmp/custom-config/microsoft-edge');
+  assert.deepEqual(browserCandidates('freebsd', '/home/test', {}), []);
 });
 
 test('enable and disable are serialized and missing browsers leave tools off', async () => {

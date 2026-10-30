@@ -8,6 +8,51 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.45: current DSH 0.2.2-alpha.2 compatibility
+
+Desktop **0.1.45** bundles [DSH **0.2.2-alpha.2**](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2), the latest upstream prerelease checked on 2026-10-30. The [v0.1.45 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) includes macOS Apple Silicon, Windows x64 and Kylin V10 LoongArch64 old-world installers.
+
+- Selected chat text now has only two native quote actions: quote to the main conversation or ask in side chat. Existing side chats are reused, and quoting does not send a message. Install [dsh-side-chat 0.1.6](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.6) separately.
+- Content search remains an external modeless window on Ctrl/Cmd+S; Ctrl/Cmd+F keeps session search separate.
+- Fix early window activation during macOS initialization and recovery from a denied cached Windows port.
+- Use **Kylin package 0.1.45-2**, which fixes the missing `node-addon-require-builtin` dependency. Its application UI version remains 0.1.45.
+
+Mac installation and UI checks passed; Windows passed native CI and final installer install/update/uninstall tests. The final Kylin DEB passed actual LoongArch Node22.16 QEMU dependency, Worker, Host cold-start/restart, API and session-persistence checks. **Physical Kylin Chromium GUI is untested.** Mac is ad-hoc signed and not notarized; Windows is unsigned. Kylin retains Electron31.7.7 and the Node22.16 old-world port below upstream's Node>=24.9 requirement. See the release for exact validation scope and SHA-256 files.
+
+Installers contain an anonymous local-plugins manifest and do not preinstall P2P, Side or Univer user extensions. Existing user plugins and configuration are retained. See the [Kylin native port provenance and release gate](patches/kylin-require-builtin/README.md).
+
+## v0.1.43: separate content search window
+
+`Ctrl+S` (`Command+S` on macOS) opens a compact modeless child window above the app and its native previews. Search adds no form, padding or reserved space inside conversations or sidebar panels, so their layout and dimensions stay unchanged. It still searches the selected main, side-chat, file or browser panel. `Enter` / `Shift+Enter`, `Esc`, and the separate session-search shortcut keep their existing behavior.
+
+## v0.1.42: compact search and selected-text previews
+
+Content search is now a compact box at the current panel's top right. Click a selected-text reference in either composer to view its original text. Long selections initially show a beginning excerpt with expand/collapse controls; previewing preserves the draft and sends no message. The side-chat plugin remains at 0.1.5, and an already-open side chat continues to receive new selections.
+
+## v0.1.41: selected text and content search
+
+Select transcript text to add a reference chip to the main composer or prepare a question in `/side` (requires the enabled `dsh-side-chat 0.1.5` plugin). Existing drafts and attachments stay intact; the action does not send a message. Closing the temporary side chat still discards it.
+
+Click or focus the main conversation, a right-panel file or `/side`, then press `Ctrl+S` (`Command+S` on macOS) to search that panel's loaded text. Matches are highlighted; `Enter` / `Shift+Enter` navigate and `Esc` closes search. `Ctrl+F` / `Command+F` continues to search the left session list. Desktop 0.1.41 uses DSH Core 0.2.1-rc.2.
+
+## dsh-p2p-collab 0.1.3 (unreleased)
+
+Phone remote control now lives in **Plugins → dsh-p2p-collab**, with relay registration, QR pairing and phone unbinding in the plugin detail page. Configuration and LAN pairing remain available while the plugin is disabled. The collaboration workspace appears only when the plugin is enabled and the relay is registered, and closes when registration is removed. Existing phone connections and background behavior are preserved.
+
+## v0.1.32: mobile previews, downloads, sharing, terminals and voice input
+
+Android 0.12.5-dsh.4 previews Office files as PDFs converted on the computer, animates GIFs, and plays media from bounded private cache downloads. Original files can be saved to the phone or shared through Android's system chooser. Phones with control access can use the computer's interactive terminal. Finish a voice recording to transcribe it on the computer and automatically send the text; cancellation, navigation and backgrounding retire the recording.
+
+## v0.1.31: stable phone connections
+
+Fix the reconnect loop caused by rejecting the phone's job status subscription. Rejected subscriptions now return an individual stream error while other streams stay connected. Android 0.12.4-dsh.3 also converts tunnel failures into UI errors instead of crashing. Existing bindings remain valid.
+
+## v0.1.30: scan to connect
+
+Desktop now pairs phones with a short-lived QR code. Same-network connections work without a relay; registered computers also support automatic relay fallback. Android opens the existing chat interface after scanning, with computer switching, globe markers, and unbinding in the sidebar. Both ends support revocation, including queued offline requests. Closing the desktop window keeps the Host running until explicit Quit.
+
+See [remote access setup](docs/REMOTE-ACCESS.md) for pairing, builds, and relay upgrades.
+
 ## v0.1.28 preview updates
 
 Desktop **0.1.28** supports and bundles **DSH `0.2.0-rc.1`**, with compatibility updates for the local Auto, Audit, and Progressive Tools plugins.
@@ -21,7 +66,7 @@ On macOS and Windows, prepare or download the speech models before using offline
 
 Browser Use and Computer Use are available on macOS and Windows. They are not enabled in the Kylin build; its sidebar browser and file previews remain available.
 
-The `main` branch contains Desktop `0.1.28` source, including the three-platform speech adaptations and compatibility patches. The [v0.1.28 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) publishes Windows and Kylin installers; macOS can be built from the current source.
+The historical v0.1.28 release contains the earlier three-platform speech adaptations and compatibility patches. The [v0.1.28 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.28) publishes Windows and Kylin installers; macOS can be built from the current source.
 
 ## v0.1.12 preview updates
 
@@ -57,9 +102,9 @@ Download the package for your platform from [GitHub Releases](https://github.com
 
 | Platform | Package | Installation |
 | --- | --- | --- |
-| macOS 13+ Apple Silicon (v0.1.28) | `DSH-Desktop-*-macOS-arm64.zip` | Extract the ZIP and move `DSH Desktop.app` to your Applications folder |
+| macOS 13+ Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | Extract the ZIP and move `DSH Desktop.app` to your Applications folder |
 | Windows 10/11 x64 | `DSH-Desktop-*-Windows-x64-Setup.exe` | Run the installer; it installs for the current user by default, without administrator privileges |
-| Kylin V10 SP1 2403 / LoongArch64 old ABI | `DSH-Desktop-0.1.28-Kylin-V10-loongarch64.deb` | Install manually using `DSH-Desktop-0.1.28-Kylin-README.md` from the release, including its KYSEC steps when applicable |
+| Kylin V10 SP1 2403 / LoongArch64 old ABI | `DSH-Desktop-0.1.45-2-Kylin-V10-loongarch64.deb` | Install manually using the Kylin installation guide from the release, including its KYSEC steps when applicable |
 
 Open the app, configure your provider and API key in **Settings → Models**, select a workspace, and create a session. Existing DSH users can reuse their configuration in `~/.dsh`, or `%USERPROFILE%\.dsh` on Windows. Node.js and DSH are included in the package and do not require a separate installation.
 
@@ -87,7 +132,7 @@ Update downloads use the system proxy. Failed installations can be retried using
 - Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
 - Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.
 
-Desktop `0.1.28` bundles DSH `0.2.0-rc.1`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
+Desktop `0.1.45` bundles DSH `0.2.2-alpha.2`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 
 Some features depend on your model or external tools. MP4 attachments require a provider that supports `video_url`. Audit's Codex and Claude Code backends require their respective CLIs; a DSH model backend can also be configured. The installer does not include model accounts, API keys, or these external CLIs.
 
@@ -99,13 +144,13 @@ Codex sign-in uses DSH's authorization service and shared credential store. The 
 
 The official session lifecycle lock allows only one process to write to a session at a time. Other interfaces receive an ownership error when they try to resume, modify, or delete a session that is in use. They can take over after the owning process exits. Switching pages does not guarantee that a session is released, and following an active stream live across separate processes is not currently supported.
 
-Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. The patches and their verification manifests for Desktop 0.1.28 are in [patches](patches/dsh-0.2.0-rc.1).
+Local patches provide deletion, MP4, and some older-event compatibility. **They do not replace the official session write lock or relax tool-call consistency checks.** Previously corrupted logs may still need separate repair. Current compatibility patches and their manifests are in [patches](patches/dsh-0.2.2-alpha.2).
 
 ## Univer Office plugin upgrade
 
-DSH `0.2.0-rc.1` checks third-party plugin compatibility. Official `dsh-univer-office` `0.3.2` and `0.3.5` do not declare support for this core. Updating Desktop does not replace plugins in a user profile.
+DSH `0.2.2-alpha.2` checks third-party plugin compatibility. Updating Desktop does not replace plugins in a user profile. The [v0.1.45 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) provides the separate `dsh-univer-office-0.3.5-universal.2.tgz` compatibility package, retaining the telemetry-off default and right-alignment repair.
 
-This repository can build `0.3.5-desktop.1` from the official `0.3.5` archive, preserving the `telemetry: false` default and `right` alignment fix while adapting client registration. Install the generated `.tgz` through **Settings → Plugin marketplace → Add manually**, then restart Desktop. See the [compatibility package guide](patches/univer-office-0.3.5-dsh-rc1/README.md) for provenance, builds, validation scope, and rollback. This is a project compatibility build, not a new upstream npm release.
+Install the archive through Settings → Plugin marketplace → Add manually, then quit and restart Desktop. This is a project compatibility build from upstream 0.3.5, not a new upstream npm release. The [universal compatibility overlay](patches/univer-office-universal/README.md) records its implementation. User extensions are not preinstalled in the App.
 
 ## Computer use (macOS and Windows)
 
@@ -127,7 +172,7 @@ Screenshots require an image-capable model, such as `deepseek-v4-flash-vision-ex
 
 ## Build from source
 
-The current `main` source is Desktop `0.1.28` with DSH `0.2.0-rc.1`. The standard commands below build the macOS/Windows app. Kylin requires a separate old-ABI environment; see the [Kylin speech overlay](patches/loongarch-speech/README.md) for its offline speech build and pinned sources, and use the release installation guide for the `.deb`.
+The current `main` source is Desktop `0.1.45` with DSH `0.2.2-alpha.2`. The standard commands below build the macOS/Windows app. Kylin requires a separate old-ABI environment; see the [Kylin speech overlay](patches/loongarch-speech/README.md) for its offline speech build and pinned sources, and use the release installation guide for the `.deb`.
 
 Install Git, Node.js **24.15.0**, and npm, then run:
 

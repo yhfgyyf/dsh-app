@@ -20,13 +20,14 @@ const home = join(data, 'home');
 await mkdir(home);
 const probe = join(data, 'probe.mjs');
 await writeFile(probe, `import { randomUUID } from 'node:crypto';
-export const inject = ['connection', 'agents', 'tools'];
+export const inject = ['connection', 'agents', 'tools', 'systemPrompt'];
 export function apply(ctx) {
   ctx.connection.rpc.handle('/workspace-dependency-test', async (method, payload, signal) => {
     const agent = ctx.agents.get(payload.args.sessionId);
     if (!agent) throw new Error('Fixture session not found');
-    if (method === 'catalog') return { ok: true, value: ctx.tools.schemas(agent).map(tool => tool.name) };
-    return { ok: true, value: await ctx.tools.execute({ agent, signal, callId: randomUUID(), name: payload.args.name, arguments: payload.args.arguments }) };
+    if (method === 'catalog') return { ok: true, value: (await ctx.systemPrompt.assemble({ scope: agent })).tools.map(tool => tool.name) };
+    const batch = await ctx.tools.execute({ agent, signal, calls: [{ type: 'tool-call', id: randomUUID(), name: payload.args.name, arguments: payload.args.arguments }] });
+    return { ok: true, value: batch.results[0].result };
   });
 }
 `);
@@ -39,6 +40,7 @@ try {
   const connection = join(data, 'connection.json');
   await writeFile(connection, JSON.stringify({ owner: 'dsh-desktop-test', ...ready }), { mode: 0o600 });
   client = await connectFixture(connection);
+  assert.deepEqual(await client.rpc('schedule/catalog'), [], 'The promoted Schedule service must load in the Desktop Host');
   for (const mode of modes) {
     const sessionId = (await client.rpc('session/create', { request: { cwd: data, agentPreset: mode } })).sessionId;
     const catalog: string[] = await client.rpc('catalog', { sessionId }, false, '/workspace-dependency-test');
