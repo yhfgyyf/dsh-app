@@ -109,7 +109,7 @@ try:
     gh('release', 'upload', 'v0.1.45', '--repo', repo, str(helper))
     helper_id = next(a['id'] for a in release()['assets'] if a['name'] == helper.name)
     print('Relay metadata ready:', helper.name, flush=True)
-    deadline = time.monotonic() + 900
+    deadline = time.monotonic() + 5400
     previous = -1
     while True:
         with lock:
