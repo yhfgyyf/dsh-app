@@ -12,7 +12,7 @@
 
 补齐 Host 到 Electron 窗口的结构化页面注入通道，支持插件提供的全局变量、脚本、样式和 HTML。每次加载页面重新收集，保留插件注入顺序，并排除桌面壳已经执行过的核心模块启动项，修复 `dsh-whale-widget` 安装成功但重启后仍不显示的问题。插件继续通过原生 Plugin Manager 安装，无需修改小鲸鱼源码。
 
-本次仅验证和打包 macOS Apple Silicon；小鲸鱼 0.4.2 的显示、刷新去重和禁用后重启通过，Side 0.1.6 与 Univer 0.3.5-universal.2 的相关回归通过。Windows 和麒麟尚未构建或验证此修复，已发布全平台安装包仍为下述 0.1.45。
+macOS Apple Silicon 已完成实际安装与小鲸鱼 0.4.2 显示验证，Side 0.1.6 与 Univer 0.3.5-universal.2 的相关回归通过。Windows x64 的[原生 CI](https://github.com/yhfgyyf/dsh-app/actions/runs/41566679736)通过小鲸鱼显示、刷新去重、禁用后重启，以及最终 EXE 安装、升级、重启与卸载验证。麒麟 V10 LoongArch64 旧 ABI 包保留全部 92 个原生文件；最终 DEB 解包内容逐文件校验后，在实际 LoongArch Node22.16/QEMU 中通过依赖、Worker、Host 启动/重启、页面注入 IPC、原版鲸鱼脚本/图片鉴权和会话持久化检查，**未做麒麟真机 Chromium GUI 测试**。0.1.46 尚未发布 GitHub Release，已发布全平台安装包仍为下述 0.1.45。
 
 ## v0.1.45：适配 DSH 0.2.2 Alpha 通道
 

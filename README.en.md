@@ -12,7 +12,7 @@ The app bundles Node.js and the DSH core, with its own Electron main process, Re
 
 Carry the Host's structured page injections into the Electron renderer: globals, scripts, styles and HTML run in their original order on each page load. Only the core module-bootstrap rows already owned by Desktop are excluded. This fixes `dsh-whale-widget` installing successfully but remaining invisible after restart; the original plugin and native Plugin Manager installation remain supported.
 
-This revision is tested and packaged only for macOS Apple Silicon. Whale 0.4.2 display, reload deduplication and restart after disabling passed, together with the relevant Side 0.1.6 and Univer 0.3.5-universal.2 regressions. Windows and Kylin have not been built or tested with this fix; their published installers remain at 0.1.45 below.
+macOS Apple Silicon installation and Whale 0.4.2 display passed, together with the relevant Side 0.1.6 and Univer 0.3.5-universal.2 regressions. Windows x64 [native CI](https://github.com/yhfgyyf/dsh-app/actions/runs/41566679736) passed Whale startup, reload deduplication and restart after disabling, plus final EXE installation, update, relaunch and uninstall. The Kylin V10 LoongArch64 old-world package retains all 92 native files. Its final extracted DEB payload was matched file by file before actual LoongArch Node22.16/QEMU dependency, Worker, Host startup/restart, page-injection IPC, original Whale script/image authorization and session-persistence checks. **Physical Kylin Chromium GUI is untested.** Version 0.1.46 has not been published as a GitHub Release; the published cross-platform installers remain at 0.1.45 below.
 
 ## v0.1.45: current DSH 0.2.2-alpha.2 compatibility
 
