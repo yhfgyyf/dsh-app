@@ -79,6 +79,19 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Structured page injections and the original Whale widget
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $fixture = Join-Path $env:RUNNER_TEMP 'dsh-whale-widget-0.4.2'
+          New-Item -ItemType Directory -Force $fixture | Out-Null
+          $archive = Join-Path $fixture 'dsh-whale-widget-0.4.2.tgz'
+          Invoke-WebRequest -Uri 'https://registry.npmjs.org/dsh-whale-widget/-/dsh-whale-widget-0.4.2.tgz' -OutFile $archive
+          if ((Get-FileHash $archive -Algorithm SHA512).Hash.ToLowerInvariant() -ne '6860d47ddddbd806efe0fa149f52ad9e56ac388928aa0bc8391dbeac02043c33add6a94707b7a6953abee33772a15e598a2712fad92e80f93ce86c955280e081') { throw 'Whale fixture integrity mismatch' }
+          tar -xzf $archive -C $fixture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DSH_TEST_WHALE_PACKAGE = Join-Path $fixture 'package'
+          npx --no-install electron tests/index-injections.cjs
       - name: Startup activation ordering regression
         timeout-minutes: 2
         run: npx --no-install electron tests/startup-activation.cjs
@@ -165,6 +178,8 @@ jobs:
             .test-data/plugin-marketplace-native/**
             .test-data/univer-client/report.json
             .test-data/univer-client/*.png
+            .test-data/index-injections.json
+            .test-data/index-injections-*/whale-boot-*.png
             .test-data/workspace-dependencies-latest.json
             .test-data/remote-settings-latest.json
           include-hidden-files: true

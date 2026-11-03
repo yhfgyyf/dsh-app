@@ -42,7 +42,7 @@ const manifest = { name: 'dsh-profile-desktop', private: true,
   dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface', 'dsh-index-injection-fixture', ...whale ? ['dsh-whale-widget'] : []] } } };
 writeFileSync(join(profile, 'package.json'), JSON.stringify(manifest));
 Object.assign(process.env, { DSH_DESKTOP_DATA_DIR: data, DSH_DESKTOP_CONFIG_HOME: home, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' });
-const report = { checks: [], failures: [], console: [], data, whale: whale ? JSON.parse(readFileSync(join(whale, 'package.json'))).version : null, readyCount: 0, coreStopped: false };
+const report = { platform: process.platform, checks: [], failures: [], console: [], data, whale: whale ? JSON.parse(readFileSync(join(whale, 'package.json'))).version : null, readyCount: 0, coreStopped: false };
 let corePid, host, finished = false, reloading = false;
 const spawn = childProcess.spawn;
 childProcess.spawn = (...args) => {
