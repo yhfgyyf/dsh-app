@@ -8,6 +8,12 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.46: plugin page injection compatibility
+
+Carry the Host's structured page injections into the Electron renderer: globals, scripts, styles and HTML run in their original order on each page load. Only the core module-bootstrap rows already owned by Desktop are excluded. This fixes `dsh-whale-widget` installing successfully but remaining invisible after restart; the original plugin and native Plugin Manager installation remain supported.
+
+This revision is tested and packaged only for macOS Apple Silicon. Whale 0.4.2 display, reload deduplication and restart after disabling passed, together with the relevant Side 0.1.6 and Univer 0.3.5-universal.2 regressions. Windows and Kylin have not been built or tested with this fix; their published installers remain at 0.1.45 below.
+
 ## v0.1.45: current DSH 0.2.2-alpha.2 compatibility
 
 Desktop **0.1.45** bundles [DSH **0.2.2-alpha.2**](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2), the latest upstream 0.2.2 alpha-channel release checked on 2026-10-30. Upstream also published [0.2.1-rc.5](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5) in the parallel RC channel that day; this installer uses the tested 0.2.2-alpha.2 core. The [v0.1.45 release](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.45) includes macOS Apple Silicon, Windows x64 and Kylin V10 LoongArch64 old-world installers.

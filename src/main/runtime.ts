@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:net';
-import { assertBootGraph, type BootGraph } from '../shared/dsh-boot.ts';
+import { assertBootGraph, assertDesktopBoot, type BootGraph, type DesktopBoot } from '../shared/dsh-boot.ts';
 import { isComputerRequest, type ComputerRequest, type ComputerResult } from '../shared/computer-use.ts';
 import type { LocalRemoteAction, RemoteRuntimeConfig, RemoteRuntimeState } from '../shared/remote-access.ts';
 import type { BrowserUseConfig } from '../shared/browser-use.ts';
@@ -56,6 +56,9 @@ export class DesktopRuntime {
     });
   }
   async graph(): Promise<BootGraph> {
+    return (await this.boot()).graph;
+  }
+  async boot(): Promise<DesktopBoot> {
     const child = this.child;
     if (!this.ready || !child?.connected) throw new Error('DSH 核心尚未就绪。');
     return new Promise((resolve, reject) => {
@@ -65,7 +68,11 @@ export class DesktopRuntime {
       const receive = (message: any) => {
         if (message?.type !== 'boot-result' || message.id !== id) return;
         cleanup();
-        try { assertBootGraph(message.graph); resolve(message.graph); } catch (error) { reject(error); }
+        try {
+          if (message.error) throw new Error(message.error);
+          assertDesktopBoot(message);
+          resolve({ graph: message.graph, injections: message.injections });
+        } catch (error) { reject(error); }
       };
       const timer = setTimeout(failed, 10000);
       child.on('message', receive); child.once('exit', failed);

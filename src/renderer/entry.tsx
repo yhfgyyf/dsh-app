@@ -13,7 +13,8 @@ import * as ReactVirtual from '@tanstack/react-virtual';
 import { ArtifactMarkdown } from './artifact-markdown.tsx';
 import { createDesktopModuleFacade, DesktopSlotCore } from './univer-slot-compat.ts';
 import './updates.css';
-import { DESKTOP_PLUGIN_ID, withDesktopPlugin } from '../shared/dsh-boot.ts';
+import { assertDesktopBoot, DESKTOP_PLUGIN_ID, withDesktopPlugin } from '../shared/dsh-boot.ts';
+import { applyIndexInjections } from './index-injections.ts';
 import '../shared/desktop-api.ts';
 
 const target = window as unknown as { __ModuleLoader__: any };
@@ -25,7 +26,9 @@ function Startup({ error }: { error?: string }) {
 status.render(<Startup />);
 let context: Cordis.Context | undefined;
 async function bootDesktop() {
-  const hostGraph = await window.dshDesktop!.getBoot();
+  const boot = await window.dshDesktop!.getBoot();
+  assertDesktopBoot(boot);
+  const hostGraph = boot.graph;
   const graph = withDesktopPlugin(hostGraph, (await window.dshDesktop!.getInfo()).version);
   const facade = createDesktopModuleFacade();
   const queue = facade.pendingQueue;
@@ -35,6 +38,7 @@ async function bootDesktop() {
     script.src = url; script.onload = () => resolve(); script.onerror = () => reject(new Error('无法加载 DSH 功能模块。'));
     document.head.append(script);
   });
+  await applyIndexInjections(boot.injections, loadScript);
   for (const batch of graph.batches.filter(batch => batch.phase === 'bootstrap')) await loadScript(batch.url);
   const index = queue.findIndex(row => row.id === '@deepseek-ai/dsh-client-modules');
   if (index < 0) throw new Error('DSH 模块加载器缺失。');

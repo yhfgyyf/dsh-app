@@ -80,7 +80,7 @@ ipcMain.handle = (channel, listener) => {
         assert.ok(report.corePid);
         originalCorePid = report.corePid;
         originalEndpoint = info.endpoint;
-        const graph = await handlers.get('desktop:boot')(event);
+        const { graph } = await handlers.get('desktop:boot')(event);
         assert.ok(graph.entries.length >= 47);
         report.checks.push(`App-owned core, ${graph.entries.length} DSH client modules, independent frontend boot`);
         for (const invalid of [{ ...event, sender: {} }, { ...event, senderFrame: { url: 'http://untrusted.invalid/' } }]) await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:info')(invalid)));

@@ -86,7 +86,7 @@ await build({ configFile: false, root: resolve(root, 'src/renderer/computer-prev
 await build({ configFile: false, root: resolve(root, 'src/renderer/content-find'), base: './', build: { outDir: resolve(root, 'dist/renderer/content-find'), target: 'chrome126', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'index-injections.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
 // Reuse the official preset declarations without mounting the Web App surface.
 const desktopPatchPath = resolve(root, 'dist/runtime/desktop.patch.yml');
 let desktopPatch = await readFile(desktopPatchPath, 'utf8');

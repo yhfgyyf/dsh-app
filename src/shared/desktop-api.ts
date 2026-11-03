@@ -5,6 +5,7 @@ import type { LocalOpenRequest } from './local-open.ts';
 import type { ComputerState } from './computer-use.ts';
 import type { BrowserUseState } from './browser-use.ts';
 import type { ContentFindAction, ContentFindState } from './content-find.ts';
+import type { DesktopBoot } from './dsh-boot.ts';
 
 export type DesktopCommand = 'new-session' | 'search' | 'find-content' | 'settings' | 'sidebar' | 'details';
 
@@ -41,7 +42,7 @@ export interface DesktopAPI {
   installUpdate(): Promise<UpdateState>;
   onUpdateState(listener: (state: UpdateState) => void): () => void;
   getInfo(): Promise<DesktopInfo>;
-  getBoot(): Promise<unknown>;
+  getBoot(): Promise<DesktopBoot>;
   connect(input: string): Promise<{ ok: boolean; error?: string }>;
   showConnection(): Promise<void>;
   reconnect(): Promise<{ ok: boolean; error?: string }>;

@@ -4,9 +4,15 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前桌面版 **0.1.45** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.46** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.46：插件页面注入兼容
+
+补齐 Host 到 Electron 窗口的结构化页面注入通道，支持插件提供的全局变量、脚本、样式和 HTML。每次加载页面重新收集，保留插件注入顺序，并排除桌面壳已经执行过的核心模块启动项，修复 `dsh-whale-widget` 安装成功但重启后仍不显示的问题。插件继续通过原生 Plugin Manager 安装，无需修改小鲸鱼源码。
+
+本次仅验证和打包 macOS Apple Silicon；小鲸鱼 0.4.2 的显示、刷新去重和禁用后重启通过，Side 0.1.6 与 Univer 0.3.5-universal.2 的相关回归通过。Windows 和麒麟尚未构建或验证此修复，已发布全平台安装包仍为下述 0.1.45。
 
 ## v0.1.45：适配 DSH 0.2.2 Alpha 通道
 

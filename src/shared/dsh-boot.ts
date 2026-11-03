@@ -26,6 +26,24 @@ export type BootGraph = {
   [key: string]: unknown;
 };
 
+// Matches the structured rows of the pinned dsh-host-webserver protocol.
+export type IndexInjection =
+  | { kind: 'global'; name: string; value: unknown }
+  | { kind: 'script'; placement: 'head' | 'body'; text: string }
+  | { kind: 'script-src'; placement: 'head' | 'body'; src: string }
+  | { kind: 'script-preload'; src: string }
+  | { kind: 'style'; text: string }
+  | { kind: 'html'; placement: 'head' | 'body'; html: string };
+
+export type DesktopBoot = { graph: BootGraph; injections: IndexInjection[] };
+
+export function assertDesktopBoot(value: unknown): asserts value is DesktopBoot {
+  if (typeof value !== 'object' || value === null || !Array.isArray((value as DesktopBoot).injections)) {
+    throw new Error('DSH 页面注入清单不兼容，未修改现有插件。');
+  }
+  assertBootGraph((value as DesktopBoot).graph);
+}
+
 export function assertBootGraph(value: unknown): asserts value is BootGraph {
   const fail = () => { throw new Error('DSH 启动清单不兼容，未修改现有插件。'); };
   if (typeof value !== 'object' || value === null) return fail();

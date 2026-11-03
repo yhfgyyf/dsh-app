@@ -117,7 +117,7 @@ async function run(event) {
   host.setBackgroundThrottling(false);
   window.show(); window.focus();
   const js = code => host.executeJavaScript(code, true);
-  const graph = await handlers.get('desktop:boot')(event);
+  const { graph } = await handlers.get('desktop:boot')(event);
   assert.ok(graph.entries.some(entry => entry.id === 'dsh-univer-office'), 'Official boot graph omitted the real Univer client');
   const styles = () => js(`document.querySelectorAll('style[data-plugin="dsh-univer-office"]').length`);
   assert.equal(await styles(), 2, 'The original Univer client did not execute and install both stylesheets');

@@ -10,6 +10,7 @@ import type { RemoteCredentials } from '../shared/remote-access.ts';
 import { createCollabBroker } from './collab-transport.ts';
 import { createBrowserUseController } from './browser-use.ts';
 import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames, migrateRetiredScheduleBundle } from './legacy-settings.ts';
+import { desktopIndexInjections } from './index-injections.ts';
 
 const runtimeRoot = process.env.DSH_DESKTOP_RUNTIME_ROOT;
 if (!runtimeRoot || !process.env.DSH_HOME || !process.send) throw new Error('Desktop core requires an owned runtime, data directory and IPC channel.');
@@ -19,6 +20,7 @@ const {
   boot, loadLayeredEnv, loadOptionalPatches, installFailLoud,
   initProfile, loadProfileDirectory, readProfilePatches, createRuntimeResolution, PluginPackages, reportSkippedBundles,
 } = await load('@deepseek-ai/dsh-app-boot');
+const { bootInjections } = await load('@deepseek-ai/dsh-client-modules');
 const directory = dirname(fileURLToPath(import.meta.url));
 let context: any;
 let closing = false;
@@ -81,7 +83,13 @@ process.on('message', (message: any) => {
     return;
   }
   if (message?.type === 'get-boot' && typeof message.id === 'string' && context?.get('clientModules')) {
-    process.send?.({ type: 'boot-result', id: message.id, graph: context.get('clientModules').graph() });
+    try {
+      const graph = context.get('clientModules').graph();
+      const rows = context.get('webServer').collectIndexInjections(context.get('connection').browserPeer);
+      process.send?.({ type: 'boot-result', id: message.id, graph, injections: desktopIndexInjections(rows, bootInjections(graph)) });
+    } catch (error) {
+      process.send?.({ type: 'boot-result', id: message.id, error: error instanceof Error ? error.message : 'DSH 页面注入准备失败。' });
+    }
   }
 });
 installFailLoud('dsh-desktop', process, () => context?.fiber.dispose());

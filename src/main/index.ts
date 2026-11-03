@@ -319,7 +319,7 @@ else {
     handle('desktop:remote-state', () => remoteAccess.state);
     handle('desktop:remote-action', action => remoteAccess.act(action));
     handle('desktop:info', info);
-    handle('desktop:boot', () => runtime.graph());
+    handle('desktop:boot', () => runtime.boot());
     handle('desktop:connect', connect);
     handle('desktop:connection', () => showConnection());
     handle('desktop:reconnect', () => connect());
