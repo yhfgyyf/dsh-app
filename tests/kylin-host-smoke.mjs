@@ -1,14 +1,23 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 
-const [runtimeArg, executableArg, dataArg] = process.argv.slice(2);
+const [runtimeArg, executableArg, dataArg, whaleArg] = process.argv.slice(2);
 const runtime = resolve(runtimeArg), executable = resolve(executableArg), data = resolve(dataArg);
 await mkdir(join(data, 'workspace'), { recursive: true });
 const report = { passed: false, passes: [] };
+if (whaleArg) {
+  const whale = resolve(whaleArg), profile = join(data, 'state/profiles/desktop');
+  assert.equal(JSON.parse(await readFile(join(whale, 'package.json'), 'utf8')).version, '0.4.2');
+  await mkdir(join(profile, 'node_modules'), { recursive: true });
+  await cp(whale, join(profile, 'node_modules/dsh-whale-widget'), { recursive: true });
+  await writeFile(join(profile, 'package.json'), JSON.stringify({ name: 'dsh-profile-desktop', private: true,
+    dependencies: { 'dsh-whale-widget': 'file:' + whale },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface', 'dsh-whale-widget'] } } }));
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const addonProbe = `
 const assert=require('node:assert/strict'),fs=require('node:fs'),{createRequire}=require('node:module'),{Worker}=require('node:worker_threads');
@@ -59,9 +68,32 @@ for (let iteration = 1; iteration <= 2; iteration++) {
     assert(ready.graph.entries.length >= 60);
     pass.clientModules = ready.graph.entries.length;
     pass.checks.push('Actual packaged Host prepares and starts on LoongArch Node22 with its full client-module graph');
+    const bootId = randomUUID();
+    child.send({ type: 'get-boot', id: bootId });
+    let boot;
+    for (let attempt = 0; attempt < 200 && !exited; attempt++) {
+      boot = messages.find(message => message.type === 'boot-result' && message.id === bootId);
+      if (boot) break;
+      await sleep(100);
+    }
+    assert(boot && !boot.error && Array.isArray(boot.injections), 'Packaged Host did not deliver page injections over IPC');
+    assert.equal(boot.graph.rev, ready.graph.rev);
+    assert(!boot.injections.some(row => row.kind === 'global' && row.name === '__DSH_BOOT__'), 'Core bootstrap would execute twice');
+    if (whaleArg) assert.equal(boot.injections.filter(row => row.kind === 'script' && row.text.includes('/dsh-whale/widget.js')).length, 1);
+    pass.injectionRows = boot.injections.length;
+    pass.checks.push('Fresh peer-scoped boot IPC includes plugin page rows and excludes the core bootstrap already owned by Desktop');
     const response = await fetch(ready.launchUrl, { redirect: 'manual' });
     const cookie = response.headers.getSetCookie().map(v => v.split(';')[0]).join(';');
     assert(cookie, 'Host authentication cookie missing');
+    if (whaleArg) {
+      const script = await fetch(ready.endpoint + '/dsh-whale/widget.js', { headers: { cookie } });
+      assert.equal(script.status, 200);
+      assert.deepEqual(Buffer.from(await script.arrayBuffer()), await readFile(join(resolve(whaleArg), 'assets/whale-widget.js')));
+      const image = await fetch(ready.endpoint + '/dsh-whale/image.png', { headers: { cookie } });
+      assert.equal(image.status, 200);
+      assert.equal(Buffer.from(await image.arrayBuffer()).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+      pass.checks.push('Unmodified Whale 0.4.2 registers one page loader; authenticated script and image assets are served by the actual LoongArch Host');
+    }
     async function rpc(method, args) {
       const r = await fetch(ready.endpoint + '/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ type: 'client-request', rpcId: randomUUID(), method, payload: { args } }) });

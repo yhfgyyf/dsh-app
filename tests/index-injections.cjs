@@ -42,8 +42,8 @@ const manifest = { name: 'dsh-profile-desktop', private: true,
   dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-surface', 'dsh-index-injection-fixture', ...whale ? ['dsh-whale-widget'] : []] } } };
 writeFileSync(join(profile, 'package.json'), JSON.stringify(manifest));
 Object.assign(process.env, { DSH_DESKTOP_DATA_DIR: data, DSH_DESKTOP_CONFIG_HOME: home, DSH_HOME: home, DSH_TELEMETRY_DISABLED: '1' });
-const report = { platform: process.platform, checks: [], failures: [], console: [], data, whale: whale ? JSON.parse(readFileSync(join(whale, 'package.json'))).version : null, readyCount: 0, coreStopped: false };
-let corePid, host, finished = false, reloading = false;
+const report = { platform: process.platform, checks: [], failures: [], console: [], expectedReloadMessages: [], data, whale: whale ? JSON.parse(readFileSync(join(whale, 'package.json'))).version : null, readyCount: 0, coreStopped: false };
+let corePid, host, sessionId, finished = false, reloading = false;
 const spawn = childProcess.spawn;
 childProcess.spawn = (...args) => {
   const child = spawn(...args);
@@ -92,7 +92,12 @@ app.on('web-contents-created', (_event, contents) => {
   contents.on('console-message', details => {
     if (details.level !== 'error') return;
     const message = clean(details.message);
-    if (reloading && message.startsWith('[cordis-client-runner] syncing inspect providers failed:')) return;
+    const expectedDisconnect = [
+      '[cordis-client-runner] syncing inspect providers failed: Error: client api: dynamicCordisRunner/syncInspectManifest has no active Connection',
+      '[cordis-client-runner] syncing inspect providers failed: Error: gateway/cancelled: client api: Remote invocation "dynamicCordisRunner/syncInspectManifest" was aborted',
+      '[cordis-client-runner] syncing inspect providers failed: Error: cannot get required service "remote" in inactive context',
+    ].includes(message) || /^Sidebar Session opening failed: Error: Session reference "session-[a-f0-9-]+" is released$/.test(message);
+    if (reloading && expectedDisconnect) { report.expectedReloadMessages.push(message); return; }
     report.console.push(message);
   });
   contents.on('did-fail-load', (_event, code, description, _url, mainFrame) => {
@@ -117,7 +122,12 @@ async function run(event) {
   }
   await js(`Array.from(document.querySelectorAll('button')).find(button=>['继续','Continue'].includes(button.textContent))?.click()`);
   await js(`Array.from(document.querySelectorAll('button')).find(button=>['稍后配置','Configure later'].includes(button.textContent))?.click()`);
-  await js(`(async()=>{const ctx=window.__dshInjectionFixture;const id=await ctx.sessions.create({cwd:${JSON.stringify(workspace)}});ctx.uiWorkspace.openSession(id);})()`);
+  if (report.readyCount === 1) {
+    sessionId = await js(`(async()=>{const ctx=window.__dshInjectionFixture;const id=await ctx.sessions.create({cwd:${JSON.stringify(workspace)}});ctx.uiWorkspace.openSession(id);return id;})()`);
+  }
+  // Reuse the restored conversation. Opening a replacement immediately after
+  // reload cancels its still-opening predecessor and tests an unrelated race.
+  await until(() => js(`window.__dshInjectionFixture.sessions.binding(${JSON.stringify(sessionId)})?.session.getSnapshot().openState==='open'`), 'The same fixture session did not finish opening');
   await until(() => js('!!document.querySelector("[data-composer-input]")'), 'Fixture chat composer did not mount');
   if (whale) {
     await until(() => js('document.querySelectorAll(".dshwv-root").length===1'), 'The actual Whale package did not create its widget');
