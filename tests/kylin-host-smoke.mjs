@@ -5,10 +5,26 @@ import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { promisify } from 'node:util';
 
-const [runtimeArg, executableArg, dataArg, whaleArg] = process.argv.slice(2);
+const [runtimeArg, executableArg, dataArg, whaleArg, cdpArg, browserPageArg] = process.argv.slice(2);
 const runtime = resolve(runtimeArg), executable = resolve(executableArg), data = resolve(dataArg);
 await mkdir(join(data, 'workspace'), { recursive: true });
 const report = { passed: false, passes: [] };
+if (cdpArg) {
+  assert(browserPageArg, 'CDP verification requires an owned test-page URL');
+  const probe = join(data, 'browser-probe.mjs');
+  await writeFile(probe, `import { randomUUID } from 'node:crypto';
+export const inject = ['connection', 'agents', 'tools'];
+export function apply(ctx) {
+  ctx.connection.rpc.handle('/browser-use-test', async (_method, payload, signal) => {
+    const agent = ctx.agents.get(payload.args.sessionId);
+    if (!agent) throw new Error('Owned fixture session missing');
+    const batch = await ctx.tools.execute({ agent, signal, calls: [{ type: 'tool-call', id: randomUUID(), name: payload.args.name, arguments: payload.args.arguments }] });
+    return { ok: true, value: batch.results[0].result };
+  });
+}\n`);
+  await mkdir(join(data, 'state'), { recursive: true });
+  await writeFile(join(data, 'state/desktop.patch.yml'), '- insert:\n    - id: browser-use-test\n      name: ' + JSON.stringify(probe) + '\n');
+}
 if (whaleArg) {
   const whale = resolve(whaleArg), profile = join(data, 'state/profiles/desktop');
   assert.equal(JSON.parse(await readFile(join(whale, 'package.json'), 'utf8')).version, '0.4.2');
@@ -94,8 +110,8 @@ for (let iteration = 1; iteration <= 2; iteration++) {
       assert.equal(Buffer.from(await image.arrayBuffer()).subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
       pass.checks.push('Unmodified Whale 0.4.2 registers one page loader; authenticated script and image assets are served by the actual LoongArch Host');
     }
-    async function rpc(method, args) {
-      const r = await fetch(ready.endpoint + '/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json', cookie },
+    async function rpc(method, args, channel = '/api') {
+      const r = await fetch(ready.endpoint + channel + '/' + method, { method: 'POST', headers: { 'content-type': 'application/json', cookie },
         body: JSON.stringify({ type: 'client-request', rpcId: randomUUID(), method, payload: { args } }) });
       assert(r.ok, method + ' HTTP ' + r.status);
       const result = await r.json(); assert(result.result.ok, JSON.stringify(result.result.error)); return result.result.value;
@@ -115,6 +131,41 @@ for (let iteration = 1; iteration <= 2; iteration++) {
     }
     assert(listed.items.some(item => item.sessionId === savedSession));
     if (iteration === 2) pass.checks.push('The same persisted session is available after a complete Host restart');
+    if (cdpArg) {
+      const browserSession = iteration === 1 ? savedSession : (await rpc('session/create', { request: { cwd: join(data, 'workspace'), agentPreset: 'standard' } })).sessionId;
+      async function configure(cdpEndpoint, enabled = true) {
+        const id = randomUUID();
+        child.send({ type: 'browser-use-configure', id, config: enabled ? { enabled: true, cdpEndpoint } : { enabled: false } });
+        for (let n = 0; n < 300 && !exited; n++) {
+          const result = messages.find(message => message.type === 'browser-use-result' && message.id === id);
+          if (result) return result;
+          await sleep(100);
+        }
+        throw new Error('CDP configuration IPC timed out');
+      }
+      if (iteration === 1) assert.match((await configure('http://127.0.0.1:1')).error, /无法连接本机浏览器/);
+      assert.equal((await configure(cdpArg)).error, undefined);
+      const call = async (name, args) => {
+        const result = await rpc('execute', { sessionId: browserSession, name, arguments: args }, '/browser-use-test');
+        assert.equal(result.isError, false, JSON.stringify(result)); return result;
+      };
+      const names = ['browser_tabs', 'browser_type', 'browser_click', 'browser_snapshot', 'browser_take_screenshot'].map(name => 'mcp__playwright-mcp__' + name);
+      await call('describe_tools', { names });
+      const invoke = (name, args) => call('invoke_tool', { name: 'mcp__playwright-mcp__' + name, arguments: args });
+      await invoke('browser_tabs', { action: 'new', url: browserPageArg });
+      const expected = 'DSH_KYLIN_CDP_OK_' + iteration;
+      await invoke('browser_type', { target: '#name', text: expected });
+      await invoke('browser_click', { target: 'button' });
+      const snapshot = await invoke('browser_snapshot', {});
+      assert.match(snapshot.content.filter(block => block.type === 'text').map(block => block.text).join('\n'), new RegExp(expected));
+      const image = await invoke('browser_take_screenshot', { type: 'png', scale: 'css' });
+      assert(image.content.some(block => block.type === 'image'));
+      await invoke('browser_tabs', { action: 'close' });
+      assert.equal((await configure(undefined, false)).error, undefined);
+      assert.equal((await fetch(cdpArg + '/json/version')).status, 200);
+      pass.checks.push('Actual LoongArch Node22 Host and pinned MCP attach over CDP, type/click/read/screenshot, close only the owned tab, and disconnect without terminating the external browser');
+      pass.browserCdp = { passed: true, expected, screenshotReturned: true, externalBrowserPreserved: true };
+    }
     assert.deepEqual(JSON.parse(await readFile(join(data, 'state/profiles/desktop/local-plugins/package.json'), 'utf8')), { private: true });
     pass.checks.push('Actual profile initialization creates its anonymous local-plugin manifest');
     child.send({ type: 'shutdown' });

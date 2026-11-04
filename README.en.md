@@ -8,6 +8,12 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.48: Kylin LBrowser CDP attachment
+
+Linux/LoongArch defaults to the official exclusive CDP attach provider on `127.0.0.1:9222`, discovers LBrowser directly and displays the connection mode in Settings. The included LBrowser takeover launcher uses the existing profile, inherits the desktop/input-method environment and binds debugging to loopback. No Chrome symlink, extension download or installed-code patch is needed. Disabling DSH leaves the external browser running.
+
+See [Kylin Browser Use instructions](docs/KYLIN_BROWSER_USE.md). This change targets the Kylin installer; the installed Mac stays at 0.1.47 and Windows at 0.1.46.
+
 ## v0.1.47: Browser Use protected-profile compatibility
 
 Distinguish an unreadable browser profile from a missing extension. When macOS denies Chrome/Edge profile reads, use the official Playwright extension to connect to the current browser without requiring access to its protected files. `EPERM/EACCES` no longer becomes installation advice. Existing extension confirmation and explicitly saved connection credentials remain in effect; no additional Full Disk Access grant is required. Conclusive absence still fails promptly, and other filesystem errors retain their cause.

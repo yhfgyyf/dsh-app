@@ -4,9 +4,15 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.47** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.48** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.48：麒麟龙芯浏览器 CDP 接管
+
+麒麟 LoongArch 版默认通过官方 CDP attach provider 连接本机 `127.0.0.1:9222`，直接识别 LBrowser，不依赖 Chrome 软链、扩展下载或手工修改包内代码。设置中显示连接方式，接管前检查本机端口；提供“龙芯浏览器（DSH 接管）”启动入口，使用已有 profile、继承桌面输入法环境，只监听回环地址。关闭 DSH 开关保留外部浏览器；一次由一个会话使用。
+
+详见[麒麟 Browser Use 使用说明](docs/KYLIN_BROWSER_USE.md)。此改动面向麒麟安装包，本机 Mac 保持 0.1.47，Windows 保持 0.1.46；不在本次更换它们的安装版本。
 
 ## v0.1.47：Browser Use 资料目录权限兼容
 

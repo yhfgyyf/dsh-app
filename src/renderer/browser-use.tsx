@@ -41,15 +41,17 @@ export function BrowserUseSettings() {
     finally { setPending(false); }
   }
   const busy = pending || state.phase === 'starting' || state.phase === 'stopping';
+  const attach = state.mode === 'attach';
   return <div className="desktop-browser-use-settings">
     <div className="desktop-computer-controls">
       <span>浏览器操作（Browser Use）</span>
       <div className="desktop-browser-use-actions">
-        <button type="button" className="desktop-browser-use-connect" aria-expanded={editing} disabled={busy} onClick={() => { setToken(''); setError(''); setEditing(!editing); }}>自动连接</button>
+        {!attach && <button type="button" className="desktop-browser-use-connect" aria-expanded={editing} disabled={busy} onClick={() => { setToken(''); setError(''); setEditing(!editing); }}>自动连接</button>}
         <button type="button" className="desktop-computer-switch" role="switch" aria-label="浏览器操作" aria-checked={state.enabled} aria-busy={busy} disabled={busy} onClick={() => { void toggle(); }}><span /></button>
       </div>
     </div>
-    {editing && <form ref={credentialsRef} className="desktop-browser-use-credentials" aria-label="浏览器自动连接" onSubmit={event => { event.preventDefault(); void save(token); }}>
+    {attach && <p className="desktop-browser-use-note">本机浏览器接管（CDP {state.cdpEndpoint}）。先从应用菜单启动“龙芯浏览器（DSH 接管）”，再开启此开关。沿用已有登录状态，无需扩展；同一时间由一个会话使用浏览器。</p>}
+    {!attach && editing && <form ref={credentialsRef} className="desktop-browser-use-credentials" aria-label="浏览器自动连接" onSubmit={event => { event.preventDefault(); void save(token); }}>
       <p>保存扩展连接令牌后，DSH 可自动连接浏览器并使用已登录的会话，无需每次确认。</p>
       <label htmlFor="desktop-browser-use-token">扩展连接令牌{state.extensionTokenConfigured ? '（已保存，填写可替换）' : ''}</label>
       <input id="desktop-browser-use-token" type="password" autoComplete="off" spellCheck={false} value={token} maxLength={1100} placeholder="粘贴令牌或完整的环境变量行" onChange={event => setToken(event.target.value)} disabled={busy} />

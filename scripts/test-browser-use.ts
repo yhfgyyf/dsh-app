@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { access, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +36,8 @@ await new Promise<void>(resolve => page.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${(page.address() as { port: number }).port}/`;
 const core = new DesktopRuntime({ runtimeRoot: join(root, '.runtime'), entry: join(root, '.runtime/app/index.ts'), home: state, configHome: home, cwd: data, onExit: () => {} });
 let client: Awaited<ReturnType<typeof connectFixture>> | undefined;
+let cdpChild: ReturnType<typeof spawn> | undefined;
+let cdpInspector: any;
 const checks: string[] = [];
 try {
   const ready = await core.start();
@@ -100,11 +104,52 @@ try {
   await create();
   await core.configureBrowserUse({ enabled: false });
   checks.push('Provider can be enabled again after complete cleanup');
+  const cdpProfile = join(data, 'cdp-profile');
+  await mkdir(cdpProfile);
+  cdpChild = spawn(browser.path, ['--headless=new', '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', '--user-data-dir=' + cdpProfile, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' });
+  let port: number | undefined;
+  for (let n = 0; n < 150; n++) {
+    port = await readFile(join(cdpProfile, 'DevToolsActivePort'), 'utf8').then(text => Number(text.split('\n')[0]), () => undefined);
+    if (port) break;
+    assert.equal(cdpChild.exitCode, null, 'Owned CDP browser exited before readiness');
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  assert.ok(port, 'Owned CDP browser never became ready');
+  const cdpEndpoint = 'http://127.0.0.1:' + port;
+  const require = createRequire(new URL('../.runtime/package.json', import.meta.url));
+  cdpInspector = await require('playwright-core').chromium.connectOverCDP(cdpEndpoint);
+  await cdpInspector.contexts()[0].addCookies([{ name: 'dsh_cdp_fixture', value: 'preserved', url }]);
+  await core.configureBrowserUse({ enabled: true, cdpEndpoint });
+  const attached = await create();
+  await call(attached, 'describe_tools', { names: ['mcp__playwright-mcp__browser_navigate', 'mcp__playwright-mcp__browser_type', 'mcp__playwright-mcp__browser_click', 'mcp__playwright-mcp__browser_snapshot', 'mcp__playwright-mcp__browser_take_screenshot'] });
+  await call(attached, 'invoke_tool', { name: 'mcp__playwright-mcp__browser_navigate', arguments: { url } });
+  await call(attached, 'invoke_tool', { name: 'mcp__playwright-mcp__browser_type', arguments: { target: '#name', text: 'DSH_CDP_OK' } });
+  await call(attached, 'invoke_tool', { name: 'mcp__playwright-mcp__browser_click', arguments: { target: 'button' } });
+  const snapshot = await call(attached, 'invoke_tool', { name: 'mcp__playwright-mcp__browser_snapshot', arguments: {} });
+  assert.match(snapshot.content.filter((block: any) => block.type === 'text').map((block: any) => block.text).join('\n'), /DSH_CDP_OK/);
+  const cdpImage = await call(attached, 'invoke_tool', { name: 'mcp__playwright-mcp__browser_take_screenshot', arguments: { type: 'png', scale: 'css' } });
+  assert.ok(cdpImage.content.some((block: any) => block.type === 'image'));
+  checks.push('Official CDP attach performs real navigation, browser input/click, result snapshot and screenshot');
+  const context = cdpInspector.contexts()[0];
+  assert.ok((await context.cookies(url)).some((cookie: any) => cookie.name === 'dsh_cdp_fixture' && cookie.value === 'preserved'));
+  const controlled = context.pages().find((page: any) => page.url() === url);
+  assert.equal(await controlled.locator('output').textContent(), 'DSH_CDP_OK');
+  checks.push('CDP uses the pre-existing browser context and preserves its synthetic login cookie');
+  await core.configureBrowserUse({ enabled: false });
+  assert.equal(cdpChild.exitCode, null, 'Disabling DSH must not terminate the external browser');
+  assert.equal((await fetch(cdpEndpoint + '/json/version')).status, 200);
+  assert.equal(await controlled.locator('output').textContent(), 'DSH_CDP_OK');
+  checks.push('Disabling CDP disconnects DSH while retaining the external browser, page and cookie');
   const report = { status: 'pass', browser: browser.name, platform: process.platform, checks };
   await mkdir(join(root, 'docs/evidence'), { recursive: true });
   await writeFile(join(root, 'docs/evidence/browser-use.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 } finally {
   client?.close(); await core.stop();
+  await cdpInspector?.close();
+  if (cdpChild && cdpChild.exitCode === null) {
+    cdpChild.kill('SIGTERM');
+    await new Promise<void>(resolve => cdpChild!.once('exit', () => resolve()));
+  }
   await new Promise<void>(resolve => page.close(() => resolve()));
 }

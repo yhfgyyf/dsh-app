@@ -12,6 +12,25 @@ type ProfileIO = {
 };
 type ExtensionProfile = { status: 'installed'; profile: string } | { status: 'missing' } | { status: 'unreadable'; code: string; path: string };
 
+function localCdpEndpoint(value: string): string {
+  let url: URL;
+  try { url = new URL(value); } catch { throw new Error('仅允许本机 HTTP CDP 地址。'); }
+  if (url.protocol !== 'http:' || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || !url.port || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('仅允许本机 HTTP CDP 地址。');
+  return url.origin;
+}
+
+async function checkCdpBrowser(endpoint: string): Promise<void> {
+  try {
+    const response = await fetch(endpoint + '/json/version', { redirect: 'error', signal: AbortSignal.timeout(3000) });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const version = await response.json() as { Browser?: string; webSocketDebuggerUrl?: string };
+    const socket = new URL(version.webSocketDebuggerUrl ?? '');
+    if (!/^(Chrome|Chromium|LBrowser)\//.test(version.Browser ?? '') || socket.protocol !== 'ws:' || !['127.0.0.1', 'localhost', '[::1]'].includes(socket.hostname) || socket.port !== new URL(endpoint).port || socket.username || socket.password) throw new Error('服务未返回有效的本机 Chromium CDP 信息。');
+  } catch (error) {
+    throw new Error(`无法连接本机浏览器 ${endpoint}。请先使用“龙芯浏览器（DSH 接管）”或 dsh-browser-cdp 启动浏览器；已有浏览器未启用接管时，请先正常退出后再启动。${error instanceof Error ? error.message : String(error)}`, { cause: error });
+  }
+}
+
 /** Match the pinned extension probe, preserving access failures instead of absence. */
 async function inspectExtensionProfile(userDataDir: string, extensionId: string, io: ProfileIO): Promise<ExtensionProfile> {
   const optional = async <T>(read: () => Promise<T>): Promise<T | undefined> => {
@@ -53,7 +72,7 @@ export async function createBrowserUseController(ctx: any, load: (id: string) =>
   let provider: any;
   let pending: Promise<unknown> = Promise.resolve();
   return {
-    configure(config: { enabled: boolean; executablePath?: string; userDataDir?: string; extensionToken?: string }): Promise<void> {
+    configure(config: { enabled: boolean; executablePath?: string; userDataDir?: string; extensionToken?: string; cdpEndpoint?: string }): Promise<void> {
       const operation = pending.then(async () => {
         if (!config.enabled) {
           if (provider) { await provider.dispose(); provider = undefined; }
@@ -61,6 +80,13 @@ export async function createBrowserUseController(ctx: any, load: (id: string) =>
         }
         if (provider) return;
         if (ctx.get('browserUse')?.providerName) throw new Error('已有其他浏览器操作插件启用，请先停用该插件。');
+        if (config.cdpEndpoint !== undefined) {
+          if (config.userDataDir !== undefined || config.extensionToken !== undefined) throw new Error('本机 CDP 接管不能同时配置扩展模式。');
+          const endpoint = localCdpEndpoint(config.cdpEndpoint);
+          await checkCdpBrowser(endpoint);
+          provider = await ctx.plugin(await load('@deepseek-ai/dsh-experimental-browser-use-playwright-mcp'), { mode: 'attach', endpoint });
+          return;
+        }
         if (!config.executablePath) throw new Error('浏览器路径不可用。');
         if (config.userDataDir) {
           if (!playwrightCli || !extension) throw new Error('浏览器操作组件不可用。');

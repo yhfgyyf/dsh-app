@@ -1,0 +1,26 @@
+#!/bin/sh
+set -eu
+
+if [ -z "${DISPLAY-}" ] && [ -z "${WAYLAND_DISPLAY-}" ]; then
+  printf '%s\n' '请在麒麟图形桌面中启动龙芯浏览器（DSH 接管），以保留输入法和桌面会话环境。' >&2
+  exit 1
+fi
+
+for browser in /opt/apps/lbrowser/lbrowser /usr/bin/lbrowser; do
+  if [ -x "$browser" ]; then
+    for argument in "$@"; do
+      case "$argument" in --*) printf '%s\n' '接管启动入口仅接受网页地址，不接受覆盖浏览器参数。' >&2; exit 2 ;; esac
+    done
+    export GTK_IM_MODULE="${GTK_IM_MODULE:-fcitx}"
+    export QT_IM_MODULE="${QT_IM_MODULE:-fcitx}"
+    export QT4_IM_MODULE="${QT4_IM_MODULE:-fcitx}"
+    export XMODIFIERS="${XMODIFIERS:-@im=fcitx}"
+    exec "$browser" \
+      --user-data-dir="${XDG_CONFIG_HOME:-$HOME/.config}/lbrowser" \
+      --remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 \
+      --no-first-run --no-default-browser-check "$@"
+  fi
+done
+
+printf '%s\n' '未找到龙芯浏览器，请先安装 LBrowser。' >&2
+exit 1

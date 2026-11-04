@@ -75,7 +75,7 @@ process.on('message', (message: any) => {
   if (message?.type === 'browser-use-configure' && typeof message.id === 'string') {
     const config = message.config;
     const configure = async () => {
-      if (!browserUse || closing || typeof config?.enabled !== 'boolean' || (config.enabled && (typeof config.executablePath !== 'string' || (config.userDataDir !== undefined && (typeof config.userDataDir !== 'string' || !config.userDataDir.trim()))))) throw new Error('浏览器操作配置不可用。');
+      if (!browserUse || closing || typeof config?.enabled !== 'boolean' || (config.enabled && config.cdpEndpoint === undefined && (typeof config.executablePath !== 'string' || (config.userDataDir !== undefined && (typeof config.userDataDir !== 'string' || !config.userDataDir.trim())))) || (config.cdpEndpoint !== undefined && typeof config.cdpEndpoint !== 'string')) throw new Error('浏览器操作配置不可用。');
       if (config.extensionToken !== undefined && (typeof config.extensionToken !== 'string' || !/^[A-Za-z0-9_+/=-]{16,1024}$/.test(config.extensionToken) || !config.userDataDir)) throw new Error('浏览器连接令牌配置无效。');
       await browserUse.configure(config);
     };

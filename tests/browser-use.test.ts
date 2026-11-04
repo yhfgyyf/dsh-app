@@ -5,7 +5,7 @@ import * as profileFs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { browserCandidates, browserProfileRoot, DesktopBrowserUse } from '../src/main/browser-use.ts';
+import { browserCandidates, browserProfileRoot, browserUseMode, DesktopBrowserUse } from '../src/main/browser-use.ts';
 import { createBrowserUseController } from '../src/runtime/browser-use.ts';
 import { defaultPreferences, parsePreferences } from '../src/shared/config.ts';
 
@@ -24,10 +24,65 @@ test('finds supported Mac, Windows and Linux browsers without relying on the hos
   assert.deepEqual(browserCandidates('win32', '', { PROGRAMFILES: 'C:\\Program Files' })[0], { name: 'Google Chrome', path: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe' });
   assert.equal(browserProfileRoot('Google Chrome', 'darwin', '/Users/test', {}), '/Users/test/Library/Application Support/Google/Chrome');
   assert.equal(browserProfileRoot('Microsoft Edge', 'win32', 'C:\\Users\\test', {}), 'C:\\Users\\test\\AppData\\Local\\Microsoft\\Edge\\User Data');
-  assert.equal(browserCandidates('linux', '/home/test', {})[0].path, '/usr/bin/google-chrome');
+  assert.equal(browserCandidates('linux', '/home/test', {})[0].path, '/opt/apps/lbrowser/lbrowser');
+  assert.ok(browserCandidates('linux', '/home/test', {}).some(browser => browser.path === '/usr/bin/google-chrome'));
   assert.equal(browserProfileRoot('Google Chrome', 'linux', '/home/test', {}), '/home/test/.config/google-chrome');
+  assert.equal(browserProfileRoot('龙芯浏览器', 'linux', '/home/test', {}), '/home/test/.config/lbrowser');
   assert.equal(browserProfileRoot('Microsoft Edge', 'linux', '/home/test', { XDG_CONFIG_HOME: '/tmp/custom-config' }), '/tmp/custom-config/microsoft-edge');
   assert.deepEqual(browserCandidates('freebsd', '/home/test', {}), []);
+});
+
+test('only the Linux LoongArch build defaults to CDP attachment', () => {
+  assert.equal(browserUseMode('linux', 'loong64'), 'attach');
+  for (const [platform, arch] of [['darwin', 'arm64'], ['win32', 'x64'], ['linux', 'x64']]) assert.equal(browserUseMode(platform, arch), 'extension');
+});
+
+test('Kylin attach mode uses its local endpoint without Chrome profile inference or extension credentials', async () => {
+  const calls: any[] = [];
+  const control = new DesktopBrowserUse(async config => { calls.push(config); }, () => {},
+    async () => ({ name: '龙芯浏览器', path: '/opt/apps/lbrowser/lbrowser', userDataDir: '/home/test/.config/lbrowser' }),
+    { async load() { throw new Error('CDP must not read extension credentials'); }, async save() { throw new Error('CDP must not save extension credentials'); } }, 'attach');
+  await control.restoreCredentials();
+  await control.setEnabled(true);
+  assert.deepEqual(calls[0], { enabled: true, cdpEndpoint: 'http://127.0.0.1:9222' });
+  assert.equal(control.state.mode, 'attach');
+  assert.equal(control.state.cdpEndpoint, 'http://127.0.0.1:9222');
+  assert.equal(control.state.browser, '龙芯浏览器');
+  assert.equal(control.state.credentialError, undefined);
+  await control.setEnabled(false);
+});
+
+test('CDP uses the official attach provider after a bounded local readiness check', async t => {
+  const calls: any[] = [];
+  t.mock.method(globalThis, 'fetch', async (input: string, options: RequestInit) => {
+    assert.equal(input, 'http://127.0.0.1:9222/json/version');
+    assert.equal(options.redirect, 'error');
+    assert.ok(options.signal);
+    return Response.json({ Browser: 'Chrome/138.0.7204.310', webSocketDebuggerUrl: 'ws://127.0.0.1:9222/devtools/browser/fixture' });
+  });
+  const ctx = { get: () => ({}), async plugin(module: string, config: any) { calls.push({ module, config }); return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async id => id);
+  await control.configure({ enabled: true, cdpEndpoint: 'http://127.0.0.1:9222' });
+  assert.deepEqual(calls, [{ module: '@deepseek-ai/dsh-experimental-browser-use-playwright-mcp', config: { mode: 'attach', endpoint: 'http://127.0.0.1:9222' } }]);
+  await control.configure({ enabled: false });
+});
+
+test('CDP rejects non-loopback endpoints and reports a stopped browser without extension advice', async t => {
+  let fetched = 0, mounted = 0;
+  t.mock.method(globalThis, 'fetch', async () => { fetched++; throw new Error('ECONNREFUSED'); });
+  const ctx = { get: () => ({}), async plugin() { mounted++; return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async id => id);
+  for (const endpoint of ['http://192.168.2.160:9222', 'https://example.com', 'http://user:secret@127.0.0.1:9222', 'http://127.0.0.1:9222/redirect?next=example.com']) {
+    await assert.rejects(control.configure({ enabled: true, cdpEndpoint: endpoint }), /本机.*CDP/);
+  }
+  assert.equal(fetched, 0);
+  await assert.rejects(control.configure({ enabled: true, cdpEndpoint: 'http://127.0.0.1:9222' }), error => {
+    assert.match(String(error), /无法连接.*浏览器/);
+    assert.match(String(error), /DSH.*接管/);
+    assert.doesNotMatch(String(error), /安装.*扩展|Playwright Extension/);
+    return true;
+  });
+  assert.equal(mounted, 0);
 });
 
 test('enable and disable are serialized and missing browsers leave tools off', async () => {

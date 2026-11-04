@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=LBrowser (DSH CDP)
+Name[zh_CN]=龙芯浏览器（DSH 接管）
+Comment=Start LBrowser for local DSH browser control
+Comment[zh_CN]=使用已有登录状态，允许本机 DSH 接管浏览器
+Exec=/usr/bin/dsh-browser-cdp
+Icon=web-browser
+Terminal=false
+Type=Application
+Categories=Network;WebBrowser;
