@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import * as profileFs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -8,7 +9,7 @@ import { browserCandidates, browserProfileRoot, DesktopBrowserUse } from '../src
 import { createBrowserUseController } from '../src/runtime/browser-use.ts';
 import { defaultPreferences, parsePreferences } from '../src/shared/config.ts';
 
-const extensionFixture = { async findPlaywrightExtensionProfile() { return 'Default'; }, playwrightExtensionInstallUrl: 'https://example.invalid/playwright-extension' };
+const extensionFixture = { playwrightExtensionId: 'mmlmfjhmonkocbjadbfplnigmagldckm', playwrightExtensionInstallUrl: 'https://example.invalid/playwright-extension' };
 
 test('Browser Use stays off for existing preferences and rejects invalid switch values', () => {
   const old: any = defaultPreferences();
@@ -90,6 +91,53 @@ test('only a saved extension token reaches MCP, through env rather than argument
   assert.equal(calls[0].env.PLAYWRIGHT_MCP_EXTENSION_TOKEN, token);
   assert.ok(!calls[0].args.some((arg: string) => arg.includes(token)));
   await control.configure({ enabled: false });
+});
+
+for (const code of ['EPERM', 'EACCES']) test(`a ${code} profile denial uses the live extension without profile access or an installation claim`, async () => {
+  let guard: any, options: any, forwarded = 0;
+  const scope = { on(_event: string, handler: any) { guard = handler; } };
+  const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply(scope); return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp(_scope: any, value: any) { options = value; } }), '/cli.js', extensionFixture, {
+    ...profileFs,
+    async readdir() { throw Object.assign(new Error('Profile access denied'), { code, path: '/protected-profile' }); },
+  });
+  await control.configure({ enabled: true, executablePath: '/browser', userDataDir: '/protected-profile' });
+  assert.deepEqual(options.args, ['/cli.js', '--browser', 'chrome', '--extension', '--executable-path', '/browser']);
+  assert.equal(options.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN, '');
+  assert.equal(await guard({ name: 'mcp__playwright-mcp__browser_tabs' }, async () => { forwarded++; return 'connected'; }), 'connected');
+  assert.equal(forwarded, 1, 'The real extension handshake must decide availability when files are protected');
+  await assert.rejects(guard({ name: 'mcp__playwright-mcp__browser_tabs' }, async () => { throw new Error('Extension connection timed out'); }), error => {
+    assert.match(String(error), /目录.*(EPERM|EACCES)/);
+    assert.match(String(error), /Extension connection timed out/);
+    assert.doesNotMatch(String(error), /请先由用户.*安装|未安装/);
+    return true;
+  });
+  await control.configure({ enabled: false });
+});
+
+test('profile metadata permission denial is not reported as a missing extension', async () => {
+  let guard: any, options: any;
+  const ctx = { get: () => ({}), async plugin(plugin: any) { plugin.apply({ on(_event: string, handler: any) { guard = handler; } }); return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp(_scope: any, value: any) { options = value; } }), '/cli.js', extensionFixture, {
+    async readdir() { return ['Default']; },
+    async access() { throw Object.assign(new Error('Absent extension directory'), { code: 'ENOENT' }); },
+    async readFile(path: string) { throw Object.assign(new Error('Profile file unavailable'), { code: path.endsWith('Local State') ? 'ENOENT' : 'EPERM', path }); },
+  });
+  await control.configure({ enabled: true, executablePath: '/browser', userDataDir: '/profile' });
+  assert.ok(!options.args.includes('--user-data-dir'));
+  assert.equal(await guard({ name: 'mcp__playwright-mcp__browser_tabs' }, async () => 'connected'), 'connected');
+  await control.configure({ enabled: false });
+});
+
+test('unexpected profile I/O failures remain visible instead of becoming installation advice', async () => {
+  let mounted = false;
+  const ctx = { get: () => ({}), async plugin() { mounted = true; return { dispose: async () => {} }; } };
+  const control = await createBrowserUseController(ctx, async () => ({ mountSessionMcp() {} }), '/cli.js', extensionFixture, {
+    ...profileFs,
+    async readdir() { throw Object.assign(new Error('Profile disk I/O failure'), { code: 'EIO' }); },
+  });
+  await assert.rejects(control.configure({ enabled: true, executablePath: '/browser', userDataDir: '/profile' }), /Profile disk I\/O failure/);
+  assert.equal(mounted, false);
 });
 
 test('a missing extension never starts a handshake and installation is rechecked on the next call', async () => {

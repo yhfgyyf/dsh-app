@@ -4,9 +4,15 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.46** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.47** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.47：Browser Use 资料目录权限兼容
+
+区分浏览器资料目录不可读和扩展缺失。macOS 拒绝读取 Chrome/Edge 资料时，通过官方 Playwright 扩展连接当前浏览器，避免将 `EPERM/EACCES` 误报为“请安装扩展”，也不再把读取受保护资料目录作为连接的前提。沿用已有的扩展确认或用户明确保存的连接令牌，不需要新增全磁盘访问授权。目录可读且确认没有扩展时仍立即提示安装；其他文件系统错误保留原始原因。
+
+本次为本机 Mac 修复构建，Windows 和麒麟安装包仍为 0.1.46；0.1.47 尚未发布 GitHub Release。
 
 ## v0.1.46：插件页面注入兼容
 

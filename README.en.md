@@ -8,6 +8,12 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.47: Browser Use protected-profile compatibility
+
+Distinguish an unreadable browser profile from a missing extension. When macOS denies Chrome/Edge profile reads, use the official Playwright extension to connect to the current browser without requiring access to its protected files. `EPERM/EACCES` no longer becomes installation advice. Existing extension confirmation and explicitly saved connection credentials remain in effect; no additional Full Disk Access grant is required. Conclusive absence still fails promptly, and other filesystem errors retain their cause.
+
+This is a local Mac repair build. Windows and Kylin installers remain at 0.1.46; 0.1.47 has not been published as a GitHub Release.
+
 ## v0.1.46: plugin page injection compatibility
 
 Carry the Host's structured page injections into the Electron renderer: globals, scripts, styles and HTML run in their original order on each page load. Only the core module-bootstrap rows already owned by Desktop are excluded. This fixes `dsh-whale-widget` installing successfully but remaining invisible after restart; the original plugin and native Plugin Manager installation remain supported.
