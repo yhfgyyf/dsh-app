@@ -132,7 +132,6 @@ for (let iteration = 1; iteration <= 2; iteration++) {
     assert(listed.items.some(item => item.sessionId === savedSession));
     if (iteration === 2) pass.checks.push('The same persisted session is available after a complete Host restart');
     if (cdpArg) {
-      const browserSession = iteration === 1 ? savedSession : (await rpc('session/create', { request: { cwd: join(data, 'workspace'), agentPreset: 'standard' } })).sessionId;
       async function configure(cdpEndpoint, enabled = true) {
         const id = randomUUID();
         child.send({ type: 'browser-use-configure', id, config: enabled ? { enabled: true, cdpEndpoint } : { enabled: false } });
@@ -145,6 +144,8 @@ for (let iteration = 1; iteration <= 2; iteration++) {
       }
       if (iteration === 1) assert.match((await configure('http://127.0.0.1:1')).error, /无法连接本机浏览器/);
       assert.equal((await configure(cdpArg)).error, undefined);
+      // The pinned official provider mounts MCP on future agent/created events.
+      const browserSession = (await rpc('session/create', { request: { cwd: join(data, 'workspace'), agentPreset: 'standard' } })).sessionId;
       const call = async (name, args) => {
         const result = await rpc('execute', { sessionId: browserSession, name, arguments: args }, '/browser-use-test');
         assert.equal(result.isError, false, JSON.stringify(result)); return result;

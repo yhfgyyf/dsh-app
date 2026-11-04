@@ -7,7 +7,7 @@
 1. 若日常龙芯浏览器已启动，先正常退出它。不要强制结束或同时启动两个占用同一资料目录的浏览器实例。
 2. 从麒麟应用菜单打开“龙芯浏览器（DSH 接管）”，或在图形桌面的终端运行 `dsh-browser-cdp`。该入口使用 `${XDG_CONFIG_HOME:-$HOME/.config}/lbrowser`，沿用已有登录状态，并只将调试服务绑定到 `127.0.0.1:9222`。
 3. 在 DSH“设置 → 通用设置”开启“浏览器操作”。设置中显示本机 CDP 模式；不需要安装扩展或填写扩展令牌。
-4. 在会话中使用 Browser Use。官方 attach provider 同一时间只允许一个会话使用浏览器。关闭开关会断开 DSH 连接，保留外部浏览器及其登录状态。
+4. 开启后新建或重新打开需要使用 Browser Use 的会话；官方 provider 在会话激活时注册工具，开启前已经打开的会话需重新打开。官方 attach provider 同一时间只允许一个会话使用浏览器。关闭开关会断开 DSH 连接，保留外部浏览器及其登录状态。
 
 可以继续使用已经准备好的 `lbrowser-cdp.sh`，前提是它使用正确的本人 profile，并提供本机 `127.0.0.1:9222` 服务。App 自带路径发现，不再依赖将 `/usr/bin/google-chrome` 软链到 LBrowser。无需手工修改 `resources/runtime/app/browser-use.ts`，升级保留功能实现及原有开关值。
 
