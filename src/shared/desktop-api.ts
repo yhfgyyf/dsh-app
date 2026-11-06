@@ -22,6 +22,9 @@ export type DesktopInfo = {
 };
 
 export interface DesktopAPI {
+  setNotificationView(sessionId: string | null): Promise<void>;
+  takeNotificationTarget(): Promise<string | null>;
+  onNotificationOpen(listener: () => void): () => void;
   exportRemoteDiagnostics(): Promise<string | undefined>;
   getRemoteState(): Promise<RemoteState>;
   remoteAction(action: RemoteAction): Promise<RemoteState>;

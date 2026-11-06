@@ -8,6 +8,12 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.49: Task notifications and unread badges
+
+Background conversation completion, model failures and unexpected core exits trigger native notifications and an unread-conversation badge. Foreground conversations and deliberate Stop remain quiet. Clicking a notification opens its conversation; viewing it clears that reminder. History replay, renderer reloads and inner subagents do not produce duplicate alerts; temporary `/side` forks are excluded. Notifications contain only the conversation title and outcome.
+
+Mac uses Dock badges, Windows uses a numeric taskbar overlay, and Linux requires desktop LauncherEntry support. System authorization and Focus settings control banner presentation.
+
 ## v0.1.48: Kylin LBrowser CDP attachment
 
 Linux/LoongArch defaults to the official exclusive CDP attach provider on `127.0.0.1:9222`, discovers LBrowser directly and displays the connection mode in Settings. The included LBrowser takeover launcher uses the existing profile, inherits the desktop/input-method environment and binds debugging to loopback. No Chrome symlink, extension download or installed-code patch is needed. Disabling DSH leaves the external browser running.

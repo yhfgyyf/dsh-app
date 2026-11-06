@@ -4,9 +4,15 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.48** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.49** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.49：任务通知与图标角标
+
+后台会话完成、模型报错或内核意外退出时，显示系统通知，并在 Dock／任务栏显示未读会话数字。当前前台会话和主动停止不提醒；同一会话只占一个未读数字。点击通知打开对应会话，返回查看后清除该会话计数。历史回放、界面重载及内部子代理不产生重复提醒，临时 `/side` 不计入主会话提醒。通知只包含会话标题和结果类型。
+
+Mac 使用系统通知和 Dock 角标；Windows 使用系统通知和数字覆盖图标；Linux 角标需要桌面支持 LauncherEntry D-Bus 接口。通知横幅显示受系统授权和专注模式控制。
 
 ## v0.1.48：麒麟龙芯浏览器 CDP 接管
 

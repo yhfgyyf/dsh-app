@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.48",
+  "version": "0.1.49",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
@@ -46,6 +46,7 @@
     "test:univer-client": "electron tests/univer-client.cjs",
     "test:browser-use": "node scripts/test-browser-use.ts",
     "test:browser-use-settings": "node scripts/test-browser-use-settings.ts",
+    "test:task-notifications": "node scripts/test-task-notifications.ts",
     "test:remote": "node --test tests/remote-access.test.ts tests/remote-interactions.test.ts && node scripts/test-mobile-remote.mjs",
     "test:remote-ui": "electron tests/remote-settings.cjs"
   },

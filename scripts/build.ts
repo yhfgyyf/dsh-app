@@ -86,7 +86,7 @@ await build({ configFile: false, root: resolve(root, 'src/renderer/computer-prev
 await build({ configFile: false, root: resolve(root, 'src/renderer/content-find'), base: './', build: { outDir: resolve(root, 'dist/renderer/content-find'), target: 'chrome126', emptyOutDir: true } });
 
 await mkdir(resolve(root, 'dist/runtime'), { recursive: true });
-for (const name of ['index.ts', 'index-injections.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
+for (const name of ['index.ts', 'index-injections.ts', 'directory-picker.ts', 'computer-use.ts', 'browser-use.ts', 'task-notifications.ts', 'legacy-settings.ts', 'plugin-marketplace.ts', 'plugin-security-host.ts', 'plugin-security.ts', 'plugin-audit-package.ts', 'collab-transport.ts', 'cordis.yml', 'desktop.patch.yml', 'package.json']) await copyFile(resolve(root, 'src/runtime', name), resolve(root, 'dist/runtime', name));
 // Reuse the official preset declarations without mounting the Web App surface.
 const desktopPatchPath = resolve(root, 'dist/runtime/desktop.patch.yml');
 let desktopPatch = await readFile(desktopPatchPath, 'utf8');
@@ -115,7 +115,7 @@ await writeFile(resolve(root, '.runtime/local-plugins/package.json'), '{\n  "pri
 const surfaceRoot = resolve(root, '.runtime/node_modules/dsh-desktop-surface');
 await cp(resolve(root, 'dist/runtime'), surfaceRoot, { recursive: true });
 // Node cannot strip TypeScript inside node_modules; compile the host entries.
-for (const name of ['directory-picker', 'computer-use', 'browser-use', 'legacy-settings', 'plugin-marketplace', 'plugin-security-host', 'plugin-security', 'plugin-audit-package']) {
+for (const name of ['directory-picker', 'computer-use', 'browser-use', 'task-notifications', 'legacy-settings', 'plugin-marketplace', 'plugin-security-host', 'plugin-security', 'plugin-audit-package']) {
   const source = await readFile(resolve(root, 'src/runtime', `${name}.ts`), 'utf8');
   const compiled = stripTypeScriptTypes(source).replaceAll("'./plugin-audit-package.ts'", "'./plugin-audit-package.js'").replaceAll("'./plugin-security.ts'", "'./plugin-security.js'");
   await writeFile(resolve(surfaceRoot, `${name}.js`), compiled);

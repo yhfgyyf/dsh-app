@@ -40,11 +40,12 @@ for path in [app / 'dist', *(app / 'dist').rglob('*')]:
 package = read(app / 'package.json'); package['version'] = version; save(app / 'package.json', package)
 for name in ['README.md', 'README.en.md']: shutil.copy2(source / name, app / name)
 for directory in ['app', 'node_modules/dsh-desktop-surface']:
-    for name in ['index.ts', 'browser-use.ts']:
+    for name in ['index.ts', 'browser-use.ts', 'task-notifications.ts']:
         target = runtime / directory / name
         shutil.copy2(source / 'dist/runtime' / name, target); target.chmod(0o644)
-compiled = runtime / 'node_modules/dsh-desktop-surface/browser-use.js'
-shutil.copy2(source / '.runtime/node_modules/dsh-desktop-surface/browser-use.js', compiled); compiled.chmod(0o644)
+for name in ['browser-use.js', 'task-notifications.js']:
+    compiled = runtime / 'node_modules/dsh-desktop-surface' / name
+    shutil.copy2(source / '.runtime/node_modules/dsh-desktop-surface' / name, compiled); compiled.chmod(0o644)
 for relative, mode in [('usr/bin/dsh-browser-cdp', 0o755), ('usr/share/applications/dsh-browser-cdp.desktop', 0o644)]:
     target = stage / relative
     shutil.copy2(source / 'scripts/kylin' / target.name, target); target.chmod(mode)

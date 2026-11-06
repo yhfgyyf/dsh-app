@@ -8,6 +8,13 @@ import type { BrowserUseState } from '../shared/browser-use.ts';
 import { readContentFindAction, readContentFindId, readContentFindState } from '../shared/content-find.ts';
 
 const api: DesktopAPI = {
+  setNotificationView: sessionId => ipcRenderer.invoke('desktop:notification-view', sessionId),
+  takeNotificationTarget: () => ipcRenderer.invoke('desktop:notification-target'),
+  onNotificationOpen: listener => {
+    const callback = () => listener();
+    ipcRenderer.on('desktop:notification-open', callback);
+    return () => ipcRenderer.removeListener('desktop:notification-open', callback);
+  },
   exportRemoteDiagnostics: () => ipcRenderer.invoke('desktop:remote-diagnostics'),
   getRemoteState: () => ipcRenderer.invoke('desktop:remote-state'),
   remoteAction: action => ipcRenderer.invoke('desktop:remote-action', action),

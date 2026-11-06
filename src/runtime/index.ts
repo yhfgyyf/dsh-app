@@ -11,6 +11,8 @@ import { createCollabBroker } from './collab-transport.ts';
 import { createBrowserUseController } from './browser-use.ts';
 import { prepareLegacySettings, migrateProgressiveOverride, migrateRuntimePluginNames, migrateRetiredScheduleBundle } from './legacy-settings.ts';
 import { desktopIndexInjections } from './index-injections.ts';
+import { installTaskNotifications } from './task-notifications.ts';
+import type { TaskEvent } from '../shared/task-notifications.ts';
 
 const runtimeRoot = process.env.DSH_DESKTOP_RUNTIME_ROOT;
 if (!runtimeRoot || !process.env.DSH_HOME || !process.send) throw new Error('Desktop core requires an owned runtime, data directory and IPC channel.');
@@ -92,7 +94,8 @@ process.on('message', (message: any) => {
     }
   }
 });
-installFailLoud('dsh-desktop', process, () => context?.fiber.dispose());
+const publishTaskEvent = (event: TaskEvent) => { if (process.connected) process.send?.({ type: 'task-event', event }, () => {}); };
+installFailLoud('dsh-desktop', process, () => { publishTaskEvent({ kind: 'runtime-interrupted' }); return context?.fiber.dispose(); });
 try {
   // Sessions, attachments, workspaces and credentials share the CLI's home.
   // Settings are imported once into the app's profile, as required by DSH 0.1.7.
@@ -146,6 +149,7 @@ try {
   await copyFile(join(directory, 'cordis.yml'), rootConfig);
   context = await boot('dsh-desktop', rootConfig, patches, async (ctx: any) => {
     context = ctx;
+    installTaskNotifications(ctx, publishTaskEvent);
     ctx.provide('launchEnvironment', launchEnvironment);
     ctx.provide('profileContext', profileContext);
     ctx.provide('appReady', appReady);

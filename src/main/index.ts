@@ -24,6 +24,9 @@ import { ComputerPreviewWindow } from './computer-preview.ts';
 import { ContentFindWindow } from './content-find.ts';
 import { resetDshComputerPermissions } from './macos-privacy.ts';
 import { installDesktopPermissions } from './permissions.ts';
+import { createNativeTaskNotifications, prepareTaskNotificationIdentity } from './native-task-notifications.ts';
+import { notificationSessionId } from '../shared/task-notifications.ts';
+import type { TaskNotifications } from './task-notifications.ts';
 
 app.setName('DSH Desktop');
 const customData = process.env.DSH_DESKTOP_DATA_DIR;
@@ -51,6 +54,8 @@ else {
   let browserUse: DesktopBrowserUse;
   let computerPreview: ComputerPreviewWindow | undefined;
   let contentFind: ContentFindWindow | undefined;
+  let taskNotifications: TaskNotifications;
+  let notificationTarget: string | null = null;
   let computerSettingRevision = 0;
   let connected = false;
   let connecting = false;
@@ -123,6 +128,10 @@ else {
     window?.show(); window?.focus();
   }
 
+  function updateTaskFocus() {
+    taskNotifications?.setFocused(window?.isFocused() === true && window.isVisible() && !window.isMinimized());
+  }
+
   function installMenu() {
     const template: MenuItemConstructorOptions[] = [
       { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
@@ -155,11 +164,12 @@ else {
     installTextContextMenu(window.webContents, window);
     browser = new SidebarBrowser(window, () => preferences.endpoint, openSidebarLink);
     contentFind = new ContentFindWindow(window, app.getAppPath(), () => sendCommand('search'));
-    window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) browser?.clear(); });
+    window.webContents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) { browser?.clear(); taskNotifications?.setView(undefined); } });
     window.once('ready-to-show', () => window?.show());
     window.on('resize', scheduleSave);
     window.on('move', scheduleSave);
     window.on('focus', () => { void computer.permissions(); });
+    window.on('focus', updateTaskFocus).on('blur', updateTaskFocus).on('show', updateTaskFocus).on('hide', updateTaskFocus).on('minimize', updateTaskFocus).on('restore', updateTaskFocus);
     window.on('close', event => {
       scheduleSave();
       if (!quitting) {
@@ -270,6 +280,11 @@ else {
 
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
+    handle('desktop:notification-view', value => {
+      if (value !== null && !notificationSessionId(value)) throw new Error('通知会话标识无效。');
+      updateTaskFocus(); taskNotifications.setView(value ?? undefined);
+    });
+    handle('desktop:notification-target', () => { const target = notificationTarget; notificationTarget = null; return target; });
     handle('desktop:browser-use-state', () => browserUse.state);
     handle('desktop:browser-use-token', value => browserUse.saveExtensionToken(value));
     handle('desktop:browser-use-enabled', async value => {
@@ -323,7 +338,7 @@ else {
     handle('desktop:connect', connect);
     handle('desktop:connection', () => showConnection());
     handle('desktop:reconnect', () => connect());
-    handle('desktop:ready', () => { connected = true; connectionError = undefined; });
+    handle('desktop:ready', () => { connected = true; connectionError = undefined; if (notificationTarget) window?.webContents.send('desktop:notification-open'); });
     handle('desktop:color-scheme', (scheme: unknown) => {
       if (scheme !== 'light' && scheme !== 'dark') throw new Error('外观参数无效。');
       window?.setBackgroundColor(scheme === 'dark' ? '#181818' : '#f6f6f6');
@@ -350,6 +365,11 @@ else {
 
   app.on('second-instance', restoreWindow);
   app.whenReady().then(async () => {
+    prepareTaskNotificationIdentity();
+    taskNotifications = createNativeTaskNotifications(() => window, id => {
+      notificationTarget = id; restoreWindow();
+      if (window && !window.isDestroyed() && isEndpointDocument(window.webContents.getURL(), preferences.endpoint)) window.webContents.send('desktop:notification-open');
+    });
     preferencesFile = new PreferencesFile(app.getPath('userData'));
     try { preferences = await preferencesFile.load(); }
     catch { connectionError = '已有桌面配置无法读取，原文件已保留。'; }
@@ -370,6 +390,7 @@ else {
       cwd: app.getPath('home'),
       computerRequest: (request, signal) => computer.request(request, signal),
       computerStop: () => computer.stop(),
+      taskEvent: event => taskNotifications.receive(event),
       remoteState: state => remoteAccess?.update(state),
       localRemoteAction: action => remoteAccess.localAction(action),
       pickDirectory: async () => {
@@ -377,7 +398,7 @@ else {
         const result = await dialog.showOpenDialog(window, { title: '选择工作区', buttonLabel: '选择工作区', properties: ['openDirectory', 'createDirectory'] });
         return result.canceled ? null : result.filePaths[0] ?? null;
       },
-      onExit: () => { connected = false; remoteAccess?.update({ status: 'error', error: 'DSH 核心已退出，远程连接已断开。' }); browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
+      onExit: () => { if (!quitting) taskNotifications.receive({ kind: 'runtime-interrupted' }); connected = false; remoteAccess?.update({ status: 'error', error: 'DSH 核心已退出，远程连接已断开。' }); browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
     });
     browserUse = new DesktopBrowserUse(config => runtime.configureBrowserUse(config), state => {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:browser-use-state', state);
@@ -415,6 +436,7 @@ else {
     if (quitting || !preferencesFile) return;
     event.preventDefault();
     quitting = true;
+    taskNotifications?.dispose();
     globalShortcut.unregisterAll();
     updates?.stop();
     remoteAccess?.stop();

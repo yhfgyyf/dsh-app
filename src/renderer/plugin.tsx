@@ -15,6 +15,7 @@ import type { MarketplaceConnection } from './plugin-marketplace.tsx';
 import { installPluginSecurityReview } from './plugin-security.tsx';
 import { installSessionDelete } from './session-delete.tsx';
 import { installContentTools } from './content-tools.tsx';
+import { installTaskNotificationNavigation } from './task-notifications.ts';
 
 type Disposer = () => void;
 type ThemeSnapshot = { active: { colorScheme: 'light' | 'dark' } };
@@ -24,7 +25,7 @@ type StateSource = { subscribe(listener: () => void): Disposer; getSnapshot(): s
 interface DesktopContext extends BrowserContext, DocumentContext {
   effect(factory: () => Disposer, label?: string): void;
   on(event: 'theme/change', listener: (snapshot: ThemeSnapshot) => void): Disposer;
-  get(name: 'uiWorkspace'): { startSession(): void };
+  get(name: 'uiWorkspace'): { startSession(): void; openSession(sessionId: string): void };
   get(name: 'sessions'): { delete(sessionId: string): Promise<void> };
   get(name: 'connection'): MarketplaceConnection & { state: StateSource; reconnect(): void };
   get(name: string): any;
@@ -143,6 +144,7 @@ export async function apply(ctx: DesktopContext) {
   installPluginSecurityReview(ctx);
   installSessionDelete(ctx);
   installContentTools(ctx);
+  installTaskNotificationNavigation(ctx);
   // Configuration stays available while the collaboration workspace is disabled.
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({ name: 'plugins.bundle.config', key: 'dsh-p2p-collab' }, RemoteAccessSettings));
   ctx.effect(() => ctx.theme.overrideTokens(name, Object.fromEntries(Object.entries(palette).map(([key, [light, dark]]) => [key, { light, dark }]))), 'desktop: palette');
