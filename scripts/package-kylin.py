@@ -19,7 +19,10 @@ def copy(a, b):
     subprocess.run(['cp', '-cR' if sys.platform == 'darwin' else '-a', str(a), str(b)], check=True)
 
 # This runtime is the existing Node22 / Electron31 / ABI1 port, not a host-native rebuild.
-assert sha(archive) == '2e8c4586c4fa239050af8e7214e02b0d0089e42d7be0997da2b4381842217491'
+base_version = {
+    '2e8c4586c4fa239050af8e7214e02b0d0089e42d7be0997da2b4381842217491': '0.1.46-1',
+    '855025b3b08b333c761a3247bff20c13083b2418a70862b5068a323e52328294': '0.1.48-1',
+}[sha(archive)]
 assert not work.exists() and not output.exists(), 'Keep previous builds; use new work/output directories'
 version = read(source / 'package.json')['version']
 assert re.fullmatch(r'\d+\.\d+\.\d+', version)
@@ -32,6 +35,7 @@ subprocess.run(['dpkg-deb', '-x', str(archive), str(base)], check=True)
 subprocess.run(['dpkg-deb', '-e', str(archive), str(base / 'DEBIAN')], check=True)
 copy(base, stage)
 app, runtime = (stage / 'opt/dsh-desktop/resources' / name for name in ['app', 'runtime'])
+assert read(runtime / 'kylin-build.json')['debianVersion'] == base_version
 shutil.rmtree(app / 'dist')
 copy(source / 'dist', app / 'dist')
 for path in [app / 'dist', *(app / 'dist').rglob('*')]:
@@ -60,7 +64,7 @@ build.update(app=version, debianVersion=version + '-1', sourceCommit=args.source
     builtAt=datetime.datetime.now(datetime.timezone.utc).isoformat(), basePackageSha256=sha(archive),
     browserUse='Exclusive official CDP attach on loopback 127.0.0.1:9222 with native LBrowser discovery',
     taskNotifications='Completed/interrupted task notifications; LauncherEntry count plus red numeric window/tray icon for UKUI',
-    inheritedValidation={'baseVersion': '0.1.46-1', 'checks': build.get('currentValidation')},
+    inheritedValidation={'baseVersion': base_version, 'checks': build.get('currentValidation')},
     currentValidation={'compiledTargets': build_targets['targets'], 'physicalKylinGuiTested': False})
 save(runtime / 'kylin-build.json', build)
 notes = stage / 'usr/share/doc/dsh-desktop/README.Kylin'
