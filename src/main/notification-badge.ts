@@ -35,3 +35,15 @@ export function notificationBadgePng(count: number): Buffer {
   const header = Buffer.alloc(13); header.writeUInt32BE(size); header.writeUInt32BE(size, 4); header[8] = 8; header[9] = 6;
   return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', header), chunk('IDAT', deflateSync(pixels)), chunk('IEND', Buffer.alloc(0))]);
 }
+
+/** Composite Electron's premultiplied BGRA bitmaps in the icon's top-right corner. */
+export function overlayNotificationBadge(base: Buffer, badge: Buffer): Buffer {
+  if (base.length !== 64 * 64 * 4 || badge.length !== 32 * 32 * 4) throw new Error('Invalid notification icon bitmap');
+  const result = Buffer.from(base);
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    const source = (y * 32 + x) * 4, target = (y * 64 + x + 32) * 4;
+    const remaining = 1 - badge[source + 3] / 255;
+    for (let channel = 0; channel < 4; channel++) result[target + channel] = Math.min(255, Math.round(badge[source + channel] + result[target + channel] * remaining));
+  }
+  return result;
+}

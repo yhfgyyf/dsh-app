@@ -42,8 +42,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\DSH Desktop"; Filename: "{app}\DSH Desktop.exe"
-Name: "{autodesktop}\DSH Desktop"; Filename: "{app}\DSH Desktop.exe"; Tasks: desktopicon
+Name: "{group}\DSH Desktop"; Filename: "{app}\DSH Desktop.exe"; AppUserModelID: "io.dsh.desktop"
+Name: "{autodesktop}\DSH Desktop"; Filename: "{app}\DSH Desktop.exe"; AppUserModelID: "io.dsh.desktop"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\DSH Desktop.exe"; Description: "{cm:LaunchProgram,DSH Desktop}"; Flags: nowait postinstall skipifsilent

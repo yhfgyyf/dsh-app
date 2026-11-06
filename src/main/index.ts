@@ -132,6 +132,20 @@ else {
     taskNotifications?.setFocused(window?.isFocused() === true && window.isVisible() && !window.isMinimized());
   }
 
+  function ensureRemoteTray() {
+    if (remoteTray) return remoteTray;
+    const icon = nativeImage.createFromPath(join(app.getAppPath(), 'dist/renderer/tray.png')).resize({ width: 22, height: 22 });
+    if (icon.isEmpty()) throw new Error('tray_icon_missing');
+    remoteTray = new Tray(icon);
+    remoteTray.setToolTip('DSH Desktop');
+    remoteTray.setContextMenu(Menu.buildFromTemplate([
+      { label: '打开 DSH', click: restoreWindow },
+      { label: '退出 DSH', click: () => app.quit() },
+    ]));
+    remoteTray.on('click', restoreWindow);
+    return remoteTray;
+  }
+
   function installMenu() {
     const template: MenuItemConstructorOptions[] = [
       { label: 'DSH Desktop', submenu: [{ role: 'about', label: '关于 DSH Desktop' }, { label: '设置…', accelerator: 'CmdOrCtrl+,', click: () => sendCommand('settings') }, { label: '运行状态…', accelerator: 'CmdOrCtrl+Shift+,', click: () => { void showConnection(); } }, { type: 'separator' }, { role: 'hide', label: '隐藏 DSH Desktop' }, { role: 'hideOthers', label: '隐藏其他' }, { role: 'unhide', label: '显示全部' }, { type: 'separator' }, { role: 'quit', label: '退出 DSH Desktop' }] },
@@ -175,17 +189,7 @@ else {
       if (!quitting) {
         event.preventDefault();
         try {
-          if (!remoteTray) {
-            const icon = nativeImage.createFromPath(join(app.getAppPath(), 'dist/renderer/tray.png')).resize({ width: 22, height: 22 });
-            if (icon.isEmpty()) throw new Error('tray_icon_missing');
-            remoteTray = new Tray(icon);
-            remoteTray.setToolTip('DSH Desktop');
-            remoteTray.setContextMenu(Menu.buildFromTemplate([
-              { label: '打开 DSH', click: restoreWindow },
-              { label: '退出 DSH', click: () => app.quit() },
-            ]));
-            remoteTray.on('click', restoreWindow);
-          }
+          ensureRemoteTray();
           if (process.platform === 'darwin') window?.minimize();
           else window?.hide();
         } catch { window?.minimize(); }
@@ -369,6 +373,11 @@ else {
     taskNotifications = createNativeTaskNotifications(() => window, id => {
       notificationTarget = id; restoreWindow();
       if (window && !window.isDestroyed() && isEndpointDocument(window.webContents.getURL(), preferences.endpoint)) window.webContents.send('desktop:notification-open');
+    }, (count, image) => {
+      window?.setIcon(image);
+      if (count) ensureRemoteTray();
+      remoteTray?.setImage(image);
+      remoteTray?.setToolTip(count ? `DSH Desktop · ${count} 个会话有未读任务结果` : 'DSH Desktop');
     });
     preferencesFile = new PreferencesFile(app.getPath('userData'));
     try { preferences = await preferencesFile.load(); }

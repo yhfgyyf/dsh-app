@@ -59,12 +59,15 @@ build = read(runtime / 'kylin-build.json')
 build.update(app=version, debianVersion=version + '-1', sourceCommit=args.source_commit,
     builtAt=datetime.datetime.now(datetime.timezone.utc).isoformat(), basePackageSha256=sha(archive),
     browserUse='Exclusive official CDP attach on loopback 127.0.0.1:9222 with native LBrowser discovery',
+    taskNotifications='Completed/interrupted task notifications; LauncherEntry count plus red numeric window/tray icon for UKUI',
     inheritedValidation={'baseVersion': '0.1.46-1', 'checks': build.get('currentValidation')},
     currentValidation={'compiledTargets': build_targets['targets'], 'physicalKylinGuiTested': False})
 save(runtime / 'kylin-build.json', build)
 notes = stage / 'usr/share/doc/dsh-desktop/README.Kylin'
 notes.write_text('DSH Desktop ' + version + ' / core 0.2.2-alpha.2 / Kylin V10 old-world ABI1\n\n'
     'Browser Use: see README.Browser-Use. Electron31.7.7, Node22.16.0 and Python3.12.14 retained.\n'
+    'Background tasks notify on completion or unexpected interruption. Deliberate Stop is silent.\n'
+    'Unread session counts use LauncherEntry plus a red numeric window/tray icon for UKUI.\n'
     'Node22 remains an exception to the upstream Node>=24.9 requirement.\n'
     'No user extensions are preinstalled; existing user profiles/plugins are preserved.\n'
     'Physical Kylin/LBrowser GUI has not been tested for this package.\n')

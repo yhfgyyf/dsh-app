@@ -19,6 +19,9 @@ if ($setup.ExitCode -ne 0) {
 $exe = Join-Path $install 'DSH Desktop.exe'
 $node = Join-Path $install 'resources/runtime/bin/node.exe'
 if (!(Test-Path $exe) -or !(Test-Path $node)) { throw 'Installed binaries are missing' }
+$shortcut = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/DSH Desktop/DSH Desktop.lnk'
+$shortcutItem = (New-Object -ComObject Shell.Application).NameSpace((Split-Path $shortcut)).ParseName((Split-Path $shortcut -Leaf))
+if (!$shortcutItem -or $shortcutItem.ExtendedProperty('System.AppUserModel.ID') -ne 'io.dsh.desktop') { throw 'Installed shortcut lacks the task notification / overlay identity' }
 & node (Join-Path $root 'scripts/verify-windows-runtime.ts') $install $artifact.app
 if ($LASTEXITCODE -ne 0) { throw 'Installed runtime verification failed' }
 $env:DSH_HOME = $config
@@ -77,5 +80,6 @@ $uninstall = Start-Process -FilePath (Join-Path $install 'unins000.exe') -Argume
 if ($uninstall.ExitCode -ne 0 -or (Test-Path $exe)) { throw 'Silent uninstall failed' }
 if (!(Test-Path $sentinel)) { throw 'Uninstall removed user data' }
 $report = @{ status = 'pass'; update = $updateReport; checks = @('silent per-user installation into a path with spaces', 'installed app.asar and complete runtime match package', 'installed external content-find window and preload match production build', 'installed runtime excludes dsh-p2p-collab and contains an anonymous local-plugins manifest', 'installed core version matches the pinned DSH version', 'restart icon completes an external update and retains a complete previous-app backup', 'updated app.asar and complete runtime match package', 'bundled Node runs without system Node', 'updated application automatically creates a native window and owned core', 'installed app initializes an anonymous local-plugins manifest in its active profile', 'closing the window preserves the app and protected Host transport', 'reopening restores the same application window', 'explicit Quit through the real application menu releases its core', 'silent uninstall preserves user data') }
+$report.checks += 'installed Start Menu shortcut carries io.dsh.desktop notification / overlay identity'
 $report | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $root '.test-data/windows-installer-report.json')
 $report | ConvertTo-Json -Depth 4 | Write-Output

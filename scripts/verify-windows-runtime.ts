@@ -14,6 +14,8 @@ for (const path of ['dist/renderer/content-find/index.html', 'dist/content-find-
 assert.doesNotMatch(extractFile(join(installed, 'resources/app.asar'), join('dist', 'renderer', 'theme.css')).toString(), /\.desktop-content-find-scope|\.desktop-content-find\s*\{/);
 assert.deepEqual(await runtimeManifest(join(installed, 'resources/runtime')), await runtimeManifest(join(packaged, 'resources/runtime')));
 const runtime = join(installed, 'resources/runtime');
+assert.match(extractFile(join(installed, 'resources/app.asar'), join('dist', 'main', 'index.cjs')).toString(), /setOverlayIcon/);
+for (const name of ['app/task-notifications.ts', 'node_modules/dsh-desktop-surface/task-notifications.js']) assert.equal(existsSync(join(runtime, name)), true, name);
 assert.deepEqual(JSON.parse(await readFile(join(runtime, 'local-plugins/package.json'), 'utf8')), { private: true });
 for (const path of ['plugins/dsh-p2p-collab', 'node_modules/dsh-p2p-collab']) assert.equal(existsSync(join(runtime, path)), false);
 assert.equal(JSON.parse(await readFile(join(runtime, 'package.json'), 'utf8')).dependencies?.['dsh-p2p-collab'], undefined);

@@ -12,7 +12,18 @@ mkdirSync(join(data, 'core'), { recursive: true });
 process.env.DSH_DESKTOP_DATA_DIR = data;
 process.env.DSH_DESKTOP_CONFIG_HOME = join(data, 'core');
 process.env.DSH_DESKTOP_NOTIFICATION_KEY = 'owned-local-fixture';
-const report = { passed: false, checks: [], failures: [], badgeValues: [], notificationCalls: [], nativeShown: 0, nativeFailed: 0, nativeFailureReasons: [], modelRequests: 0 };
+const report = { platform: process.platform, badgeBackend: process.platform === 'win32' ? 'BrowserWindow.setOverlayIcon' : process.platform === 'darwin' ? 'app.dock.setBadge' : 'LauncherEntry + window/tray icon', passed: false, checks: [], failures: [], badgeValues: [], notificationCalls: [], nativeShown: 0, nativeFailed: 0, nativeFailureReasons: [], modelRequests: 0 };
+if (process.platform === 'win32') {
+  const setOverlayIcon = BrowserWindow.prototype.setOverlayIcon;
+  BrowserWindow.prototype.setOverlayIcon = function (image, description) {
+    if (image) { assert.equal(image.isEmpty(), false); writeFileSync(join(data, 'native-overlay.png'), image.toPNG()); }
+    report.badgeValues.push(image ? description.match(/^\d+/)[0] : '');
+    return setOverlayIcon.call(this, image, description);
+  };
+} else if (process.platform === 'linux') {
+  const setBadgeCount = app.setBadgeCount.bind(app);
+  app.setBadgeCount = count => { report.badgeValues.push(count ? String(count) : ''); return setBadgeCount(count); };
+}
 const notices = [], handlers = new Map();
 let corePid, finished = false, testing = false;
 const originalSpawn = childProcess.spawn;
@@ -101,6 +112,10 @@ ipcMain.handle = (channel, fn) => {
 };
 async function run(event) {
   const win = BrowserWindow.fromWebContents(event.sender);
+  const background = async () => {
+    if (process.platform === 'darwin') win.hide(); else win.minimize();
+    await until(() => !win.isFocused(), 'App did not enter the background');
+  };
   const js = source => event.sender.executeJavaScript(source);
   const rpc = (method, args) => js(`(async () => {
     const response = await fetch('/api/' + ${JSON.stringify(method)}, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({type:'client-request',rpcId:${JSON.stringify(randomUUID())},method:${JSON.stringify(method)},payload:{args:${JSON.stringify(args)}}}) });
@@ -116,7 +131,7 @@ async function run(event) {
   await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:notification-view')({ ...event, sender: {} }, null)));
   await assert.rejects(Promise.resolve().then(() => handlers.get('desktop:notification-view')(event, '../wrong')));
   report.checks.push('Task outcomes arrive only from the owned core; notification-view IPC rejects foreign senders and invalid ids');
-  const completed = await create('Native completion'); win.hide();
+  const completed = await create('Native completion'); await background();
   await prompt(completed, 'NOTIFICATION_COMPLETE');
   await until(() => notices.length === 1 && badge() === '1', 'Background completion notification/badge missing');
   assert.equal(notices[0].title, '任务已完成');
@@ -126,7 +141,7 @@ async function run(event) {
     assert(report.nativeShown > 0, 'System notification presentation was not authorized');
     await sleep(Number(process.env.DSH_NOTIFICATION_PRESENTATION_PAUSE_MS ?? 0));
   }
-  report.checks.push('A real streamed model turn completes in the owned Host and creates one native notification and Dock badge 1');
+  report.checks.push('A real streamed model turn completes in the owned Host and creates one native notification and platform badge 1');
   app.focus({ steal: true }); notices[0].emit('click');
   await until(async () => await js(`!!document.querySelector('[data-conversation-session="${completed}"] [contenteditable="true"]')`), 'Notification click did not navigate to its conversation');
   await until(() => badge() === '', 'Reading the notified conversation did not clear the badge');
@@ -136,7 +151,7 @@ async function run(event) {
   await until(() => report.modelRequests > before, 'Foreground model request did not run'); await stopped(completed); await sleep(200);
   assert.equal(notices.length, 1);
   report.checks.push('Notification click uses the real workspace navigator and read clearing; a focused foreground completion stays quiet');
-  const failed = await create('Native interrupted'); win.hide(); await prompt(failed, 'NOTIFICATION_ERROR');
+  const failed = await create('Native interrupted'); await background(); await prompt(failed, 'NOTIFICATION_ERROR');
   await until(() => notices.length === 2 && badge() === '1', 'Model failure notification missing');
   assert.equal(notices[1].title, '任务意外中断');
   assert(!notices[1].body.includes('invalid_request_error'));
@@ -161,6 +176,6 @@ async function run(event) {
   const overlay = nativeImage.createFromPath(join(data, 'badge-12.png'));
   assert.equal(overlay.isEmpty(), false); assert.deepEqual(overlay.getSize(), { width: 32, height: 32 });
   report.checks.push('Electron independently decodes the red Windows numeric-overlay image');
-  report.systemPresentation = { dispatched: notices.length, shown: report.nativeShown, failed: report.nativeFailed, note: 'System presentation is separate from native dispatch and Dock badge verification' };
+  report.systemPresentation = { dispatched: notices.length, shown: report.nativeShown, failed: report.nativeFailed, note: 'System presentation is separate from native dispatch and platform badge verification' };
 }
 require('../dist/main/index.cjs');

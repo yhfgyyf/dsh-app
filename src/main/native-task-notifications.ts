@@ -1,8 +1,8 @@
 import { app, nativeImage, Notification, shell } from 'electron';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, NativeImage } from 'electron';
 import { join, resolve } from 'node:path';
 import { TaskNotifications } from './task-notifications.ts';
-import { notificationBadgePng } from './notification-badge.ts';
+import { notificationBadgePng, overlayNotificationBadge } from './notification-badge.ts';
 
 export function prepareTaskNotificationIdentity() {
   if (process.platform === 'linux') app.setDesktopName('dsh-desktop.desktop');
@@ -17,13 +17,20 @@ export function prepareTaskNotificationIdentity() {
   } catch { /* Portable runs may have no installer shortcut. */ }
 }
 
-export function createNativeTaskNotifications(window: () => BrowserWindow | undefined, openSession: (id: string) => void) {
+export function createNativeTaskNotifications(window: () => BrowserWindow | undefined, openSession: (id: string) => void, linuxBadge: (count: number, image: NativeImage) => void) {
   return new TaskNotifications({
     badge(count) {
       try {
         if (process.platform === 'darwin') app.dock?.setBadge(count ? String(count) : '');
         else if (process.platform === 'win32') window()?.setOverlayIcon(count ? nativeImage.createFromBuffer(notificationBadgePng(count)) : null, count ? `${count} 个会话有未读任务结果` : '');
-        else app.setBadgeCount(count);
+        else {
+          app.setBadgeCount(count);
+          // UKUI does not consistently implement LauncherEntry badges. Also update
+          // its window icon and the existing DSH tray, without another tray entry.
+          const base = nativeImage.createFromPath(join(app.getAppPath(), 'dist/renderer/tray.png')).resize({ width: 64, height: 64 });
+          const image = count ? nativeImage.createFromBitmap(overlayNotificationBadge(base.toBitmap(), nativeImage.createFromBuffer(notificationBadgePng(count)).toBitmap()), { width: 64, height: 64 }) : base;
+          linuxBadge(count, image);
+        }
       } catch { console.warn('任务角标未能更新。'); }
     },
     notify(notice, open) {

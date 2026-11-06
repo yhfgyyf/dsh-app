@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { TaskNotifications } from '../src/main/task-notifications.ts';
 import { installTaskNotifications } from '../src/runtime/task-notifications.ts';
 import { readTaskEvent, notificationSessionId, type TaskEvent, type TaskNotice } from '../src/shared/task-notifications.ts';
-import { notificationBadgePng } from '../src/main/notification-badge.ts';
+import { notificationBadgePng, overlayNotificationBadge } from '../src/main/notification-badge.ts';
 import { inflateSync } from 'node:zlib';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,19 @@ function setup() {
   const end = (id: string, turn = 1, outcome: 'completed' | 'interrupted' | 'stopped' = 'completed') => control.receive({ kind: 'ended', sessionId: id, turn, title: id, outcome });
   return { control, badges, notices, opens, clicks, closed, start, end };
 }
+
+test('Linux fallback keeps the app icon and composites only its top-right numeric badge', () => {
+  const base = Buffer.alloc(64 * 64 * 4), badge = Buffer.alloc(32 * 32 * 4);
+  for (let i = 0; i < base.length; i += 4) base.set([20, 40, 60, 255], i);
+  badge.set([30, 30, 124, 128], 0); // Premultiplied half-transparent red.
+  badge.set([255, 255, 255, 255], 4);
+  const result = overlayNotificationBadge(base, badge);
+  assert.deepEqual([...result.subarray(32 * 4, 32 * 4 + 8)], [40, 50, 154, 255, 255, 255, 255, 255]);
+  assert.deepEqual(result.subarray(0, 32 * 4), base.subarray(0, 32 * 4));
+  assert.deepEqual(result.subarray(32 * 64 * 4), base.subarray(32 * 64 * 4));
+  assert.deepEqual([...base.subarray(32 * 4, 32 * 4 + 4)], [20, 40, 60, 255]);
+  assert.throws(() => overlayNotificationBadge(Buffer.alloc(4), badge));
+});
 
 test('background tasks notify once per live turn and badge counts unread conversations', () => {
   const f = setup(); f.end('orphan'); assert.equal(f.control.count, 0);

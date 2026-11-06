@@ -79,6 +79,9 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
+      - name: Native task completion, interruptions and numeric taskbar overlays
+        timeout-minutes: 3
+        run: npm run test:task-notifications
       - name: Structured page injections and the original Whale widget
         timeout-minutes: 3
         shell: pwsh
@@ -182,6 +185,9 @@ jobs:
             .test-data/index-injections-*/whale-boot-*.png
             .test-data/workspace-dependencies-latest.json
             .test-data/remote-settings-latest.json
+            .test-data/task-notifications-latest.json
+            .test-data/task-notifications-*/report.json
+            .test-data/task-notifications-*/*.png
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
