@@ -184,6 +184,7 @@ jobs:
             .test-data/index-injections.json
             .test-data/index-injections-*/whale-boot-*.png
             .test-data/workspace-dependencies-latest.json
+            .test-data/workspace-dependencies-failure.json
             .test-data/remote-settings-latest.json
             .test-data/task-notifications-latest.json
             .test-data/task-notifications-*/report.json

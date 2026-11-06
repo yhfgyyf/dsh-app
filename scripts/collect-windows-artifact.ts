@@ -1,5 +1,5 @@
 import { cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname, basename, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const artifact = JSON.parse(await readFile(join(root, 'release/latest-windows.json'), 'utf8'));
@@ -27,7 +27,7 @@ const voice = JSON.parse(await readFile(join(root, '.test-data/voice-input-lates
 if (voice.platform !== 'win32' || voice.errors.length || voice.checks.length !== 4) throw new Error('Windows microphone verification did not pass.');
 await writeFile(join(output, 'windows-voice-input-report.json'), JSON.stringify(voice, null, 2));
 const workspaceDependencies = JSON.parse(await readFile(join(root, '.test-data/workspace-dependencies-latest.json'), 'utf8'));
-if (workspaceDependencies.status !== 'pass' || workspaceDependencies.platform !== 'win32') throw new Error('Packaged workspace dependency verification did not pass.');
+if (workspaceDependencies.status !== 'pass' || workspaceDependencies.platform !== 'win32' || resolve(workspaceDependencies.runtime) !== resolve(artifact.app, 'resources/runtime')) throw new Error('Packaged workspace dependency verification did not pass.');
 await cp(join(root, '.test-data/workspace-dependencies-latest.json'), join(output, 'windows-workspace-dependencies-report.json'));
 await cp(join(root, 'examples/office-smoke.py'), join(output, 'office-smoke.py'));
 await cp(join(root, 'examples/README.md'), join(output, 'Office-library-test-README.md'));
