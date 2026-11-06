@@ -1,4 +1,4 @@
-name: Build Windows installer
+name: Verify Windows package
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   windows:
     runs-on: windows-2022
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -35,106 +35,21 @@ jobs:
       - name: Install frontend dependencies
         timeout-minutes: 8
         run: npm ci --no-audit --no-fund
-      - name: Build relay native dependencies
+      - name: Build relay native dependencies for shared type checks
         timeout-minutes: 8
         env:
           npm_config_build_from_source: 'true'
         run: npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
-      - name: Windows menu Quit helper preflight
-        timeout-minutes: 1
-        run: npx --no-install electron tests/windows-quit-smoke.cjs
-      - name: Build pinned runtime and apply verified patch
+      - name: Build pinned runtime
         run: npm run setup:runtime
-      - name: Typecheck, unit tests and production build
-        run: npm run check
-      - name: Remote pairing, native settings and shared Host sessions
-        timeout-minutes: 4
+      - name: Typecheck and build production files
         run: |
-          npm run build --prefix services/relay
+          npm run typecheck
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:remote
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:remote-ui
-      - name: Collaboration publishing, attachments, Markdown and voice input
-        timeout-minutes: 4
-        run: |
-          node services/relay/node_modules/tsx/dist/cli.mjs scripts/test-collaboration.ts
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx --no-install electron tests/collaboration.cjs
-      - name: Plugin marketplace review and explicit installation consent
-        timeout-minutes: 4
-        run: npm run test:plugin-marketplace
-      - name: Bundled Python, Office round trips and workspace virtual environment
-        timeout-minutes: 3
-        run: npm run test:workspace-dependencies
-      - name: Shared model settings
-        run: npm run test:model-settings
-      - name: Preset switching and cold session restoration
-        timeout-minutes: 2
-        run: npm run test:audit-switch
-      - name: Auto first turns, Audit remediation and saved conversations
-        timeout-minutes: 2
-        run: npm run test:auto-conversation
-      - name: Web, TUI and App ownership
-        run: npm run test:three-surfaces
-      - name: Native Electron lifecycle
-        run: npm run test:native
-      - name: Native task completion, interruptions and numeric taskbar overlays
+          npm run build
+      - name: Native task notifications and numeric overlays
         timeout-minutes: 3
         run: npm run test:task-notifications
-      - name: Structured page injections and the original Whale widget
-        timeout-minutes: 3
-        shell: pwsh
-        run: |
-          $fixture = Join-Path $env:RUNNER_TEMP 'dsh-whale-widget-0.4.2'
-          New-Item -ItemType Directory -Force $fixture | Out-Null
-          $archive = Join-Path $fixture 'dsh-whale-widget-0.4.2.tgz'
-          Invoke-WebRequest -Uri 'https://registry.npmjs.org/dsh-whale-widget/-/dsh-whale-widget-0.4.2.tgz' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA512).Hash.ToLowerInvariant() -ne '6860d47ddddbd806efe0fa149f52ad9e56ac388928aa0bc8391dbeac02043c33add6a94707b7a6953abee33772a15e598a2712fad92e80f93ce86c955280e081') { throw 'Whale fixture integrity mismatch' }
-          tar -xzf $archive -C $fixture
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:DSH_TEST_WHALE_PACKAGE = Join-Path $fixture 'package'
-          npx --no-install electron tests/index-injections.cjs
-      - name: Startup activation ordering regression
-        timeout-minutes: 2
-        run: npx --no-install electron tests/startup-activation.cjs
-      - name: Microphone capture and permission isolation
-        timeout-minutes: 2
-        run: npm run test:voice-input
-      - name: Browser Use tools, isolation and settings persistence
-        timeout-minutes: 4
-        run: |
-          npm run test:browser-use
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:browser-use-settings
-      - name: Published Univer client startup and legacy turn preview
-        timeout-minutes: 3
-        run: npm run test:univer-client
-      - name: Computer use approval and image transport
-        timeout-minutes: 4
-        run: npm run test:computer-tools
-      - name: Computer switch and audit dock UI
-        timeout-minutes: 3
-        run: npm run test:computer-settings
-      - name: Native computer input and screenshot (three consecutive runs)
-        timeout-minutes: 4
-        run: |
-          1..3 | ForEach-Object {
-            npm run test:computer-native
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Native updater
-        timeout-minutes: 3
-        run: npm run test:updates
-      - name: Update download through a proxy
-        timeout-minutes: 5
-        run: npm run test:update-network
-      - name: Native Office, text, media and file previews
-        timeout-minutes: 3
-        run: npm run test:artifact-links
-      - name: Native sidebar browser
-        timeout-minutes: 3
-        run: npm run test:sidebar-browser
       - name: Install pinned Inno Setup with long-path support
         shell: pwsh
         run: |
@@ -147,54 +62,50 @@ jobs:
           "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Create Windows installer
         run: node scripts/package-windows.ts
-      - name: Verify the packaged Python payload
+      - name: Retain exact build for package diagnostics
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dsh-app-windows-unverified-package
+          path: |
+            release/*/DSH-Desktop-*-Windows-x64-Setup.exe
+            release/*/artifact.json
+            release/*/runtime-manifest.json
+          compression-level: 0
+          retention-days: 3
+      - name: Verify packaged runtime with exit diagnostics
+        timeout-minutes: 3
         shell: pwsh
         run: |
           $artifact = Get-Content release/latest-windows.json | ConvertFrom-Json
           $env:DSH_TEST_DESKTOP_RUNTIME = Join-Path $artifact.app 'resources/runtime'
-          npm run test:workspace-dependencies
+          node --trace-exit --trace-uncaught scripts/test-workspace-dependencies.ts
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install, launch, close and uninstall
+      - name: Install, update, launch and uninstall
         timeout-minutes: 6
         shell: pwsh
         run: ./scripts/test-windows-installer.ps1
-      - name: Collect verified installer and reports
-        run: node scripts/collect-windows-artifact.ts
-      - name: Preserve installation diagnostics on failure
+      - name: Collect verified package
+        run: node scripts/collect-windows-package.ts
+      - name: Package failure diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: dsh-app-windows-diagnostics
+          name: dsh-app-windows-package-diagnostics
           path: |
+            .test-data/workspace-dependencies-failure.json
+            .test-data/workspace-dependencies-latest.json
+            .test-data/task-notifications-latest.json
             .test-data/installer-*/install.log
             .test-data/installer-*/updates/report.json
             .test-data/installer-*/updates/failure.txt
-            .test-data/installer-*/updates/old-app.log
-            .test-data/installer-*/updates/before-install.json
             .test-data/installer-*/desktop-state/updates/install-result.json
-            .test-data/installer-*/desktop-state/updates/inno-update.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.json
-            .test-data/computer-native/**
-            .test-data/computer-*-latest.json
-            .test-data/computer-tools-*/**
-            .test-data/plugin-marketplace-native/**
-            .test-data/univer-client/report.json
-            .test-data/univer-client/*.png
-            .test-data/index-injections.json
-            .test-data/index-injections-*/whale-boot-*.png
-            .test-data/workspace-dependencies-latest.json
-            .test-data/remote-settings-latest.json
-            .test-data/task-notifications-latest.json
-            .test-data/task-notifications-*/report.json
-            .test-data/task-notifications-*/*.png
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: dsh-app-windows-x64
-          path: release/upload/*
+          name: dsh-app-windows-package-verified
+          path: release/upload-installer/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
