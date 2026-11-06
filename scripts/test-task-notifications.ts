@@ -10,9 +10,11 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 await mkdir(join(root, '.test-data'), { recursive: true });
 const data = await mkdtemp(join(root, '.test-data/task-notifications-'));
 await writeFile(join(data, 'badge-12.png'), notificationBadgePng(12));
+const env: NodeJS.ProcessEnv = { ...process.env, DSH_NOTIFICATION_TEST_DATA: data };
+delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(createRequire(import.meta.url)('electron'),
   [join(root, 'tests/task-notifications-native.cjs')], {
-    cwd: root, env: { ...process.env, ELECTRON_RUN_AS_NODE: '', DSH_NOTIFICATION_TEST_DATA: data }, stdio: 'inherit',
+    cwd: root, env, stdio: 'inherit',
   });
 const code = await new Promise<number | null>((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
 const report = JSON.parse(await readFile(join(data, 'report.json'), 'utf8'));
