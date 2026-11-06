@@ -5,11 +5,23 @@ import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { DesktopRuntime } from '../src/main/runtime.ts';
 import { connectFixture } from '../tests/fixture-client.ts';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const runtime = resolve(process.env.DSH_TEST_DESKTOP_RUNTIME ?? join(root, '.runtime'));
+let phase = 'resolve-bundled-runtime', completed = false, failure: string | undefined;
+const diagnostic = join(root, '.test-data/workspace-dependencies-failure.json');
+mkdirSync(join(root, '.test-data'), { recursive: true });
+const checkpoint = (value: string) => { phase = value; console.log('[workspace-dependencies] ' + phase); };
+process.on('uncaughtExceptionMonitor', error => { failure = String(error.stack ?? error).replace(/token=[^\s&"']+/g, 'token=[redacted]'); });
+process.on('exit', code => {
+  if (code === 0 && completed) return;
+  writeFileSync(diagnostic, JSON.stringify({ status: 'fail', platform: process.platform, runtime, phase, exitCode: code, error: failure }, null, 2));
+  process.exitCode = code || 1;
+});
+checkpoint(phase);
 const requireRuntime = createRequire(join(runtime, 'package.json'));
 const { resolvePrimaryRuntime } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/dsh-tool-workspace-dependencies')).href);
 const paths = await resolvePrimaryRuntime(runtime);
@@ -36,12 +48,14 @@ const core = new DesktopRuntime({ runtimeRoot: runtime, entry: join(runtime, 'ap
 let client: Awaited<ReturnType<typeof connectFixture>> | undefined;
 const modes = ['standard', 'ptc', 'minimal', 'cordis', 'auto', 'audit'];
 try {
+  checkpoint('start-host');
   const ready = await core.start();
   const connection = join(data, 'connection.json');
   await writeFile(connection, JSON.stringify({ owner: 'dsh-desktop-test', ...ready }), { mode: 0o600 });
   client = await connectFixture(connection);
   assert.deepEqual(await client.rpc('schedule/catalog'), [], 'The promoted Schedule service must load in the Desktop Host');
   for (const mode of modes) {
+    checkpoint('host-tools-' + mode);
     const sessionId = (await client.rpc('session/create', { request: { cwd: data, agentPreset: mode } })).sessionId;
     const catalog: string[] = await client.rpc('catalog', { sessionId }, false, '/workspace-dependency-test');
     const calls: readonly (readonly [string, Record<string, unknown>])[] = catalog.includes('run_code') ? [
@@ -65,18 +79,24 @@ env.PYTHONHOME = join(data, 'invalid-python-home');
 env.PYTHONPATH = join(data, 'invalid-python-path');
 env.PYTHONDONTWRITEBYTECODE = '1';
 const output = join(data, '中文空格 Office outputs');
+checkpoint('office-round-trip');
 await run(paths.python, ['-I', '-B', paths.officeExample, '--output', output, '--node', paths.node], { env, windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
 const office = JSON.parse(await readFile(join(output, '测试报告.json'), 'utf8'));
 assert.equal(office.passed, true);
+checkpoint('bundled-pip-check');
 await run(paths.python, ['-I', '-B', '-m', 'pip', 'check'], { env, windowsHide: true });
 const venv = join(data, 'workspace venv');
+checkpoint('create-workspace-venv');
 await run(paths.python, ['-I', '-B', '-m', 'venv', '--copies', '--system-site-packages', venv], { env, windowsHide: true });
 const venvPython = join(venv, ...(process.platform === 'win32' ? ['Scripts', 'python.exe'] : ['bin', 'python3']));
+checkpoint('workspace-venv-imports');
 await run(venvPython, ['-I', '-B', '-c', 'import sys,openpyxl,docx,pptx,PIL,lxml,pypdf,reportlab; assert sys.prefix != sys.base_prefix; print("venv-ok")'], { env, windowsHide: true });
 await run(venvPython, ['-I', '-B', '-m', 'pip', 'check'], { env, windowsHide: true });
+checkpoint('bundled-pnpm');
 const pnpm = await run(paths.node, ['--expose-internals', paths.pnpm, '--version'], { env, windowsHide: true });
 assert.match(pnpm.stdout.trim(), /^11\.7\.0$/);
 const report = { status: 'pass', platform: process.platform, arch: process.arch, runtime, output, checks: [...office.checks, 'pip dependency consistency', 'workspace venv creation, inherited libraries and pip', 'bundled pnpm through bundled Node', 'no host Python/Node in PATH', 'actual DSH discovery/execution through Native or Code in all six presets'], modes, office };
 await writeFile(join(data, 'report.json'), JSON.stringify(report, null, 2));
 await writeFile(join(root, '.test-data/workspace-dependencies-latest.json'), JSON.stringify(report, null, 2));
+completed = true;
 console.log(JSON.stringify(report, null, 2));

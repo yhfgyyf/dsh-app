@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = fileURLToPath(new URL('..', import.meta.url));
+const artifact = JSON.parse(await readFile(join(root, 'release/latest-windows.json'), 'utf8'));
+const output = join(root, 'release/upload-installer');
+await mkdir(output, { recursive: true });
+const workspace = JSON.parse(await readFile(join(root, '.test-data/workspace-dependencies-latest.json'), 'utf8'));
+assert.equal(workspace.status, 'pass'); assert.equal(workspace.platform, 'win32');
+assert.equal(resolve(workspace.runtime), resolve(artifact.app, 'resources/runtime'));
+const notifications = JSON.parse(await readFile(join(root, '.test-data/task-notifications-latest.json'), 'utf8'));
+assert.equal(notifications.passed, true); assert.equal(notifications.platform, 'win32');
+assert.equal(notifications.checks.length, 7); assert.deepEqual(notifications.failures, []);
+assert(notifications.badgeValues.includes('3'));
+const installed = JSON.parse(await readFile(join(root, '.test-data/windows-installer-report.json'), 'utf8'));
+assert.equal(installed.status, 'pass');
+await cp(artifact.installer, join(output, basename(artifact.installer)));
+await cp(join(dirname(artifact.installer), 'runtime-manifest.json'), join(output, 'runtime-manifest-windows-x64.json'));
+await cp(join(notifications.data, 'native-overlay.png'), join(output, 'windows-taskbar-overlay.png'));
+for (const [name, value] of [['windows-workspace-dependencies-report.json', workspace], ['windows-task-notifications-report.json', { ...notifications, data: undefined }], ['windows-installer-report.json', installed], ['windows-artifact.json', { ...artifact, app: undefined, installer: basename(artifact.installer) }]]) await writeFile(join(output, name), JSON.stringify(value, null, 2));
+await writeFile(join(output, 'SHA256SUMS-windows.txt'), `${artifact.sha256}  ${basename(artifact.installer)}\n`);
