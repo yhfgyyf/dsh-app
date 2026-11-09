@@ -189,6 +189,9 @@ jobs:
             .test-data/task-notifications-latest.json
             .test-data/task-notifications-*/report.json
             .test-data/task-notifications-*/*.png
+            .test-data/collaboration-*/report.json
+            .test-data/collaboration-*/host.log
+            .test-data/collaboration-*/enabled.json
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7

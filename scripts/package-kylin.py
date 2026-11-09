@@ -5,6 +5,7 @@ import argparse, datetime, hashlib, json, math, os, re, shutil, stat, struct, su
 parser = argparse.ArgumentParser(description=__doc__)
 for name in ['base', 'source', 'source-commit', 'work', 'output']:
     parser.add_argument('--' + name, required=True)
+parser.add_argument('--runtime-source', help='Fresh tested runtime whose JS dependency graph replaces the previous core')
 args = parser.parse_args()
 source, work, output = (Path(value).resolve() for value in [args.source, args.work, args.output])
 archive = Path(args.base).resolve()
@@ -22,6 +23,7 @@ def copy(a, b):
 base_version = {
     '2e8c4586c4fa239050af8e7214e02b0d0089e42d7be0997da2b4381842217491': '0.1.46-1',
     '855025b3b08b333c761a3247bff20c13083b2418a70862b5068a323e52328294': '0.1.48-1',
+    'e2b81b7439b45e0b716362fa416b94ca15b10c368d4bd8540700f8b1ec3f450c': '0.1.49-1',
 }[sha(archive)]
 assert not work.exists() and not output.exists(), 'Keep previous builds; use new work/output directories'
 version = read(source / 'package.json')['version']
@@ -36,6 +38,62 @@ subprocess.run(['dpkg-deb', '-e', str(archive), str(base / 'DEBIAN')], check=Tru
 copy(base, stage)
 app, runtime = (stage / 'opt/dsh-desktop/resources' / name for name in ['app', 'runtime'])
 assert read(runtime / 'kylin-build.json')['debianVersion'] == base_version
+core = read(source / 'runtime/dependencies.json')['dsh']
+runtime_upgrade = None
+if args.runtime_source:
+    fresh = Path(args.runtime_source).resolve()
+    assert read(fresh / 'node_modules/@deepseek-ai/dsh/package.json')['version'] == core
+    # These ABI1 builds are deliberately retained at the versions recorded by
+    # the verified base. Never copy native binaries from the build host.
+    ports = {'koffi', 'node-pty', 'sharp', 'node-addon-require-builtin',
+        '@deepseek-ai/node-addon-system-linux-loong64', '@vscode/ripgrep-linux-loong64'}
+    def packages(root):
+        paths = list(root.glob('*/package.json')) + list(root.glob('@*/*/package.json'))
+        return {read(p)['name']: p.parent for p in paths}
+    old_packages, new_packages = packages(runtime / 'node_modules'), packages(fresh / 'node_modules')
+    assert all(name in old_packages for name in ports)
+    speech = '@deepseek-ai/dsh-experimental-speech-to-text-sensevoice'
+    speech_originals = {'index.js': '286792bd82085586fbb0869aa32b3e3733425b4059a517465abed97dd710a15a',
+        'worker.js': 'cf530352910d233d96eed917a7ff5ef8b64632491c3cd2ebfdc89377eb24a2ec'}
+    speech_port = work / 'speech-port'
+    copy(old_packages[speech], speech_port)
+    for name, expected in speech_originals.items():
+        assert sha(new_packages[speech] / 'lib' / name) == expected, 'Rebase the offline LoongArch speech port'
+    installed = []
+    for name, directory in new_packages.items():
+        if name in ports:
+            continue
+        metadata = read(directory / 'package.json')
+        def accepts(values, target):
+            return not values or target not in [v[1:] for v in values if v.startswith('!')] and (not any(not v.startswith('!') for v in values) or target in values)
+        if not accepts(metadata.get('os'), 'linux') or not accepts(metadata.get('cpu'), 'loong64'):
+            continue
+        for path in directory.rglob('*'):
+            if path.is_file():
+                with path.open('rb') as f: header = f.read(4)
+                assert header[:2] != b'MZ' and header not in [b'\x7fELF', *[bytes.fromhex(x) for x in ['cffaedfe', 'feedfacf', 'cafebabe']]], 'Unreviewed host-native file: ' + str(path)
+        target = runtime / 'node_modules' / name
+        if target.is_symlink(): target.unlink()
+        elif target.exists(): shutil.rmtree(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        copy(directory, target)
+        installed.append({'name': name, 'version': metadata['version']})
+    target_speech = runtime / 'node_modules' / speech
+    for name in speech_originals: shutil.copy2(speech_port / 'lib' / name, target_speech / 'lib' / name)
+    assert sha(speech_port / 'runtime/assets.json') == sha(target_speech / 'runtime/assets.json')
+    shutil.rmtree(target_speech / 'runtime')
+    copy(speech_port / 'runtime', target_speech / 'runtime')
+    for name in ['app', 'plugins']:
+        shutil.rmtree(runtime / name)
+        copy(fresh / name, runtime / name)
+    metadata = read(fresh / 'package.json')
+    metadata.setdefault('overrides', {}).update({'koffi': read(old_packages['koffi'] / 'package.json')['version'], 'sharp': read(old_packages['sharp'] / 'package.json')['version']})
+    save(runtime / 'package.json', metadata)
+    runtime_upgrade = {'core': core, 'copiedPackages': installed,
+        'retainedNativePackages': {name: read(old_packages[name] / 'package.json')['version'] for name in sorted(ports)},
+        'offlineSpeechPortPreserved': True}
+else:
+    assert read(runtime / 'node_modules/@deepseek-ai/dsh/package.json')['version'] == core, 'A core upgrade requires --runtime-source'
 shutil.rmtree(app / 'dist')
 copy(source / 'dist', app / 'dist')
 for path in [app / 'dist', *(app / 'dist').rglob('*')]:
@@ -57,25 +115,26 @@ subprocess.run(['/bin/sh', '-n', str(stage / 'usr/bin/dsh-browser-cdp')], check=
 doc = stage / 'usr/share/doc/dsh-desktop/README.Browser-Use'
 shutil.copy2(source / 'docs/KYLIN_BROWSER_USE.md', doc); doc.chmod(0o644)
 meta = read(runtime / 'runtime.json')
-meta.update(desktopVersion=version, desktopPackageVersion=version + '-1')
+meta.update(desktopVersion=version, desktopPackageVersion=version + '-1', dsh=core)
 save(runtime / 'runtime.json', meta)
 build = read(runtime / 'kylin-build.json')
-build.update(app=version, debianVersion=version + '-1', sourceCommit=args.source_commit,
+build.update(app=version, dsh=core, debianVersion=version + '-1', sourceCommit=args.source_commit,
     builtAt=datetime.datetime.now(datetime.timezone.utc).isoformat(), basePackageSha256=sha(archive),
     browserUse='Exclusive official CDP attach on loopback 127.0.0.1:9222 with native LBrowser discovery',
     taskNotifications='Completed/interrupted task notifications; LauncherEntry count plus red numeric window/tray icon for UKUI',
     inheritedValidation={'baseVersion': base_version, 'checks': build.get('currentValidation')},
     currentValidation={'compiledTargets': build_targets['targets'], 'physicalKylinGuiTested': False})
+if runtime_upgrade: build['runtimeUpgrade'] = runtime_upgrade
 save(runtime / 'kylin-build.json', build)
 notes = stage / 'usr/share/doc/dsh-desktop/README.Kylin'
-notes.write_text('DSH Desktop ' + version + ' / core 0.2.2-alpha.2 / Kylin V10 old-world ABI1\n\n'
+notes.write_text('DSH Desktop ' + version + ' / core ' + core + ' / Kylin V10 old-world ABI1\n\n'
     'Browser Use: see README.Browser-Use. Electron31.7.7, Node22.16.0 and Python3.12.14 retained.\n'
     'Background tasks notify on completion or unexpected interruption. Deliberate Stop is silent.\n'
     'Unread session counts use LauncherEntry plus a red numeric window/tray icon for UKUI.\n'
     'Node22 remains an exception to the upstream Node>=24.9 requirement.\n'
     'No user extensions are preinstalled; existing user profiles/plugins are preserved.\n'
     'Physical Kylin/LBrowser GUI has not been tested for this package.\n')
-assert read(runtime / 'node_modules/@deepseek-ai/dsh/package.json')['version'] == '0.2.2-alpha.2'
+assert read(runtime / 'node_modules/@deepseek-ai/dsh/package.json')['version'] == core
 assert read(runtime / 'local-plugins/package.json') == {'private': True}
 assert [p.name for p in (runtime / 'local-plugins').iterdir()] == ['package.json']
 for name in ['dsh-p2p-collab', 'dsh-side-chat', 'dsh-univer-office', 'dsh-whale-widget', 'rea-mcp']:

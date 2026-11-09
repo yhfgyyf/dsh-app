@@ -51,7 +51,8 @@ await writeFile(join(state, 'desktop.patch.yml'), `- id: llm-deepseek\n  config:
 await writeFile(join(home, 'settings.yaml'), 'agent-default-model:\n  provider: deepseek-official\n  model: deepseek-flash\n');
 process.env.DSH_COLLAB_FIXTURE_KEY = 'isolated-local-fixture';
 const runtimeRoot = join(root, '.runtime');
-const runtime = new DesktopRuntime({ runtimeRoot, entry: join(runtimeRoot, 'app/index.ts'), home: state, configHome: home, cwd: data, onExit: () => {} });
+const runtimeExits: (number | null)[] = [];
+const runtime = new DesktopRuntime({ runtimeRoot, entry: join(runtimeRoot, 'app/index.ts'), home: state, configHome: home, cwd: data, onExit: code => { runtimeExits.push(code); } });
 let client: Awaited<ReturnType<typeof connectFixture>> | undefined, logs = '';
 const checks: string[] = [];
 const wait = async <T>(fn: () => Promise<T | false>, label: string, timeout = 30000) => {
@@ -235,9 +236,9 @@ try {
 } catch (error) { failure = error instanceof Error ? error.stack : String(error); process.exitCode = 1; }
 finally {
   client?.close(); await runtime.stop(); await fixture.close(); await new Promise<void>(resolve => model.close(() => resolve()));
-  await writeFile(join(data, 'host.log'), logs, { mode: 0o600 });
+  await writeFile(join(data, 'host.log'), logs.replace(/token=[^\s"'&]+/g, 'token=[redacted]'), { mode: 0o600 });
   await writeFile(join(data, 'model-inputs.json'), JSON.stringify(modelInputs, null, 2), { mode: 0o600 });
-  const report = { status: failure ? 'failed' : 'pass', failure, checks, modelCalls, data };
+  const report = { status: failure ? 'failed' : 'pass', failure, checks, modelCalls, data, runtimeExits };
   await writeFile(join(data, 'report.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 }
