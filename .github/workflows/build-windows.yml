@@ -1,4 +1,4 @@
-name: Build Windows installer
+name: Verify Windows RC1 plugin packages
 
 on:
   workflow_dispatch:
@@ -7,198 +7,80 @@ permissions:
   contents: read
 
 jobs:
-  windows:
+  plugins:
     runs-on: windows-2022
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.15.0
           cache: npm
-      - name: Validate Windows lifecycle test syntax
-        shell: pwsh
-        run: |
-          Get-ChildItem scripts/*.ps1 | ForEach-Object {
-            $tokens = $null; $errors = $null
-            [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
-            if ($errors.Count) { throw ($errors | Out-String) }
-          }
-      - name: Recover from a denied cached Windows port
-        timeout-minutes: 1
-        shell: pwsh
-        run: ./scripts/test-windows-port.ps1
       - name: Prepare verified native addon toolchain
-        timeout-minutes: 6
         shell: pwsh
         run: ./scripts/prepare-windows-node-gyp.ps1
-      - name: Install frontend dependencies
-        timeout-minutes: 8
-        run: npm ci --no-audit --no-fund
-      - name: Build relay native dependencies
-        timeout-minutes: 8
+      - name: Install frontend and relay dependencies
         env:
           npm_config_build_from_source: 'true'
-        run: npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
-      - name: Windows menu Quit helper preflight
-        timeout-minutes: 1
-        run: npx --no-install electron tests/windows-quit-smoke.cjs
-      - name: Build pinned runtime and apply verified patch
-        run: npm run setup:runtime
-      - name: Typecheck, unit tests and production build
-        run: npm run check
-      - name: Remote pairing, native settings and shared Host sessions
-        timeout-minutes: 4
         run: |
-          npm run build --prefix services/relay
+          npm ci --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:remote
+          npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
+      - name: Prepare the same RC1 runtime and production frontend
+        run: |
+          npm run setup:runtime
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:remote-ui
-      - name: Collaboration publishing, attachments, Markdown and voice input
-        timeout-minutes: 4
+          npm run build
+      - name: Reconstruct and verify the portable Univer package
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          node services/relay/node_modules/tsx/dist/cli.mjs scripts/test-collaboration.ts
+          New-Item -ItemType Directory -Force .test-data/rc1-plugins | Out-Null
+          gh release download v0.1.45 --repo yhfgyyf/dsh-app --pattern dsh-univer-office-0.3.5-universal.2.tgz --dir .test-data/rc1-plugins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx --no-install electron tests/collaboration.cjs
-      - name: Plugin marketplace review and explicit installation consent
-        timeout-minutes: 4
-        run: npm run test:plugin-marketplace
-      - name: Bundled Python, Office round trips and workspace virtual environment
-        timeout-minutes: 3
-        run: npm run test:workspace-dependencies
-      - name: Shared model settings
-        run: npm run test:model-settings
-      - name: Preset switching and cold session restoration
-        timeout-minutes: 2
-        run: npm run test:audit-switch
-      - name: Auto first turns, Audit remediation and saved conversations
-        timeout-minutes: 2
-        run: npm run test:auto-conversation
-      - name: Web, TUI and App ownership
-        run: npm run test:three-surfaces
-      - name: Native Electron lifecycle
-        run: npm run test:native
-      - name: Native task completion, interruptions and numeric taskbar overlays
-        timeout-minutes: 3
-        run: npm run test:task-notifications
-      - name: Structured page injections and the original Whale widget
-        timeout-minutes: 3
-        shell: pwsh
-        run: |
-          $fixture = Join-Path $env:RUNNER_TEMP 'dsh-whale-widget-0.4.2'
-          New-Item -ItemType Directory -Force $fixture | Out-Null
-          $archive = Join-Path $fixture 'dsh-whale-widget-0.4.2.tgz'
-          Invoke-WebRequest -Uri 'https://registry.npmjs.org/dsh-whale-widget/-/dsh-whale-widget-0.4.2.tgz' -OutFile $archive
-          if ((Get-FileHash $archive -Algorithm SHA512).Hash.ToLowerInvariant() -ne '6860d47ddddbd806efe0fa149f52ad9e56ac388928aa0bc8391dbeac02043c33add6a94707b7a6953abee33772a15e598a2712fad92e80f93ce86c955280e081') { throw 'Whale fixture integrity mismatch' }
-          tar -xzf $archive -C $fixture
+          node scripts/prepare-univer-universal.mjs --archive .test-data/rc1-plugins/dsh-univer-office-0.3.5-universal.2.tgz --out .test-data/rc1-plugins/delivered
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:DSH_TEST_WHALE_PACKAGE = Join-Path $fixture 'package'
-          npx --no-install electron tests/index-injections.cjs
-      - name: Startup activation ordering regression
-        timeout-minutes: 2
-        run: npx --no-install electron tests/startup-activation.cjs
-      - name: Microphone capture and permission isolation
-        timeout-minutes: 2
-        run: npm run test:voice-input
-      - name: Browser Use tools, isolation and settings persistence
-        timeout-minutes: 4
+          node tests/compatibility/rc1/prepare.mjs
+      - name: Run delivered P2P 0.3.4 with the actual Host and relay
+        run: node services/relay/node_modules/tsx/dist/cli.mjs scripts/test-collaboration.ts
+      - name: Run delivered Side 0.1.8 native lifecycle and references
         run: |
-          npm run test:browser-use
+          $env:DSH_SIDE_CHAT_APP_ROOT = (Get-Location).Path
+          node tests/compatibility/rc1/side/scripts/test-app.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npm run test:browser-use-settings
-      - name: Published Univer client startup and legacy turn preview
-        timeout-minutes: 3
-        run: npm run test:univer-client
-      - name: Computer use approval and image transport
-        timeout-minutes: 4
-        run: npm run test:computer-tools
-      - name: Computer switch and audit dock UI
-        timeout-minutes: 3
-        run: npm run test:computer-settings
-      - name: Native computer input and screenshot (three consecutive runs)
-        timeout-minutes: 4
+          $env:DSH_DESKTOP_CONTENT_TOOLS_MODULE = Join-Path (Get-Location).Path 'tests/native-quote-actions.cjs'
+          node tests/compatibility/rc1/side/scripts/test-app.mjs --content-tools
+      - name: Install delivered Univer through Plugin Manager and execute native tools
         run: |
-          1..3 | ForEach-Object {
-            npm run test:computer-native
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-      - name: Native updater
-        timeout-minutes: 3
-        run: npm run test:updates
-      - name: Update download through a proxy
-        timeout-minutes: 5
-        run: npm run test:update-network
-      - name: Native Office, text, media and file previews
-        timeout-minutes: 3
-        run: npm run test:artifact-links
-      - name: Native sidebar browser
-        timeout-minutes: 3
-        run: npm run test:sidebar-browser
-      - name: Install pinned Inno Setup with long-path support
-        shell: pwsh
-        run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
-          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
-          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
-          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
-          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
-          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      - name: Create Windows installer
-        run: node scripts/package-windows.ts
-      - name: Verify the packaged Python payload
-        shell: pwsh
-        run: |
-          $artifact = Get-Content release/latest-windows.json | ConvertFrom-Json
-          $env:DSH_TEST_DESKTOP_RUNTIME = Join-Path $artifact.app 'resources/runtime'
-          npm run test:workspace-dependencies
+          $env:DSH_TEST_REPORTS = '.test-data/rc1-plugins/univer-upgrade'
+          node scripts/test-univer-plugin-upgrade.mjs .test-data/rc1-plugins/delivered/dsh-univer-office-0.3.5-universal.3.tgz .test-data/rc1-plugins/univer-original/package .test-data/rc1-plugins/univer/package
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Install, launch, close and uninstall
-        timeout-minutes: 6
-        shell: pwsh
-        run: ./scripts/test-windows-installer.ps1
-      - name: Collect verified installer and reports
-        run: node scripts/collect-windows-artifact.ts
-      - name: Preserve installation diagnostics on failure
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+          node tests/compatibility/rc1/test-univer-host.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-univer-universal.mjs .test-data/rc1-plugins/univer/package tests/compatibility/rc1/univer-provenance.json .test-data/rc1-plugins/univer-compatibility
+      - name: Run the delivered Univer native client
+        run: |
+          $env:DSH_TEST_UNIVER_PACKAGE = Join-Path (Get-Location).Path '.test-data/rc1-plugins/univer/package'
+          $env:DSH_TEST_UNIVER_PROVENANCE = Join-Path (Get-Location).Path 'tests/compatibility/rc1/univer-provenance.json'
+          npx --no-install electron tests/univer-client.cjs
+      - name: Collect plugin acceptance reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: dsh-app-windows-diagnostics
+          name: dsh-rc1-plugin-compat-windows
           path: |
-            .test-data/installer-*/install.log
-            .test-data/installer-*/updates/report.json
-            .test-data/installer-*/updates/failure.txt
-            .test-data/installer-*/updates/old-app.log
-            .test-data/installer-*/updates/before-install.json
-            .test-data/installer-*/desktop-state/updates/install-result.json
-            .test-data/installer-*/desktop-state/updates/inno-update.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.log
-            .test-data/installer-*/desktop-state/updates/download-*/install.json
-            .test-data/computer-native/**
-            .test-data/computer-*-latest.json
-            .test-data/computer-tools-*/**
-            .test-data/plugin-marketplace-native/**
-            .test-data/univer-client/report.json
-            .test-data/univer-client/*.png
-            .test-data/index-injections.json
-            .test-data/index-injections-*/whale-boot-*.png
-            .test-data/workspace-dependencies-latest.json
-            .test-data/workspace-dependencies-failure.json
-            .test-data/remote-settings-latest.json
-            .test-data/task-notifications-latest.json
-            .test-data/task-notifications-*/report.json
-            .test-data/task-notifications-*/*.png
+            .test-data/rc1-plugins/prepared.json
+            .test-data/rc1-plugins/delivered/universal-provenance.json
+            .test-data/rc1-plugins/univer-upgrade/plugin-upgrade-report.json
+            .test-data/rc1-plugins/univer-host/plugin-host-report.json
+            .test-data/rc1-plugins/univer-compatibility/universal-compatibility.json
+            .test-data/univer-client-upgrade/report.json
+            .test-data/univer-client-upgrade/*/*.png
             .test-data/collaboration-*/report.json
             .test-data/collaboration-*/host.log
-            .test-data/collaboration-*/enabled.json
+            tests/compatibility/rc1/side/.test-data/latest-desktop.json
+            tests/compatibility/rc1/side/.test-data/latest-content-tools.json
+            tests/compatibility/rc1/side/.test-data/*/*.png
           include-hidden-files: true
-          if-no-files-found: ignore
-          retention-days: 7
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dsh-app-windows-x64
-          path: release/upload/*
-          if-no-files-found: error
-          compression-level: 0
+          if-no-files-found: warn
           retention-days: 14

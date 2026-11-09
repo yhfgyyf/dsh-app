@@ -1,0 +1,14 @@
+{
+  "core": "0.2.2-rc.1",
+  "desktop": "0.1.50",
+  "archives": {
+    "dsh-p2p-collab-0.3.4.tgz": {
+      "sha256": "d3b83aa77eb9f04a6de9261b97a91a08775de4e445ca442729a7e22d116a4ca7",
+      "bytes": 106229
+    },
+    "dsh-side-chat-0.1.8.tgz": {
+      "sha256": "a2257b7d5f3678473d01e41fcda328706a04b9d1e16701cf0344afdf75b7f723",
+      "bytes": 18596
+    }
+  }
+}
