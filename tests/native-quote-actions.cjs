@@ -33,7 +33,13 @@ exports.run = async ({ host, js, until, parentId, workspace, requests, report, d
     host.focus();
     host.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...point });
     host.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...point });
-    const beforeLayout = await layout(selector);
+    let previous, stable = 0;
+    const beforeLayout = await until(async () => {
+      const current = await layout(selector), encoded = JSON.stringify(current);
+      stable = encoded === previous ? stable + 1 : 0;
+      previous = encoded;
+      return stable >= 3 ? current : false;
+    }, 'Content layout did not settle before opening search');
     await key('s', [process.platform === 'darwin' ? 'meta' : 'control'], host);
     await new Promise(resolve => setTimeout(resolve, 100));
     assert.deepEqual(await layout(selector), beforeLayout, 'Opening search changed the content layout');

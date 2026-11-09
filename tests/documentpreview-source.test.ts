@@ -34,6 +34,7 @@ function harness() {
     useResource: () => ({ status: 'none' }),
     useStore: (select: Function) => select(state),
     useDocumentPreviews: () => [{ id: html, loading: 'bytes-complete' }, { id: plain, loading: 'text-pages' }],
+    useContextMenu: () => ({ getTriggerProps: () => ({}) }),
     actions,
   }).id;
   const flush = () => { while (effects.length) effects.shift()!(); };

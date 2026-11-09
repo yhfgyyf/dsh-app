@@ -29,10 +29,19 @@ let corePid, finished = false, testing = false;
 const originalSpawn = childProcess.spawn;
 childProcess.spawn = (...args) => {
   const child = originalSpawn(...args);
-  if (String(args[1]?.[0]).replaceAll('\\', '/').endsWith('/app/index.ts')) corePid = child.pid;
+  if (String(args[1]?.[0]).replaceAll('\\', '/').endsWith('/app/index.ts')) {
+    corePid = child.pid;
+    child.on('message', message => { if (message?.type === 'failed') finish(new Error('Owned core startup failed: ' + message.error)); });
+  }
   return child;
 };
 const nativeShow = Notification.prototype.show;
+app.on('web-contents-created', (_event, contents) => contents.on('console-message', (...args) => {
+  const message = args[0]?.message ?? args[2];
+  if (typeof message === 'string' && /error|TypeError|not found|not available/i.test(message)) {
+    report.rendererErrors ??= []; report.rendererErrors.push(message.slice(0, 1000));
+  }
+}));
 Notification.prototype.show = function () {
   notices.push(this); report.notificationCalls.push({ title: this.title, body: this.body });
   this.once('show', () => { report.nativeShown++; writeFileSync(join(data, 'native-shown.json'), JSON.stringify({ shown: report.nativeShown, title: this.title })); });

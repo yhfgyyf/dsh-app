@@ -8,6 +8,10 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.50: DSH 0.2.2-rc.1 compatibility
+
+Pins the RC.1 core and Cordis 4.1, including the new context menu, asynchronous session state and tool execution interfaces. Preserves native text quotes, temporary Side Chat, the separate content search window, Browser Use and task notifications with unread badges. Side, P2P and Univer compatibility packages are delivered separately; installers do not preinstall user extensions.
+
 ## v0.1.49: Task notifications and unread badges
 
 Background conversation completion, model failures and unexpected core exits trigger native notifications and an unread-conversation badge. Foreground conversations and deliberate Stop remain quiet. Clicking a notification opens its conversation; viewing it clears that reminder. History replay, renderer reloads and inner subagents do not produce duplicate alerts; temporary `/side` forks are excluded. Notifications contain only the conversation title and outcome.

@@ -12,6 +12,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const client = await connectFixture();
 const { rpc, follow } = client;
 const results: { name: string; status: string; details?: unknown }[] = [];
+const projection = (frame: any, key: string) => frame.changes?.find((change: any) => change.key === key);
 async function check(name: string, fn: () => Promise<unknown>) {
   try { const details = await fn(); results.push({ name, status: 'pass', ...(details === undefined ? {} : { details }) }); console.log('PASS', name); }
   catch (error) { results.push({ name, status: 'fail', details: error instanceof Error ? error.message : String(error) }); console.log('FAIL', name, error instanceof Error ? error.message : String(error)); }
@@ -83,7 +84,7 @@ try {
     catalog = await rpc('session/modelCatalog');
     const selected = await rpc('session/selectModel', { request: { sessionId, ...catalog.default, reasoningEffort: 'high' } });
     assert.equal(selected.selected.reasoningEffort, 'high');
-    await control.wait(frames => frames.some(frame => frame.type === 'projection' && frame.sessionId === sessionId && frame.key === 'modelSelection'));
+    await control.wait(frames => frames.some(frame => frame.type === 'projection' && frame.sessionId === sessionId && projection(frame, 'modelSelection')));
     return catalog;
   });
   await check('command, skill and file reference catalogs', async () => {
@@ -209,11 +210,11 @@ try {
     const requestId = randomUUID();
     const controlBefore = control.frames.length;
     await rpc('session/prompt', { request: { sessionId, requestId, mode: 'queue', content: [{ type: 'text', text: '待编辑队列消息' }] } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId)));
-    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && frame.value['next-turn'].some((item: any) => item.source?.rpcId === requestId));
-    const itemId = queueFrame.value['next-turn'].find((item: any) => item.source?.rpcId === requestId).id;
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.sessionId === sessionId && projection(frame, 'inbox')?.val['next-turn'].some((item: any) => item.source?.rpcId === requestId)));
+    const queueFrame = control.frames.slice(controlBefore).find(frame => frame.type === 'projection' && frame.sessionId === sessionId && projection(frame, 'inbox')?.val['next-turn'].some((item: any) => item.source?.rpcId === requestId));
+    const itemId = projection(queueFrame, 'inbox').val['next-turn'].find((item: any) => item.source?.rpcId === requestId).id;
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'edit', content: [{ type: 'text', text: '已编辑队列消息' }] } } });
-    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.key === 'inbox' && frame.sessionId === sessionId && JSON.stringify(frame.value['next-turn']).includes('已编辑队列消息')));
+    await control.wait(frames => frames.slice(controlBefore).some(frame => frame.type === 'projection' && frame.sessionId === sessionId && JSON.stringify(projection(frame, 'inbox')?.val['next-turn'])?.includes('已编辑队列消息')));
     await rpc('session/updateQueue', { request: { sessionId, itemId, action: { kind: 'remove' } } });
     await rpc('session/cancel', { request: { sessionId } });
     await session.wait(frames => frames.slice(before).some(frame => frame.type === 'event' && frame.event.type === 'turn/end'));
@@ -240,7 +241,7 @@ try {
     const initial = control.frames.length;
     const plan = await rpc('commands/execute', { agentId: sessionId, line: '/plan', submittedAttachments: [] });
     assert.equal(plan.result.kind, 'success');
-    await control.wait(frames => frames.slice(initial).some(frame => frame.type === 'projection' && frame.sessionId === sessionId && frame.key === 'plan'));
+    await control.wait(frames => frames.slice(initial).some(frame => frame.type === 'projection' && frame.sessionId === sessionId && projection(frame, 'plan')));
     assert.equal((await rpc('commands/execute', { agentId: sessionId, line: '/plan off', submittedAttachments: [] })).result.kind, 'success');
     assert.equal((await rpc('commands/execute', { agentId: sessionId, line: '/permission read-only', submittedAttachments: [] })).result.kind, 'success');
     assert.equal((await rpc('commands/execute', { agentId: sessionId, line: '/permission workspace-write', submittedAttachments: [] })).result.kind, 'success');

@@ -4,9 +4,13 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.49** 支持 **DSH 0.2.2-alpha.2**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.50** 支持 **DSH 0.2.2-rc.1**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.50：DSH 0.2.2-rc.1 兼容更新
+
+锁定 RC.1 内核及 Cordis 4.1，适配新版菜单组件、异步会话状态和工具执行接口。保留引用文本到主会话／临时侧聊、独立搜索弹窗、Browser Use、任务通知与数字角标。Side、P2P、Univer 的兼容包独立提供，安装包不预装用户扩展；原有用户配置与插件保持可升级。
 
 ## v0.1.49：任务通知与图标角标
 

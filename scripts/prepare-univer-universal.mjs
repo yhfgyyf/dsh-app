@@ -15,7 +15,7 @@ for (let i = 2; i < process.argv.length; i += 2) {
   assert.ok(['--archive', '--out', '--npm-cli'].includes(name) && process.argv[i + 1]);
   options[name.slice(2)] = resolve(process.argv[i + 1]);
 }
-assert.ok(options.archive && options.out, 'Usage: node scripts/prepare-univer-universal.mjs --archive dsh-univer-office-0.3.5-desktop.1.tgz --out DIRECTORY [--npm-cli npm-cli.js]');
+assert.ok(options.archive && options.out, `Usage: node scripts/prepare-univer-universal.mjs --archive dsh-univer-office-${manifest.baseVersion}.tgz --out DIRECTORY [--npm-cli npm-cli.js]`);
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const exists = path => access(path).then(() => true, () => false);
 function run(command, args, cwd) {
@@ -80,10 +80,11 @@ try {
   assert.equal(metadata.version, manifest.baseVersion);
   metadata.version = manifest.version;
   metadata.engines.node = manifest.node;
-  metadata.optionalDependencies = {};
+  metadata.optionalDependencies ??= {};
   for (const name of manifest.optionalNative) {
-    assert.ok(metadata.dependencies[name]);
-    metadata.optionalDependencies[name] = metadata.dependencies[name];
+    const version = metadata.dependencies[name] ?? metadata.optionalDependencies[name];
+    assert.ok(version);
+    metadata.optionalDependencies[name] = version;
     delete metadata.dependencies[name];
   }
   for (const name of Object.keys(metadata.peerDependencies)) {

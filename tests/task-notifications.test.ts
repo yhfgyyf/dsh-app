@@ -126,6 +126,9 @@ test('temporary /side ownership markers suppress reminders without hiding ordina
     f.locate({ kind: 'jsonl', path: join(directory, 'session.v4.jsonl.zstd') });
     writeFileSync(join(directory, '.dsh-side-chat-v2.json'), '{}'); f.run({ kind: 'completed' });
     assert.equal(f.events.length, 0);
+    delete (f.session.header as { parentSession?: string }).parentSession;
+    Object.assign(f.session.header, { isSeeded: true }); f.run({ kind: 'completed' });
+    assert.equal(f.events.length, 0, 'RC ordinary seeded Side forks remain temporary');
     rmSync(join(directory, '.dsh-side-chat-v2.json')); f.run({ kind: 'completed' });
     assert.equal(f.events.length, 2);
   } finally { rmSync(directory, { recursive: true, force: true }); }

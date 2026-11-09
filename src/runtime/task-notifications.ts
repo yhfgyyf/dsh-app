@@ -2,7 +2,7 @@ import type { TaskEvent, TaskOutcome } from '../shared/task-notifications.ts';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-type Session = { id: string; header: { origin?: string; parentSession?: string }; firstLiveSeq: number };
+type Session = { id: string; header: { origin?: string; parentSession?: string; isSeeded?: boolean }; firstLiveSeq: number };
 type Context = {
   on(event: 'session/event', listener: (session: Session, event: { type: string; seq: number; data: any }) => void): unknown;
   on(event: 'session/disposed', listener: (session: Session) => void): unknown;
@@ -19,7 +19,7 @@ export function installTaskNotifications(ctx: Context, publish: (event: TaskEven
     if (event.type === 'turn/start') {
       // Side's reserved on-disk marker is its ownership contract. Its temporary
       // fork must never become a main conversation through a notification click.
-      if (session.header.parentSession) {
+      if (session.header.parentSession || session.header.isSeeded) {
         const location = ctx.get('sessionPersistence')?.locate(session.header);
         if (location?.kind === 'jsonl' && existsSync(join(dirname(location.path), '.dsh-side-chat-v2.json'))) return;
       }
