@@ -28,6 +28,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm ci --prefix services/relay --foreground-scripts --no-audit --no-fund
       - name: Load the verified Windows installer runtime
+        timeout-minutes: 6
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -41,7 +42,8 @@ jobs:
           $taskInstall = Join-Path (Get-Location).Path '.test-data/rc1-plugins/installed'
           $env:DSH_DESKTOP_DATA_DIR = Join-Path (Get-Location).Path '.test-data/rc1-plugins/acquisition-user'
           $env:DSH_DESKTOP_CONFIG_HOME = Join-Path $env:DSH_DESKTOP_DATA_DIR 'core'
-          $taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList "/S /D=$taskInstall" -Wait -PassThru
+          $taskInstallLog = Join-Path $taskInputs 'install.log'
+          $taskProcess = Start-Process -FilePath $taskInstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $taskInstall + '"'), ('/LOG="' + $taskInstallLog + '"')) -Wait -PassThru
           if ($taskProcess.ExitCode -ne 0) { throw "Installer failed: $($taskProcess.ExitCode)" }
           Copy-Item (Join-Path $taskInstall 'resources/runtime') '.runtime' -Recurse
           node tests/compatibility/rc1/verify-runtime.mjs
@@ -88,6 +90,7 @@ jobs:
           path: |
             .test-data/rc1-plugins/prepared.json
             .test-data/rc1-plugins/runtime-verification.json
+            .test-data/rc1-plugins/installer/install.log
             .test-data/rc1-plugins/delivered/universal-provenance.json
             .test-data/rc1-plugins/univer-upgrade/plugin-upgrade-report.json
             .test-data/rc1-plugins/univer-host/plugin-host-report.json
