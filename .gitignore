@@ -22,6 +22,7 @@ docs/*
 !docs/BUILDING.md
 !docs/TESTING.md
 !docs/MACOS-SIGNING.md
+!docs/UBUNTU.md
 
 # DSH Remote implementation documents and local Android build artifacts.
 !docs/REMOTE-ACCESS.md
