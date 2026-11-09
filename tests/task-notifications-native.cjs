@@ -122,7 +122,7 @@ ipcMain.handle = (channel, fn) => {
 async function run(event) {
   const win = BrowserWindow.fromWebContents(event.sender);
   const background = async () => {
-    if (process.platform === 'darwin') win.hide(); else win.minimize();
+    if (process.platform === 'win32') win.minimize(); else win.hide();
     await until(() => !win.isFocused(), 'App did not enter the background');
   };
   const js = source => event.sender.executeJavaScript(source);
