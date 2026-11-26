@@ -109,7 +109,7 @@ async function main() {
   const data = await fs.mkdtemp(path.join(os.tmpdir(), 'dsh-settings-ui-'));
   const executable = process.env.DSH_TEST_EXECUTABLE || require('electron');
   const args = process.argv.slice(2);
-  const child = spawn(executable, [...(args.length ? args : [root]), '--remote-debugging-address=127.0.0.1',
+  const child = spawn(executable, [...(args.length || process.env.DSH_TEST_EXECUTABLE ? args : [root]), '--remote-debugging-address=127.0.0.1',
     '--remote-debugging-port=0', '--lang=zh-CN', '--use-mock-keychain'], {
     env: { ...process.env, DSH_DESKTOP_DATA_DIR: data, DSH_DESKTOP_CONFIG_HOME: data, DSH_HOME: data },
     stdio: 'ignore',

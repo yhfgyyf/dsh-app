@@ -2,6 +2,11 @@ name: Build Windows installer
 
 on:
   workflow_dispatch:
+    inputs:
+      settings_preview:
+        description: Retain an internal installer after native settings acceptance
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -52,6 +57,47 @@ jobs:
           npm run build
       - name: Account menu, settings controls and Session Log default
         run: npm run test:settings-controls
+      - name: Install pinned Inno Setup with long-path support
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
+          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
+          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
+          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
+          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Build and validate internal settings preview
+        if: inputs.settings_preview
+        shell: pwsh
+        run: |
+          node scripts/package-windows.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $artifact = Get-Content -Raw release/latest-windows.json | ConvertFrom-Json
+          $install = Join-Path $env:RUNNER_TEMP 'DSH Settings Preview'
+          $setup = Start-Process $artifact.installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $install + '"')) -Wait -PassThru
+          if ($setup.ExitCode -ne 0) { throw "Setup failed with exit code $($setup.ExitCode)" }
+          node scripts/verify-windows-runtime.ts $install $artifact.app
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:DSH_TEST_EXECUTABLE = Join-Path $install 'DSH Desktop.exe'
+          node tests/settings-controls.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $preview = New-Item -ItemType Directory -Path 'release/settings-preview'
+          $name = Split-Path -Leaf $artifact.installer
+          Copy-Item -LiteralPath $artifact.installer -Destination $preview.FullName
+          if ((Get-FileHash (Join-Path $preview.FullName $name)).Hash.ToLowerInvariant() -ne $artifact.sha256) { throw 'Copied installer checksum mismatch' }
+          "$($artifact.sha256)  $name" | Set-Content -Encoding ascii (Join-Path $preview.FullName 'SHA256SUMS')
+          # Packaging removes development fixtures. Rebuild them before the full suite.
+          npm run build
+      - name: Retain internally tested settings preview
+        if: inputs.settings_preview
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: dsh-app-windows-settings-preview
+          path: release/settings-preview/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
       - name: Full unit tests
         run: npm test
       - name: Remote pairing, native settings and shared Host sessions
@@ -142,16 +188,6 @@ jobs:
       - name: Native sidebar browser
         timeout-minutes: 3
         run: npm run test:sidebar-browser
-      - name: Install pinned Inno Setup with long-path support
-        shell: pwsh
-        run: |
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.0-x64.exe'
-          $inno = Join-Path $env:RUNNER_TEMP 'Inno Setup 7'
-          Invoke-WebRequest -Uri 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_0/innosetup-7.1.0-x64.exe' -OutFile $installer
-          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne '0362a383ed217d4c4239b5933866dd96d3eb2102737da92f80f6057a4b40df2f') { throw 'Inno Setup checksum mismatch' }
-          $setup = Start-Process $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/DIR="' + $inno + '"')) -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup installation failed: $($setup.ExitCode)" }
-          "ISCC_PATH=$(Join-Path $inno 'ISCC.exe')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Create Windows installer
         run: node scripts/package-windows.ts
       - name: Verify the packaged Python payload
