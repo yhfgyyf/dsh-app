@@ -161,9 +161,8 @@ try {
   await check('preset declarations can be copied and removed through the official profile configuration', async () => {
     const id = 'desktop-test-' + randomUUID().slice(0, 8);
     const requireRuntime = createRequire(new URL('../.runtime/package.json', import.meta.url));
-    const patchYaml = requireRuntime('js-yaml');
-    const { entryListSchema } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/cordis-plugin-include')).href);
-    const yaml = { parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }), stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }) };
+    const { parseEntryYaml, stringifyEntryYaml } = await import(pathToFileURL(requireRuntime.resolve('@deepseek-ai/cordis-plugin-include')).href);
+    const yaml = { parse: parseEntryYaml, stringify: stringifyEntryYaml };
     const file = join(root, '.test-data/fixture-owned/profiles/desktop/cordis.patch.yml');
     const original = await readFile(file, 'utf8');
     const declaration = yaml.parse(await readFile(join(root, '.runtime/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml'), 'utf8'))[0].insert[0];

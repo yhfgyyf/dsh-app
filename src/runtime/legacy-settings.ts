@@ -1,5 +1,6 @@
 import { access, copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 type Sections = Record<string, Record<string, unknown>>;
@@ -39,12 +40,20 @@ export async function migrateRuntimePluginNames(files: string[], yaml: { parse(t
           entry.name = '@deepseek-ai/dsh-llm-deepseek-api-key';
           changed = true;
         }
+        if (entry.id === 'llm-deepseek' || entry.name === '@deepseek-ai/dsh-llm-deepseek-api-key') {
+          for (const model of Array.isArray(entry.config?.models) ? entry.config.models : []) {
+            if (!model || typeof model !== 'object' || !Object.hasOwn(model, 'imageMaxBytes')) continue;
+            model.imageTargetBytes ??= model.imageMaxBytes;
+            delete model.imageMaxBytes;
+            changed = true;
+          }
+        }
         if (Array.isArray(entry.insert)) visit(entry.insert);
       }
     };
     visit(rows);
     if (!changed) continue;
-    await copyFile(file, `${file}.before-0.2.0-rc.1`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => {
+    await copyFile(file, `${file}.before-0.2.3-alpha.2`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== 'EEXIST') throw error;
     });
     const temporary = `${file}.${process.pid}.tmp`;
@@ -97,11 +106,19 @@ export async function migrateProgressiveOverride(stateHome: string, yaml: { pars
   if (original === undefined) return;
   const rows = yaml.parse(original);
   if (!Array.isArray(rows)) return;
-  const legacy = rows.flatMap(row => row.insert ?? []).find(row => row.id === 'progressive-tools-local' && typeof row.name === 'string' && /local-plugins[/\\]dsh-progressive-tools[/\\]lib[/\\]index\.js$/.test(row.name));
+  const inserted = rows.flatMap(row => row.insert ?? []);
+  let legacy = inserted.find(row => row.id === 'progressive-tools-local' && typeof row.name === 'string' && /local-plugins[/\\]dsh-progressive-tools[/\\]lib[/\\]index\.js$/.test(row.name));
+  if (!legacy) {
+    const schemaOverride = inserted.find(row => row.id === 'progressive-tools-invoke-schema' && typeof row.name === 'string' && /[/\\]local-plugins[/\\]progressive-invoke-schema\.mjs$/.test(row.name));
+    if (schemaOverride) {
+      const bytes = await readFile(schemaOverride.name).catch(() => undefined);
+      if (bytes && createHash('sha256').update(bytes).digest('hex') === '74d106d6f2d346e2ebe94356dc997cba22770469985f375d2f2c6dde6743688a') legacy = schemaOverride;
+    }
+  }
   if (!legacy) return;
   const next = rows.map(row => row.id === 'progressive-tools' ? { ...row, disabled: legacy.disabled ?? false, config: { ...row.config, ...legacy.config } } : row.insert ? { ...row, insert: row.insert.filter((entry: any) => entry !== legacy) } : row).filter(row => !row.insert || row.insert.length);
   if (!next.some(row => row.id === 'progressive-tools')) next.push({ id: 'progressive-tools', disabled: legacy.disabled ?? false, config: legacy.config ?? {} });
-  await copyFile(file, `${file}.before-0.1.7`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
+  await copyFile(file, `${file}.before-0.2.3-alpha.2`, constants.COPYFILE_EXCL).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'EEXIST') throw error; });
   const temporary = `${file}.${process.pid}.tmp`;
   await writeFile(temporary, yaml.stringify(next), { mode: 0o600 });
   await rename(temporary, file);

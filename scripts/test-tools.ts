@@ -98,8 +98,11 @@ try {
     const output = result.content.map((block: any) => block.text ?? '').join('');
     if (mode === 'workflow') { assert.match(output, /completed \(1 agent\)/); assert.match(output, /"verified": true/); assert.ok(output.includes('Hello, DSH Desktop')); }
     if (mode === 'subagent') {
-      const childSessionId = output.match(/started subagent (\S+)/)?.[1];
-      assert.ok(childSessionId, 'The new asynchronous subagent API returns its child identity');
+      const childName = output.match(/started subagent (\S+)/)?.[1];
+      assert.ok(childName);
+      const descriptor = frames.find(frame => frame.event?.type === 'subagent/catalog' && frame.event.data.name === childName)?.event.data;
+      const childSessionId = descriptor?.childId;
+      assert.ok(childSessionId, 'The catalog resolves the child name to its session ID');
       const child = client.follow('session/follow', { request: { address: { kind: 'subagent', parentSessionId: sessionId, childSessionId, mode: 'continuable' } } });
       try {
         await child.wait(rows => JSON.stringify(rows).includes('Hello, DSH Desktop'), 20000);
@@ -129,7 +132,7 @@ try {
       assert.equal(inspection.provider, 'Tool');
       assert.equal(inspection.method, 'listTools');
       const tools = inspection.data.tools.map((tool: any) => tool.name);
-      for (const name of ['cordis_inspect_list', 'cordis_inspect_query', 'plugin_manager']) assert.ok(tools.includes(name), name);
+      for (const name of ['cordis_inspect', 'plugin_manager']) assert.ok(tools.includes(name), name);
       for (const name of ['cordis_define', 'cordis_run', 'cordis_stop', 'cordis_undefine']) assert.equal(tools.includes(name), false, name);
       assert.ok(JSON.stringify(stream.frames).includes('Hello, DSH Desktop'));
       await writeFile(new URL('../.test-data/cordis-events.json', import.meta.url), JSON.stringify(stream.frames, null, 2));

@@ -98,3 +98,15 @@ const api: DesktopAPI = {
 };
 
 contextBridge.exposeInMainWorld('dshDesktop', Object.freeze(api));
+
+contextBridge.exposeInMainWorld('dshSimDesktop', {
+  doubleClickRestore: true,
+  configure: (prefs: unknown) => ipcRenderer.invoke('desktop:whale-config', prefs),
+  input: (id: string, action: string | null, busy: boolean) => ipcRenderer.invoke('desktop:whale-input', id, action, busy),
+  reset: () => ipcRenderer.invoke('desktop:whale-reset'),
+  onDictate: (callback: (id: string, action: string) => void) => {
+    const receive = (_: Electron.IpcRendererEvent, id: string, action: string) => callback(id, action);
+    ipcRenderer.on('whale:dictate', receive);
+    return () => ipcRenderer.off('whale:dictate', receive);
+  },
+});

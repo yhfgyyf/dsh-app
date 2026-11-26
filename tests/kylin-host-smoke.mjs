@@ -44,7 +44,7 @@ for(const name of Object.keys(manifest.dependencies)){
  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).name,name);
 }
 const a=r('node-addon-require-builtin'),info=a.getBindingInfo();
-assert.equal(info.product,'require-builtin');assert.equal(info.abi,'node-v127');
+assert.equal(info.product,'require-builtin');assert.equal(info.abi,'node-v'+process.versions.modules);
 assert.equal(info.bindingSource,'local-build');
 assert(info.bindingPath.startsWith(root+'/node_modules/node-addon-require-builtin/'));
 assert.equal(a.requireBuiltin('fs'),require('fs'));
@@ -56,7 +56,9 @@ worker.on('message',value=>{assert.equal(value,'function');console.log(JSON.stri
 worker.on('error',error=>{console.error(error);process.exitCode=1;});`;
 const probe = await promisify(execFile)(executable, ['-e', addonProbe], { timeout: 30000, maxBuffer: 1024 * 1024 });
 const addon = JSON.parse(probe.stdout.trim());
-assert.equal(addon.passed, true); assert.equal(addon.arch, 'loong64'); assert.equal(addon.node, 'v22.16.0');
+assert.equal(addon.passed, true); assert.equal(addon.arch, 'loong64');
+const runtimeMetadata = JSON.parse(await readFile(join(runtime, 'runtime.json'), 'utf8'));
+assert.equal(addon.node, 'v' + runtimeMetadata.node);
 report.addon = addon;
 console.log(JSON.stringify({ phase: 'mandatory-dependencies-and-worker', ...addon }));
 let savedSession;
@@ -83,7 +85,7 @@ for (let iteration = 1; iteration <= 2; iteration++) {
     assert(ready, 'Actual Host did not become ready; see private log');
     assert(ready.graph.entries.length >= 60);
     pass.clientModules = ready.graph.entries.length;
-    pass.checks.push('Actual packaged Host prepares and starts on LoongArch Node22 with its full client-module graph');
+    pass.checks.push('Actual packaged Host starts on LoongArch ' + addon.node + ' with its full client-module graph');
     const bootId = randomUUID();
     child.send({ type: 'get-boot', id: bootId });
     let boot;

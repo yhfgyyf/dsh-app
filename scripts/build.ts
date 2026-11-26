@@ -22,7 +22,7 @@ await progressiveImageInstaller.applyProgressiveImages();
 const workspaceInstaller = await import(new URL('install-workspace-dependencies.mjs', import.meta.url).href);
 await workspaceInstaller.applyWorkspaceDependencies();
 
-for (const entry of ['main', 'preload', 'updater', 'computer-preview-preload', 'content-find-preload']) {
+for (const entry of ['main', 'preload', 'updater', 'whale-preload', 'computer-preview-preload', 'content-find-preload']) {
   await build({ configFile: false, root, build: { outDir: resolve(root, 'dist', entry), target: 'node24', lib: { entry: resolve(root, 'src', entry, 'index.ts'), formats: ['cjs'], fileName: () => 'index.cjs' }, rolldownOptions: { external: nativeExternals } } });
 }
 
@@ -97,11 +97,12 @@ await build({ configFile: false, plugins: [{
   transform(code, id) {
     if (!id.replaceAll('\\', '/').endsWith('/@deepseek-ai/cordis-plugin-loader/lib/index.js')) return;
     // The shared Loader publishes a Node default. Desktop renderer supplies its
-    // own module system, so remove exactly the two host-only initializers.
+    // own module system, so omit the host initializers and Windows drive-path handling.
     const env = 'envData = process.env.CORDIS_SHARED ? JSON.parse(process.env.CORDIS_SHARED) : { startTime: Date.now() };';
     const internal = 'internal = ModuleLoader.fromInternal();';
-    if (!code.includes(env) || !code.includes(internal)) throw new Error('Pinned Loader browser adapter contract changed.');
-    return code.replace(env, 'envData = { startTime: Date.now() };').replace(internal, 'internal = undefined;');
+    const windowsPath = 'if (process.platform === "win32" && driveLetter.test(name)) name = url.pathToFileURL(name).href;';
+    if (!code.includes(env) || !code.includes(internal) || !code.includes(windowsPath)) throw new Error('Pinned Loader browser adapter contract changed.');
+    return code.replace(env, 'envData = { startTime: Date.now() };').replace(internal, 'internal = undefined;').replace(windowsPath, '');
   },
 }], root: resolve(root, 'src/renderer'), base: '/__dsh_desktop__/app/', build: { outDir: resolve(root, 'dist/renderer/app'), target: 'chrome148', emptyOutDir: true } });
 

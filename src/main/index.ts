@@ -1,3 +1,4 @@
+import { WhaleCompanion } from './whale-companion.ts';
 import { app, BrowserWindow, dialog, globalShortcut, ipcMain, Menu, Tray, nativeImage, nativeTheme, powerMonitor, protocol, safeStorage, screen, session, shell } from 'electron';
 import type { IpcMainInvokeEvent, MenuItemConstructorOptions } from 'electron';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
@@ -61,6 +62,7 @@ else {
   let connecting = false;
   let connectionError: string | undefined;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let whale: WhaleCompanion;
   let quitting = false;
   const resources = join(app.getAppPath(), 'dist', 'renderer');
   const setupUrl = 'dsh://app/index.html';
@@ -124,6 +126,7 @@ else {
   }
 
   function restoreWindow() {
+    if (process.platform === 'darwin' && app.isHidden()) app.show();
     if (window?.isMinimized()) window.restore();
     window?.show(); window?.focus();
   }
@@ -284,6 +287,9 @@ else {
 
   function installIpc() {
     const handle = (channel: string, callback: (...args: any[]) => unknown) => ipcMain.handle(channel, (event, ...args) => { assertSender(event); return callback(...args); });
+    handle('desktop:whale-config', prefs => whale.configure(prefs));
+    handle('desktop:whale-input', (id, action, busy) => whale.updateInput(id, action, busy));
+    handle('desktop:whale-reset', () => whale.reset());
     handle('desktop:notification-view', value => {
       if (value !== null && !notificationSessionId(value)) throw new Error('通知会话标识无效。');
       updateTaskFocus(); taskNotifications.setView(value ?? undefined);
@@ -391,6 +397,7 @@ else {
     void computer.setEnabled(preferences.computerEnabled, false);
     powerMonitor.on('lock-screen', stopComputer);
     powerMonitor.on('suspend', stopComputer);
+    whale = new WhaleCompanion(() => window, restoreWindow);
     runtime = new DesktopRuntime({
       runtimeRoot: app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'),
       entry: join(app.isPackaged ? join(process.resourcesPath, 'runtime') : join(app.getAppPath(), '.runtime'), 'app/index.ts'),
@@ -399,6 +406,7 @@ else {
       cwd: app.getPath('home'),
       computerRequest: (request, signal) => computer.request(request, signal),
       computerStop: () => computer.stop(),
+      simNotice: (id, kind) => whale.notice(id, kind),
       taskEvent: event => taskNotifications.receive(event),
       remoteState: state => remoteAccess?.update(state),
       localRemoteAction: action => remoteAccess.localAction(action),
@@ -407,7 +415,7 @@ else {
         const result = await dialog.showOpenDialog(window, { title: '选择工作区', buttonLabel: '选择工作区', properties: ['openDirectory', 'createDirectory'] });
         return result.canceled ? null : result.filePaths[0] ?? null;
       },
-      onExit: () => { if (!quitting) taskNotifications.receive({ kind: 'runtime-interrupted' }); connected = false; remoteAccess?.update({ status: 'error', error: 'DSH 核心已退出，远程连接已断开。' }); browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
+      onExit: () => { whale.close(); if (!quitting) taskNotifications.receive({ kind: 'runtime-interrupted' }); connected = false; remoteAccess?.update({ status: 'error', error: 'DSH 核心已退出，远程连接已断开。' }); browserUse?.disconnected(); if (!quitting) void showConnection('DSH 核心已退出，请重新启动。'); },
     });
     browserUse = new DesktopBrowserUse(config => runtime.configureBrowserUse(config), state => {
       if (window && !window.isDestroyed()) window.webContents.send('desktop:browser-use-state', state);
@@ -445,6 +453,7 @@ else {
     if (quitting || !preferencesFile) return;
     event.preventDefault();
     quitting = true;
+    whale?.close();
     taskNotifications?.dispose();
     globalShortcut.unregisterAll();
     updates?.stop();

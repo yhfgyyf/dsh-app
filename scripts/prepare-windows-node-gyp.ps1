@@ -1,7 +1,7 @@
 # Prepare the official Node SDK before native addon lifecycle scripts run.
 # This keeps node-gyp away from an unbounded download during npm ci.
 $ErrorActionPreference = 'Stop'
-$taskVersion = '24.15.0'
+$taskVersion = (Get-Content -Raw (Join-Path $PSScriptRoot '../runtime/dependencies.json') | ConvertFrom-Json).node
 $taskSdk = Join-Path $env:RUNNER_TEMP "dsh-node-gyp-$taskVersion"
 New-Item -ItemType Directory -Force -Path $taskSdk | Out-Null
 $taskBase = "https://nodejs.org/dist/v$taskVersion"

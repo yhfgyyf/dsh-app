@@ -6,6 +6,10 @@ parser = argparse.ArgumentParser(description=__doc__)
 for name in ['base', 'source', 'source-commit', 'work', 'output']:
     parser.add_argument('--' + name, required=True)
 parser.add_argument('--runtime-source', help='Fresh tested runtime whose JS dependency graph replaces the previous core')
+parser.add_argument('--node-distribution', help='Relocatable Node SDK installed from the validated old-world build')
+parser.add_argument('--node-sha256', help='SHA-256 of the Node executable tested on the old system image')
+parser.add_argument('--builtin-binding', help='require_builtin.node built and tested against the bundled Node SDK')
+parser.add_argument('--builtin-sha256', help='SHA-256 of that tested Node ABI binding')
 args = parser.parse_args()
 source, work, output = (Path(value).resolve() for value in [args.source, args.work, args.output])
 archive = Path(args.base).resolve()
@@ -19,8 +23,10 @@ def sha(path):
 def copy(a, b):
     subprocess.run(['cp', '-cR' if sys.platform == 'darwin' else '-a', str(a), str(b)], check=True)
 
-# This runtime is the existing Node22 / Electron31 / ABI1 port, not a host-native rebuild.
+# Preserve the reviewed Electron shell and old-world native providers from this base.
 base_version = {
+    '69df3d458308bf436405e35bbe6069c117fd335b1d121dcd26cc3a84fbde06b3': '0.1.56-1',
+    'f0929fa2a090b5d7852f2f44054508b734a6567421d87858f962fb8c3d93ace2': '0.1.54-1',
     '2e8c4586c4fa239050af8e7214e02b0d0089e42d7be0997da2b4381842217491': '0.1.46-1',
     '855025b3b08b333c761a3247bff20c13083b2418a70862b5068a323e52328294': '0.1.48-1',
     'e2b81b7439b45e0b716362fa416b94ca15b10c368d4bd8540700f8b1ec3f450c': '0.1.49-1',
@@ -38,7 +44,28 @@ subprocess.run(['dpkg-deb', '-e', str(archive), str(base / 'DEBIAN')], check=Tru
 copy(base, stage)
 app, runtime = (stage / 'opt/dsh-desktop/resources' / name for name in ['app', 'runtime'])
 assert read(runtime / 'kylin-build.json')['debianVersion'] == base_version
-core = read(source / 'runtime/dependencies.json')['dsh']
+pins = read(source / 'runtime/dependencies.json')
+core = pins['dsh']
+node_replaced = bool(args.node_distribution)
+if core == '0.2.3-alpha.2' and not node_replaced:
+    previous = read(runtime / 'kylin-build.json')
+    if previous['node'] != pins['node'] or previous.get('nodeSha256') != sha(runtime / 'node/bin/node'):
+        raise ValueError('This core requires the tested Node 24.22.3 old-world SDK')
+if node_replaced:
+    if not (args.runtime_source and args.builtin_binding and args.builtin_sha256):
+        raise ValueError('A Node SDK upgrade needs its matching builtin loader and JS runtime')
+    sdk = Path(args.node_distribution).resolve()
+    assert sha(sdk / 'bin/node') == args.node_sha256
+    header = (sdk / 'include/node/node_version.h').read_text()
+    built_version = '.'.join(re.search(r'^#define NODE_' + part + r'_VERSION\s+(\d+)', header, re.M)[1]
+                             for part in ('MAJOR', 'MINOR', 'PATCH'))
+    assert built_version == pins['node']
+    node_abi = re.search(r'^#define NODE_MODULE_VERSION (\d+)$', header, re.M)[1]
+    binding = Path(args.builtin_binding).resolve()
+    assert sha(binding) == args.builtin_sha256
+    shutil.rmtree(runtime / 'node')
+    copy(sdk, runtime / 'node')
+    assert 'node/bin/node' in (runtime / 'bin/node').read_text(), 'Expected the Desktop Node launcher'
 runtime_upgrade = None
 if args.runtime_source:
     fresh = Path(args.runtime_source).resolve()
@@ -47,6 +74,8 @@ if args.runtime_source:
     # the verified base. Never copy native binaries from the build host.
     ports = {'koffi', 'node-pty', 'sharp', 'node-addon-require-builtin',
         '@deepseek-ai/node-addon-system-linux-loong64', '@vscode/ripgrep-linux-loong64'}
+    if node_replaced:
+        ports.remove('node-addon-require-builtin')
     def packages(root):
         paths = list(root.glob('*/package.json')) + list(root.glob('@*/*/package.json'))
         return {read(p)['name']: p.parent for p in paths}
@@ -68,6 +97,16 @@ if args.runtime_source:
             return not values or target not in [v[1:] for v in values if v.startswith('!')] and (not any(not v.startswith('!') for v in values) or target in values)
         if not accepts(metadata.get('os'), 'linux') or not accepts(metadata.get('cpu'), 'loong64'):
             continue
+        # The Office package publishes frame-forwarding addons for macOS and Windows.
+        # On Linux its supported frontend is the optional WASM package.
+        if name == '@deepseek-ai/libreoffice-kit':
+            directory_copy = work / 'libreoffice-kit'
+            copy(directory, directory_copy)
+            prebuilds = directory_copy / 'frame-forwarding/prebuilds'
+            if prebuilds.exists():
+                for platform in ('darwin-arm64', 'darwin-x64', 'win32-arm64', 'win32-x64'):
+                    if (prebuilds / platform).is_dir(): shutil.rmtree(prebuilds / platform)
+            directory = directory_copy
         for path in directory.rglob('*'):
             if path.is_file():
                 with path.open('rb') as f: header = f.read(4)
@@ -78,6 +117,11 @@ if args.runtime_source:
         target.parent.mkdir(parents=True, exist_ok=True)
         copy(directory, target)
         installed.append({'name': name, 'version': metadata['version']})
+    if node_replaced:
+        builtin = runtime / 'node_modules/node-addon-require-builtin'
+        builtin_target = builtin / 'build/nodeabi' / f'node-v{node_abi}-linux-loong64-gnu/require_builtin.node'
+        builtin_target.parent.mkdir(parents=True)
+        shutil.copy2(binding, builtin_target)
     target_speech = runtime / 'node_modules' / speech
     for name in speech_originals: shutil.copy2(speech_port / 'lib' / name, target_speech / 'lib' / name)
     assert sha(speech_port / 'runtime/assets.json') == sha(target_speech / 'runtime/assets.json')
@@ -102,6 +146,7 @@ for path in [app / 'dist', *(app / 'dist').rglob('*')]:
 package = read(app / 'package.json'); package['version'] = version; save(app / 'package.json', package)
 for name in ['README.md', 'README.en.md']: shutil.copy2(source / name, app / name)
 for directory in ['app', 'node_modules/dsh-desktop-surface']:
+    shutil.copy2(source / '.runtime' / directory / 'desktop.patch.yml', runtime / directory / 'desktop.patch.yml')
     for name in ['index.ts', 'browser-use.ts', 'task-notifications.ts']:
         target = runtime / directory / name
         shutil.copy2(source / 'dist/runtime' / name, target); target.chmod(0o644)
@@ -116,6 +161,8 @@ doc = stage / 'usr/share/doc/dsh-desktop/README.Browser-Use'
 shutil.copy2(source / 'docs/KYLIN_BROWSER_USE.md', doc); doc.chmod(0o644)
 meta = read(runtime / 'runtime.json')
 meta.update(desktopVersion=version, desktopPackageVersion=version + '-1', dsh=core)
+if node_replaced:
+    meta.update(node=pins['node'], nodeCompatibility='Old-world ABI1 build meeting the upstream engine requirement on glibc 2.28.')
 save(runtime / 'runtime.json', meta)
 build = read(runtime / 'kylin-build.json')
 build.update(app=version, dsh=core, debianVersion=version + '-1', sourceCommit=args.source_commit,
@@ -124,14 +171,18 @@ build.update(app=version, dsh=core, debianVersion=version + '-1', sourceCommit=a
     taskNotifications='Completed/interrupted task notifications; LauncherEntry count plus red numeric window/tray icon for UKUI',
     inheritedValidation={'baseVersion': base_version, 'checks': build.get('currentValidation')},
     currentValidation={'compiledTargets': build_targets['targets'], 'physicalKylinGuiTested': False})
+if node_replaced:
+    build.update(node=pins['node'], nodeSha256=args.node_sha256, upstreamMinimumNode=pins['node'], nodeRequirementException=False)
+    build['hostDependencyFix'].update(version=read(builtin / 'package.json')['version'],
+        node=pins['node'], abi='node-v' + node_abi, nativeSha256=args.builtin_sha256,
+        nativeSourceArchiveSha256='8a8d738ec4601ef362cb011f13b39568abd8d26d174cf60eee17261ed91f725f')
 if runtime_upgrade: build['runtimeUpgrade'] = runtime_upgrade
 save(runtime / 'kylin-build.json', build)
 notes = stage / 'usr/share/doc/dsh-desktop/README.Kylin'
 notes.write_text('DSH Desktop ' + version + ' / core ' + core + ' / Kylin V10 old-world ABI1\n\n'
-    'Browser Use: see README.Browser-Use. Electron31.7.7, Node22.16.0 and Python3.12.14 retained.\n'
+    f"Browser Use: see README.Browser-Use. Electron {build['electron']}, Node {build['node']}, Python {build['python']}.\n"
     'Background tasks notify on completion or unexpected interruption. Deliberate Stop is silent.\n'
     'Unread session counts use LauncherEntry plus a red numeric window/tray icon for UKUI.\n'
-    'Node22 remains an exception to the upstream Node>=24.9 requirement.\n'
     'No user extensions are preinstalled; existing user profiles/plugins are preserved.\n'
     'Physical Kylin/LBrowser GUI has not been tested for this package.\n')
 assert read(runtime / 'node_modules/@deepseek-ai/dsh/package.json')['version'] == core
@@ -153,7 +204,12 @@ for path in stage.rglob('*'):
     if header[:4] == b'\x7fELF':
         assert header[4:6] == b'\x02\x01' and struct.unpack_from('<H', header, 18)[0] == 258
         assert struct.unpack_from('<I', header, 48)[0] == 3, rel
-        assert sha(path) == sha(base / rel), 'Native binary changed: ' + rel
+        if node_replaced and path == runtime / 'node/bin/node':
+            assert sha(path) == args.node_sha256
+        elif node_replaced and path == builtin_target:
+            assert sha(path) == args.builtin_sha256
+        else:
+            assert sha(path) == sha(base / rel), 'Native binary changed: ' + rel
         native.append({'path': rel, 'sha256': sha(path), 'machine': 258, 'flags': '0x3'})
     else:
         assert header[:2] != b'MZ' and header[:4] not in [bytes.fromhex(x) for x in ['cffaedfe', 'feedfacf', 'cafebabe']], rel
@@ -179,7 +235,7 @@ for row in links: assert os.readlink(verify / row['path']) == row['target']
 assert subprocess.check_output(['dpkg-deb', '-f', str(partial), 'Version'], text=True).strip() == version + '-1'
 partial.rename(installer)
 result = {**build, 'installer': str(installer), 'sha256': sha(installer), 'bytes': installer.stat().st_size,
-    'archiveVerified': True, 'nativeElfFiles': len(native), 'allNativeFilesUnchangedFromBase': True,
+    'archiveVerified': True, 'nativeElfFiles': len(native), 'allNativeFilesUnchangedFromBase': not node_replaced,
     'fileCount': len(files), 'anonymousManifestVerified': True, 'preinstalledUserPlugins': [], 'signed': False}
 save(output / 'artifact.json', result); save(output / 'elf-audit.json', native)
 save(work / 'payload-manifest.json', files); save(work / 'symlinks.json', links)

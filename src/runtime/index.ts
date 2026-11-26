@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { copyFile, mkdir, writeFile } from 'node:fs/promises';
 import { delimiter, dirname, join } from 'node:path';
@@ -19,7 +20,7 @@ if (!runtimeRoot || !process.env.DSH_HOME || !process.send) throw new Error('Des
 const require = createRequire(join(runtimeRoot, 'package.json'));
 const load = (id: string) => import(pathToFileURL(require.resolve(id)).href);
 const {
-  boot, loadLayeredEnv, loadOptionalPatches, installFailLoud,
+  boot, loadLayeredEnv, installFailLoud,
   initProfile, loadProfileDirectory, readProfilePatches, createRuntimeResolution, PluginPackages, reportSkippedBundles,
 } = await load('@deepseek-ai/dsh-app-boot');
 const { bootInjections } = await load('@deepseek-ai/dsh-client-modules');
@@ -106,15 +107,14 @@ try {
   // Official 0.1.7 imports legacy settings into each profile's configuration.
   // Keep the CLI's source document available for its own independent migration.
   await prepareLegacySettings(process.env.DSH_HOME, stateHome, require('yaml'));
-  const { entryListSchema } = await load('@deepseek-ai/cordis-plugin-include');
-  const patchYaml = require('js-yaml');
+  const { parseEntryYaml, stringifyEntryYaml } = await load('@deepseek-ai/cordis-plugin-include');
   await migrateProgressiveOverride(stateHome, {
-    parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }),
-    stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }),
+    parse: parseEntryYaml,
+    stringify: stringifyEntryYaml,
   });
   await migrateRuntimePluginNames([join(profileDir, 'cordis.patch.yml'), join(stateHome, 'desktop.patch.yml')], {
-    parse: (text: string) => patchYaml.load(text, { schema: entryListSchema }),
-    stringify: (value: unknown) => patchYaml.dump(value, { schema: entryListSchema }),
+    parse: parseEntryYaml,
+    stringify: stringifyEntryYaml,
   });
   initProfile(profileDir, ['@deepseek-ai/dsh-base', 'dsh-desktop-surface']);
   await migrateRetiredScheduleBundle(profileDir);
@@ -137,9 +137,7 @@ try {
     startedBundles: profile.layers.map((layer: { packageName: string }) => layer.packageName),
     cwd: process.cwd(), home: stateHome,
     telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
-    overlays: [
-      ...(loadOptionalPatches('dsh-desktop', join(stateHome, 'desktop.patch.yml')) ?? []),
-    ],
+    overlayPaths: [join(stateHome, 'desktop.patch.yml')].filter(path => existsSync(path)),
   };
   const resolution = await createRuntimeResolution({ installAnchor, profile });
   const patches = readProfilePatches('dsh-desktop', profileContext, profile);
@@ -163,15 +161,23 @@ try {
   const modules = context.get('clientModules');
   if (!connection || !server || !modules) throw new Error('Desktop host services are incomplete.');
   // Authentication handshake only. This process has no Web App homepage or static fallback.
-  context.effect(() => server.register({ kind: 'exact', path: '/', handler: (req: any, res: any) => {
-    if (!connection.authorizeIndex(req, res)) return;
+  context.effect(() => server.register({ kind: 'exact', path: '/', auth: 'required', handler: (_req: any, res: any) => {
     res.writeHead(204); res.end();
   } }));
   const endpoint = `http://127.0.0.1:${server.port}`;
-  remoteBridge = new RemoteBridge(require('ws'), endpoint, connection.authenticatedUrl(endpoint), state => {
+  const entries: { label: string; url: string; open?: boolean }[] = [];
+  context.emit(server, 'webserver/entry-url', endpoint, entries);
+  const launchUrl = entries.find(entry => entry.label === 'dsh web' && entry.open)?.url;
+  if (!launchUrl || new URL(launchUrl).origin !== endpoint) throw new Error('Desktop authentication provider supplied no local launch URL.');
+  // Existing Desktop plugins request this host's login URL from the connection service.
+  connection.authenticatedUrl = (base: string) => {
+    if (base !== endpoint) throw new Error('Desktop plugin requested a different browser origin.');
+    return launchUrl;
+  };
+  remoteBridge = new RemoteBridge(require('ws'), endpoint, launchUrl, state => {
     remoteState = { ...remoteState, ...state }; process.send?.({ type: 'remote-state', state: remoteState });
   });
-  lanRemote = new LanRemoteAccess(require('ws'), endpoint, connection.authenticatedUrl(endpoint), lan => {
+  lanRemote = new LanRemoteAccess(require('ws'), endpoint, launchUrl, lan => {
     remoteState = { ...remoteState, lan }; process.send?.({ type: 'remote-state', state: remoteState });
   }, localRemoteAction);
   const names = Array.from(context.loader.entries(), (entry: any) => entry.options.name);
@@ -179,7 +185,7 @@ try {
   ready = true;
   for (const listener of [...readyListeners]) listener();
   readyListeners.clear();
-  process.send!({ type: 'ready', endpoint, launchUrl: connection.authenticatedUrl(endpoint), graph: modules.graph(), hostPlugins: names });
+  process.send!({ type: 'ready', endpoint, launchUrl: launchUrl, graph: modules.graph(), hostPlugins: names });
 } catch (error) {
   console.error(error);
   process.send!({ type: 'failed', error: error instanceof Error ? error.message : 'Desktop core boot failed' });

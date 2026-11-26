@@ -15,6 +15,7 @@ async function fixture(t: any) {
   const ctx = new Context();
   t.after(() => ctx.fiber.dispose());
   await ctx.plugin(LlmRuntime);
+  await ctx.plugin((await load('@deepseek-ai/dsh-session-projection')).default);
   await ctx.plugin(SystemPrompt, {});
   await ctx.plugin(ToolRuntime);
   await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native'));
@@ -83,6 +84,9 @@ test('step presentation keeps business tools discoverable without declaring thei
   const scope = {};
   const assembly = await ctx.systemPrompt.assemble({ scope });
   assert.deepEqual(assembly.tools.map((tool: any) => tool.name).sort(), ['describe_tools', 'invoke_tool', 'search_tools']);
+  const invoke = assembly.tools.find((tool: { name: string }) => tool.name === 'invoke_tool');
+  assert.equal(invoke?.parameters.properties.arguments.type, 'object');
+  assert.equal(invoke?.parameters.properties.arguments.additionalProperties, true);
   assert.ok(assembly.sections.some((section: any) => section.text.includes('Discovery changes presentation only')));
   assert.ok(names.every(name => ctx.tools.get(name, scope) !== undefined));
 });

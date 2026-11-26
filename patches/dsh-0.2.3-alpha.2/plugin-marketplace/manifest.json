@@ -1,0 +1,12 @@
+{
+  "dsh": "0.2.3-alpha.2",
+  "files": [
+    {
+      "package": "@deepseek-ai/dsh-client-ui-plugin-manager",
+      "path": "@deepseek-ai/dsh-client-ui-plugin-manager/lib/client.js",
+      "before": "51826dea605fc25e2ccb3742b7a74d396f43c1867bdc7bf8c2f536aca66ecf05",
+      "after": "20336b0fc571dbefde2479ed6ff983818b7f523349e07ba480dec82869166fdc",
+      "patchSha256": "ed0663bc4174ed3abce28db2a7999724e4c8cb81bd5065b3e188a06060d3d79f"
+    }
+  ]
+}

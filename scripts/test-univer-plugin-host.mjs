@@ -77,7 +77,7 @@ try {
   assert.equal(Univer.Config({}).telemetry, false);
   report.checks.push('Reviewed candidate and both default telemetry=false paths verified');
   ctx = new Context();
-  await ctx.plugin(LlmRuntime); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime); await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native')); await ctx.plugin(SkillRegistry);
+  await ctx.plugin(LlmRuntime); await ctx.plugin((await load('@deepseek-ai/dsh-session-projection')).default); await ctx.plugin(SystemPrompt, {}); await ctx.plugin(ToolRuntime); await ctx.plugin(await load('@deepseek-ai/dsh-tool-executor-native')); await ctx.plugin(SkillRegistry);
   await ctx.plugin(Univer, { telemetry: false, skills: true, gatewayPort: await freePort(), gatewayStartupTimeoutMs: 60_000, resourceCacheRoot: join(data, 'resource-cache') });
   const schemas = ctx.tools.schemas();
   const names = schemas.filter(x => x.name.startsWith('univer_')).map(x => x.name);

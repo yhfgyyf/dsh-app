@@ -10,6 +10,7 @@ import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives';
 import * as UiDockkit from '@deepseek-ai/dsh-client-ui-dockkit';
 import * as Zod from 'zod';
 import * as ReactVirtual from '@tanstack/react-virtual';
+import type { ClientBundleRegistration } from '@deepseek-ai/dsh-client-modules/client';
 import { ArtifactMarkdown } from './artifact-markdown.tsx';
 import { createDesktopModuleFacade, DesktopSlotCore } from './univer-slot-compat.ts';
 import './updates.css';
@@ -25,6 +26,16 @@ function Startup({ error }: { error?: string }) {
 }
 status.render(<Startup />);
 let context: Cordis.Context | undefined;
+// DSH's renderer installs shared component styles from each compiled module's metadata.
+function linkedModule(id: string, namespace: object, overrides?: Record<string, unknown>): ClientBundleRegistration {
+  const manifest = Reflect.get(namespace, '__$dsh_client_module_manifest') as ClientBundleRegistration | undefined;
+  if (manifest?.id !== id || typeof manifest.factory !== 'function') {
+    throw new Error(`DSH 控件模块清单缺失：${id}`);
+  }
+  if (!overrides) return manifest;
+  return { ...manifest, factory: (require: Parameters<ClientBundleRegistration['factory']>[0]) =>
+    ({ ...manifest.factory(require), ...overrides }) };
+}
 async function bootDesktop() {
   const boot = await window.dshDesktop!.getBoot();
   assertDesktopBoot(boot);
@@ -44,13 +55,18 @@ async function bootDesktop() {
   if (index < 0) throw new Error('DSH 模块加载器缺失。');
   const [registration] = queue.splice(index, 1);
   const exports = registration.factory(name => { throw new Error(`Unexpected bootstrap external: ${name}`); });
-  const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: {
+  const platformModules = Object.entries({
     react: React, 'react/jsx-runtime': ReactJsxRuntime, 'react-dom': ReactDom, 'react-dom/client': ReactDomClient, zod: Zod,
     '@tanstack/react-virtual': ReactVirtual,
-    '@deepseek-ai/cordis': Cordis, '@deepseek-ai/dsh-client-store': ClientStore,
-    '@deepseek-ai/dsh-client-ui-slots': { ...UiSlots, SlotCore: DesktopSlotCore }, '@deepseek-ai/dsh-client-ui-primitives': { ...UiPrimitives, MarkdownText: ArtifactMarkdown },
-    '@deepseek-ai/dsh-client-ui-dockkit': UiDockkit,
-  } });
+    '@deepseek-ai/cordis': Cordis,
+  }).map(([id, value]) => ({ id, factory: () => value }));
+  const modules = exports.createClientModuleSystem(facade, { id: registration.id, exports }, { boot: graph, staticModules: [
+    ...platformModules,
+    linkedModule('@deepseek-ai/dsh-client-store', ClientStore),
+    linkedModule('@deepseek-ai/dsh-client-ui-slots', UiSlots, { SlotCore: DesktopSlotCore }),
+    linkedModule('@deepseek-ai/dsh-client-ui-primitives', UiPrimitives, { MarkdownText: ArtifactMarkdown }),
+    linkedModule('@deepseek-ai/dsh-client-ui-dockkit', UiDockkit),
+  ] });
   const ctx = context = new Cordis.Context();
   ctx.logger.exporter({ colors: false, export(message) {
     if (message.type === 'error') console.error('DSH 模块：', ...message.args);

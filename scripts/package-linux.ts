@@ -16,7 +16,8 @@ const runtimeInfo = JSON.parse(await readFile(join(root, '.runtime/runtime.json'
 assert.equal(runtimeInfo.platform, 'linux');
 assert.equal(runtimeInfo.arch, 'x64');
 assert.equal(runtimeInfo.desktopVersion, pkg.version);
-assert.equal(execFileSync(join(root, '.runtime/bin/node'), ['--version'], { encoding: 'utf8' }).trim(), 'v24.15.0');
+const pins = JSON.parse(await readFile(join(root, 'runtime/dependencies.json'), 'utf8'));
+assert.equal(execFileSync(join(root, '.runtime/bin/node'), ['--version'], { encoding: 'utf8' }).trim(), 'v' + pins.node);
 const output = join(root, 'release', new Date().toISOString().replace(/[:.]/g, '-'));
 const staging = join(output, 'staging');
 await mkdir(staging, { recursive: true });

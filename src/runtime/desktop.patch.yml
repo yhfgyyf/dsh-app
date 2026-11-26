@@ -16,6 +16,46 @@
 - id: tool-executor-ptc
   disabled: !!js process.env.DSH_TOOLS_MODE !== 'ptc' 
 - insert:
+    - id: tool-session-control
+      name: '@deepseek-ai/dsh-tool-session-control'
+      disabled: true
+    - id: ui-account-notifications
+      name: '@deepseek-ai/dsh-client-ui-account-notifications'
+    - id: mcp-manager
+      name: '@deepseek-ai/dsh-mcp-manager'
+      inject: [credentials]
+    - id: mcp-account
+      name: '@deepseek-ai/dsh-mcp-account'
+    - id: authentication-token
+      name: '@deepseek-ai/dsh-host-authentication-token'
+    - id: ui-session-status
+      name: '@deepseek-ai/dsh-client-ui-session-status'
+    - id: office-kit
+      name: '@deepseek-ai/dsh-office-kit'
+      config:
+        outputDirectory: !!js dshHomePath('office-kit', 'outputs')
+    - id: skill-office
+      name: '@deepseek-ai/dsh-skill-office'
+      config:
+        pythonEnvironment: !!js "ctx.get('profileContext')?.name === 'desktop' ? 'workspace-dependencies' : 'user'"
+    - id: ui-connector-account
+      name: '@deepseek-ai/dsh-client-ui-connector-account'
+    - id: action-cards
+      name: '@deepseek-ai/dsh-action-cards'
+    - id: client-ui-action-cards
+      name: '@deepseek-ai/dsh-client-ui-action-cards'
+    - id: creation-recommendations
+      name: '@deepseek-ai/dsh-creation-recommendations'
+    - id: client-ui-creation-recommendations
+      name: '@deepseek-ai/dsh-client-ui-creation-recommendations'
+    - id: plugin-recommendations
+      name: '@deepseek-ai/dsh-plugin-recommendations'
+    - id: client-ui-plugin-recommendations
+      name: '@deepseek-ai/dsh-client-ui-plugin-recommendations'
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-client-ui-agent-team'
+    - id: ui-session-panel
+      name: '@deepseek-ai/dsh-client-ui-session-panel'
     - id: ui-context-menu
       name: '@deepseek-ai/dsh-client-ui-context-menu'
     - id: schedule
@@ -125,8 +165,6 @@
       name: '@deepseek-ai/dsh-client-ui-sidebar-right'
     - id: ui-sidebar-documentpreview
       name: '@deepseek-ai/dsh-client-ui-sidebar-documentpreview'
-    - id: office-to-pdf
-      name: '@deepseek-ai/dsh-office-to-pdf'
     - id: ui-sidebar-terminal
       name: '@deepseek-ai/dsh-client-ui-sidebar-terminal'
     - id: ui-sidebar-files
@@ -139,8 +177,6 @@
       name: '@deepseek-ai/dsh-client-ui-settings-models'
     - id: ui-settings-account
       name: '@deepseek-ai/dsh-client-ui-settings-account'
-    - id: account-controller
-      name: '@deepseek-ai/dsh-api-account-controller'
     - id: ui-settings-session-log
       name: '@deepseek-ai/dsh-client-ui-settings-session-log'
     - id: ui-settings-shell
@@ -151,8 +187,6 @@
       name: '@deepseek-ai/dsh-client-ui-settings-subagent'
     - id: ui-settings-web-search
       name: '@deepseek-ai/dsh-client-ui-settings-web-search'
-    - id: ui-settings-plugin-inventory
-      name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
     - id: ui-plugin-manager
       name: '@deepseek-ai/dsh-client-ui-plugin-manager'
     - id: ui-conversation
@@ -207,8 +241,6 @@
       name: '@deepseek-ai/dsh-client-ui-permission-presets'
     - id: ui-agent-preset
       name: '@deepseek-ai/dsh-client-ui-agent-preset'
-    - id: ui-settings-plugins
-      name: '@deepseek-ai/dsh-client-ui-settings-plugins'
     - id: ui-plan
       name: '@deepseek-ai/dsh-client-ui-plan'
     - id: ui-user-questions
@@ -270,6 +302,9 @@
         default: standard
 - id: session-telemetry-otel
   disabled: true
+- id: session-log-deepseek
+  config:
+    enabled: false
 
 - insert:
     - id: auto-preset-router-bundle

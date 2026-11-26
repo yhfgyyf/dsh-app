@@ -1,0 +1,13 @@
+{
+  "dsh": "0.2.3-alpha.2",
+  "files": [
+    {
+      "kind": "primitives",
+      "package": "@deepseek-ai/dsh-client-ui-primitives",
+      "path": "@deepseek-ai/dsh-client-ui-primitives/lib/index.js",
+      "before": "6035a4c1a9c08eca797c52cec4f564462288667212be7bbdc7b8bd583ea65369",
+      "after": "5c7f89b5a715ed0732cbcd19bffb0d4eafe724d5a10d1acfa76866e62df62639",
+      "patchSha256": "92f6ad5f6f4f551e40a46a29efc63900e86a0aa3601303a6670b2abdbe1970ec"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const originalHash = 'b8478381a1501a11c1f7f8db7810bb4389694851ecad6131ac7d09055431a0b2';
+const originalHash = '3df37b90f1cd48b6894422297e7a029277a5baf37bf25b0f4c56da35224fd879';
 const marker = '// DSH Desktop workspace payload layout v1';
 const sha = text => createHash('sha256').update(text).digest('hex');
 const replacements = [

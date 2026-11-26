@@ -10,7 +10,7 @@ import type { BrowserUseConfig } from '../shared/browser-use.ts';
 import { readTaskEvent, type TaskEvent } from '../shared/task-notifications.ts';
 
 export type RuntimeReady = { type: 'ready'; endpoint: string; launchUrl: string; graph: BootGraph; hostPlugins: string[] };
-type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; taskEvent?: (event: TaskEvent) => void; remoteState?: (state: RemoteRuntimeState) => void; localRemoteAction?: (action: LocalRemoteAction) => Promise<unknown>; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
+type RuntimeOptions = { runtimeRoot: string; entry: string; home: string; configHome?: string; cwd: string; onExit: (code: number | null) => void; simNotice?: (id: unknown, kind: unknown) => void; taskEvent?: (event: TaskEvent) => void; remoteState?: (state: RemoteRuntimeState) => void; localRemoteAction?: (action: LocalRemoteAction) => Promise<unknown>; pickDirectory?: () => Promise<string | null>; computerRequest?: (request: ComputerRequest, signal: AbortSignal) => Promise<ComputerResult>; computerStop?: () => Promise<void> };
 export async function availableDesktopPort(port: number): Promise<number> {
   if (!port) return 0;
   return new Promise((resolve, reject) => {
@@ -105,6 +105,7 @@ export class DesktopRuntime {
     child.once('disconnect', stopComputer);
     child.on('message', async (message: any) => {
       if (message?.type === 'task-event') { const event = readTaskEvent(message.event); if (event) this.options.taskEvent?.(event); return; }
+      if (message?.type === 'sim-companion') { this.options.simNotice?.(message.sessionId, message.kind); return; }
       if (message?.type === 'remote-state') { this.options.remoteState?.(message.state); return; }
       if (message?.type === 'remote-local-action' && typeof message.id === 'string') {
         try {
