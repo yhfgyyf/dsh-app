@@ -45,8 +45,15 @@ jobs:
         run: npx --no-install electron tests/windows-quit-smoke.cjs
       - name: Build pinned runtime and apply verified patch
         run: npm run setup:runtime
-      - name: Typecheck, unit tests and production build
-        run: npm run check
+      - name: Typecheck and production build
+        run: |
+          npm run typecheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build
+      - name: Account menu, settings controls and Session Log default
+        run: npm run test:settings-controls
+      - name: Full unit tests
+        run: npm test
       - name: Remote pairing, native settings and shared Host sessions
         timeout-minutes: 4
         run: |
@@ -79,8 +86,6 @@ jobs:
         run: npm run test:three-surfaces
       - name: Native Electron lifecycle
         run: npm run test:native
-      - name: Account menu and settings interactions
-        run: npm run test:settings-controls
       - name: Native task completion, interruptions and numeric taskbar overlays
         timeout-minutes: 3
         run: npm run test:task-notifications
