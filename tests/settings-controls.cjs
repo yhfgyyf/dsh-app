@@ -7,7 +7,23 @@ const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const { chromium } = require('../.runtime/node_modules/playwright-core');
 
+// A change appears optimistically in the renderer before its Host write is accepted.
+async function waitForSetting(page, namespace, field, expected) {
+  await page.waitForFunction(async ({ namespace, field, expected }) => {
+    const method = 'settings/describe';
+    const response = await fetch('/api/' + method, { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId: crypto.randomUUID(), method, payload: { args: {} } }) });
+    if (!response.ok) return false;
+    const { result } = await response.json();
+    return result?.value?.namespaces?.find(row => row.ns === namespace)?.value?.[field] === expected;
+  }, { namespace, field, expected }, { polling: 150, timeout: 15000 }).catch(error => {
+    throw new Error('Host did not persist ' + namespace + '.' + field + ' = ' + expected, { cause: error });
+  });
+}
+
 async function openSettings(page) {
+  const dialog = page.getByRole('dialog', { name: '设置' });
+  if (await dialog.isVisible()) return dialog;
   const avatar = page.getByRole('button', { name: '账号菜单' });
   await avatar.waitFor();
   const top = () => page.locator('#root').evaluate(root => root.getBoundingClientRect().top);
@@ -18,7 +34,6 @@ async function openSettings(page) {
   assert.equal(await menu.evaluate(e => getComputedStyle(e).position), 'fixed', 'Account menu is in the document flow');
   assert.equal(await top(), before, 'Opening the account menu moved the application');
   await menu.getByRole('menuitem', { name: '设置' }).click();
-  const dialog = page.getByRole('dialog', { name: '设置' });
   await dialog.waitFor();
   return dialog;
 }
@@ -34,7 +49,18 @@ async function verifySettings(page) {
   const selectors = dialog.locator('button[aria-haspopup="menu"]');
   const names = await selectors.allTextContents();
   assert.ok(names.includes('标准'));
+  const settings = {
+    '工作区内修改': ['permission', 'defaultPreset', 'read-only', 'workspace-write'],
+    '中文': ['locale', 'preference', 'en', 'zh'],
+    '标准': ['ui-chat', 'transcriptView', 'compact', 'standard'],
+    '回答结束后': ['ui-chat', 'collapseTiming', 'next-input', 'completion'],
+    '全部回复': ['ui-chat', 'foldedReplies', 'final', 'all'],
+    '应用内侧边栏': ['ui-chat', 'linkOpening', 'new-tab', 'sidebar'],
+    '排队发送': ['ui-conversation', 'busyEnter', 'steer', 'queue'],
+    '详细': ['ui-chat', 'performanceUsage', 'compact', 'detailed'],
+  };
   for (const [index, name] of names.entries()) {
+    const [namespace, field, alternate, restored] = settings[name];
     const button = selectors.nth(index);
     await button.click();
     const menu = page.getByRole('menu');
@@ -56,6 +82,7 @@ async function verifySettings(page) {
     await page.waitForFunction(({ index, next }) =>
       document.querySelectorAll('[role="dialog"] button[aria-haspopup="menu"]')[index]?.textContent === next,
     { index, next });
+    await waitForSetting(page, namespace, field, alternate);
     if (name !== '标准') {
       await selected.click();
       await page.getByRole('menuitem', { name, exact: true }).click();
@@ -63,6 +90,7 @@ async function verifySettings(page) {
       await page.waitForFunction(({ index, name }) =>
         document.querySelectorAll('[role="dialog"] button[aria-haspopup="menu"]')[index]?.textContent === name,
       { index, name });
+      await waitForSetting(page, namespace, field, restored);
     }
   }
   const toggle = dialog.getByRole('switch', { name: '显示代码工作视图' });
@@ -72,6 +100,9 @@ async function verifySettings(page) {
   await toggle.click();
   await dialog.locator('[role="switch"][aria-label="显示代码工作视图"][aria-checked="' + (original !== 'true') + '"]').waitFor();
 
+  await waitForSetting(page, 'ui-settings', 'enabled', original !== 'true');
+  await dialog.getByRole('button', { name: '关闭', exact: true }).first().click();
+  await dialog.waitFor({ state: 'hidden' });
   await page.reload();
   await openSettings(page);
   const stepButton = selectors.nth(names.indexOf('标准'));
@@ -132,7 +163,13 @@ async function main() {
     const ctx = browser.contexts()[0];
     const page = ctx.pages()[0] ?? await ctx.waitForEvent('page', { timeout: 30000 });
     await page.getByRole('button', { name: '账号菜单' }).waitFor({ timeout: 60000 });
-    console.log(JSON.stringify(await verifySettings(page)));
+    try {
+      console.log(JSON.stringify(await verifySettings(page)));
+    } catch (error) {
+      console.error('Isolated fixture dialogs:', await page.getByRole('dialog').count(),
+        'menus:', await page.getByRole('menu').count(), 'document language:', await page.locator('html').getAttribute('lang'));
+      throw error;
+    }
   } finally {
     await browser?.close();
     if (process.platform === 'win32' && child.pid && child.exitCode === null) {
