@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
-const { spawn } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
+const { promisify } = require('node:util');
 const { chromium } = require('../.runtime/node_modules/playwright-core');
 
 async function openSettings(page) {
@@ -134,9 +135,17 @@ async function main() {
     console.log(JSON.stringify(await verifySettings(page)));
   } finally {
     await browser?.close();
-    if (child.exitCode === null) child.kill();
+    if (process.platform === 'win32' && child.pid && child.exitCode === null) {
+      try {
+        await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-STA', '-File',
+          path.join(root, 'scripts/quit-windows-test-app.ps1'), '-ApplicationId', String(child.pid)], { timeout: 20000 });
+        await Promise.race([exit, new Promise(resolve => setTimeout(resolve, 12000).unref())]);
+      } finally {
+        if (child.exitCode === null) child.kill();
+      }
+    } else if (child.exitCode === null) child.kill();
     await exit;
-    await fs.rm(data, { force: true, recursive: true });
+    await fs.rm(data, { force: true, recursive: true, maxRetries: 12, retryDelay: 200 });
   }
 }
 module.exports = { verifySettings };
