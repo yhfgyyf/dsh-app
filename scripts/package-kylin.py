@@ -25,6 +25,7 @@ def copy(a, b):
 
 # Preserve the reviewed Electron shell and old-world native providers from this base.
 base_version = {
+    '1146ff60cb6272e98213347091027509e8b9c32ee784959cde8993d875ba07da': '0.1.58-1',
     '69df3d458308bf436405e35bbe6069c117fd335b1d121dcd26cc3a84fbde06b3': '0.1.56-1',
     'f0929fa2a090b5d7852f2f44054508b734a6567421d87858f962fb8c3d93ace2': '0.1.54-1',
     '2e8c4586c4fa239050af8e7214e02b0d0089e42d7be0997da2b4381842217491': '0.1.46-1',

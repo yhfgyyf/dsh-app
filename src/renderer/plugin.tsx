@@ -5,6 +5,7 @@ import type { DesktopCommand, DesktopInfo } from '../shared/desktop-api.ts';
 import { installSidebarBrowser } from './sidebar-browser.tsx';
 import type { BrowserContext } from './sidebar-browser.tsx';
 import { UpdateIcon, UpdateScheduleSettings } from './updates.tsx';
+import { KylinChatReply } from './kylin-chat-reply.tsx';
 import { installLocalOpen } from './local-open.tsx';
 import { ComputerControl, ComputerSettings } from './computer-use.tsx';
 import { BrowserUseSettings } from './browser-use.tsx';
@@ -138,7 +139,10 @@ export function dispatchCommand(command: DesktopCommand, ctx: DesktopContext, br
 export async function apply(ctx: DesktopContext) {
   const info = await window.dshDesktop?.getInfo();
   installSidebarBrowser(ctx);
-  installDocumentPreviews(ctx, info?.platform === 'linux' && info.arch === 'loong64');
+  const kylin = info?.platform === 'linux' && info.arch === 'loong64';
+  installDocumentPreviews(ctx, kylin);
+  if (kylin) ctx.slots.inject('conversation.chat.turnTail', () =>
+    ctx.slots.register({ name: 'conversation.chat.turnTail', id: 'desktop-kylin-closing-reply', order: -100 }, KylinChatReply));
   installLocalOpen(ctx);
   installPluginMarketplace(ctx);
   installPluginSecurityReview(ctx);

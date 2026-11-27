@@ -1,6 +1,6 @@
 {
   "name": "dsh-app",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "private": true,
   "description": "Independent desktop application for DeepSeek Harness on macOS and Windows",
   "type": "module",
