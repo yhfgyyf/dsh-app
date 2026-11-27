@@ -1,6 +1,6 @@
 # Build and package
 
-Use Node 24.15.0 and Git. Run `npm ci`, `npm run setup:runtime`, then
+Use Node 24.22.3 and Git. Run `npm ci`, `npm run setup:runtime`, then
 `npm run check`. The runtime builder runs `npm ci --install-strategy=shallow`
 with `runtime/dsh/package.json` and its lockfile in `.build-runtime/global`.
 The manifest fixes every DSH subpackage to the runtime version and pins the

@@ -8,6 +8,14 @@ An independent DeepSeek Harness desktop application for **macOS Apple Silicon**,
 
 The app bundles Node.js and the DSH core, with its own Electron main process, React entry point, and Cordis composition. There is no need to start DSH Web beforehand. Sessions, models, tools, approvals, and attachments use DSH's core services and functional components.
 
+## v0.1.58 preview
+
+The Windows x64 and Kylin V10 SP1 2403 LoongArch64 ABI1 installers bundle Node.js 24.22.3 and DeepSeek Harness 0.2.3-alpha.2. This build restores the settings menus and switches. Official-model Session Log uploads default to off in new profiles. Explicit saved preferences take precedence. [Installers and checksums](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.58) · [Upstream release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.3-alpha.2)
+
+The installed Windows app passed the native settings tests. The full regression run recorded 368 passes, 37 failures and 8 skips. The Kylin archive and native ABI were checked. Desktop interaction on physical Kylin hardware still needs verification.
+
+Install the optional plugins separately. [Side Chat 0.1.9](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.9) · [SIM 0.9.3 and Xixi's animation](https://github.com/yhfgyyf/dsh-sim)
+
 ## v0.1.50: DSH 0.2.2-rc.1 compatibility
 
 Pins the RC.1 core and Cordis 4.1, including the new context menu, asynchronous session state and tool execution interfaces. Preserves native text quotes, temporary Side Chat, the separate content search window, Browser Use and task notifications with unread badges. Side, P2P and Univer compatibility packages are delivered separately; installers do not preinstall user extensions.
@@ -132,7 +140,7 @@ Download the package for your platform from [GitHub Releases](https://github.com
 | --- | --- | --- |
 | macOS 13+ Apple Silicon | `DSH-Desktop-*-macOS-arm64.zip` | Extract the ZIP and move `DSH Desktop.app` to your Applications folder |
 | Windows 10/11 x64 | `DSH-Desktop-*-Windows-x64-Setup.exe` | Run the installer; it installs for the current user by default, without administrator privileges |
-| Kylin V10 SP1 2403 / LoongArch64 old ABI | `DSH-Desktop-0.1.45-2-Kylin-V10-loongarch64.deb` | Install manually using the Kylin installation guide from the release, including its KYSEC steps when applicable |
+| Kylin V10 SP1 2403 / LoongArch64 old ABI | `DSH-Desktop-0.1.58-Kylin-V10-loongarch64.deb` | Install manually using the Kylin installation guide from the release, including its KYSEC steps when applicable |
 
 Open the app, configure your provider and API key in **Settings → Models**, select a workspace, and create a session. Existing DSH users can reuse their configuration in `~/.dsh`, or `%USERPROFILE%\.dsh` on Windows. Node.js and DSH are included in the package and do not require a separate installation.
 
@@ -160,7 +168,7 @@ Update downloads use the system proxy. Failed installations can be retried using
 - Select text in chat or the right sidebar and right-click to copy it. Editable fields also offer cut, paste, undo, and select all.
 - Open locally uses the system's default application for the current sidebar file. Its menu offers another application, reveal in folder, and file or folder pickers. Without a current file, it opens a file picker; opening the workspace folder remains a separate menu item.
 
-Desktop `0.1.45` bundles DSH `0.2.2-alpha.2`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
+Desktop `0.1.58` bundles DSH `0.2.3-alpha.2`, Auto Router `0.2.4`, Audit `0.6.1`, and Progressive Tools `0.3.2`. TUI `0.2.0` is used for compatibility testing across the three interfaces and is installed separately into DSH's TUI profile. Exact Git commits are pinned in the [dependency manifest](runtime/dependencies.json).
 
 Some features depend on your model or external tools. MP4 attachments require a provider that supports `video_url`. Audit's Codex and Claude Code backends require their respective CLIs; a DSH model backend can also be configured. The installer does not include model accounts, API keys, or these external CLIs.
 
@@ -200,9 +208,9 @@ Screenshots require an image-capable model, such as `deepseek-v4-flash-vision-ex
 
 ## Build from source
 
-The current `main` source is Desktop `0.1.45` with DSH `0.2.2-alpha.2`. The standard commands below build the macOS/Windows app. Kylin requires a separate old-ABI environment; see the [Kylin speech overlay](patches/loongarch-speech/README.md) for its offline speech build and pinned sources, and use the release installation guide for the `.deb`.
+The current `main` source is Desktop `0.1.58` with DSH `0.2.3-alpha.2`. The standard commands below build the macOS/Windows app. Kylin requires a separate old-ABI environment; see the [Kylin speech overlay](patches/loongarch-speech/README.md) for its offline speech build and pinned sources, and use the release installation guide for the `.deb`.
 
-Install Git, Node.js **24.15.0**, and npm, then run:
+Install Git, Node.js **24.22.3**, and npm, then run:
 
 ```sh
 npm ci

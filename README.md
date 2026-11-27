@@ -4,9 +4,17 @@
 
 简体中文 | [English](README.en.md)
 
-独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.50** 支持 **DSH 0.2.2-rc.1**，持续跟进 DSH 上游版本。
+独立的 DeepSeek Harness 桌面应用，支持 **macOS Apple Silicon、Windows x64 和银河麒麟龙芯**。当前源码版 **0.1.58** 内置 **DeepSeek Harness 0.2.3-alpha.2**，持续跟进 DSH 上游版本。
 
 应用内置 Node.js 与 DSH 核心，使用独立 Electron 主进程、React 入口和 Cordis 组装。无需预先启动 DSH Web。会话、模型、工具、审批和附件复用 DSH 的核心服务及功能组件。
+
+## v0.1.58 预览版
+
+Windows x64 和银河麒麟 V10 SP1 2403 龙芯旧 ABI 安装包均内置 Node.js 24.22.3。设置页恢复下拉菜单和开关交互，新配置默认关闭官方模型 API 的 Session Log 上传，已有用户显式保存的设置优先。[下载安装包与 SHA-256 清单](https://github.com/yhfgyyf/dsh-app/releases/tag/v0.1.58) · [上游 DeepSeek Harness v0.2.3-alpha.2](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.3-alpha.2)
+
+Windows 安装版已通过原生设置专项测试。本轮全量回归有 368 项通过、37 项失败、8 项跳过。麒麟包已检查文件完整性和旧 ABI 原生文件，麒麟真机桌面交互仍待验收。
+
+临时侧聊和汐汐桌面伙伴可以分别安装。[Side 0.1.9](https://github.com/yhfgyyf/dsh-side-chat/releases/tag/v0.1.9) · [SIM 0.9.3 与汐汐动画](https://github.com/yhfgyyf/dsh-sim)
 
 ## v0.1.50：DSH 0.2.2-rc.1 兼容更新
 
@@ -161,7 +169,7 @@ Windows 从 v0.1.6 起将旧安装目录整体保留在相邻备份目录，再�
 - 聊天与右侧栏支持选中文字后右键复制，输入框提供剪切、粘贴、撤销与全选。
 - “在本地打开”使用系统默认应用打开右侧当前文件；菜单可选择其他应用、在文件夹中显示、选择文件或文件夹。没有当前文件时弹出文件选择器，工作区文件夹作为单独菜单项保留。
 
-Desktop `0.1.45` 内置 DSH `0.2.2-alpha.2`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`，包含这些插件针对新核心的兼容补丁。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
+Desktop `0.1.58` 内置 DSH `0.2.3-alpha.2`、Auto Router `0.2.4`、Audit `0.6.1` 和 Progressive Tools `0.3.2`，包含这些插件针对新核心的兼容补丁。TUI `0.2.0` 用于跨端兼容测试，单独安装到 DSH 的 TUI profile。具体 Git 提交固定在 [依赖清单](runtime/dependencies.json)。
 
 部分能力依赖所选模型或外部工具：MP4 需要提供方支持 `video_url`；Audit 的 Codex / Claude Code 后端需要对应 CLI，也可配置 DSH 模型后端。安装包不包含模型账号、密钥或这些外部 CLI。
 
@@ -228,9 +236,9 @@ Windows 需要已登录的交互桌面；锁屏和 UAC 安全桌面不能操作�
 
 ## 从源码构建
 
-当前 `main` 源码为 Desktop `0.1.45`，内置 DSH `0.2.2-alpha.2`，包含三平台语音适配与兼容补丁。下面的标准构建命令用于 macOS / Windows；麒麟使用独立的旧 ABI 环境，离线语音构建与固定来源见 [麒麟语音适配](patches/loongarch-speech/README.md)，安装使用 Release 的 `.deb` 及随包说明。
+当前 `main` 源码为 Desktop `0.1.58`，内置 DSH `0.2.3-alpha.2`，包含三平台语音适配与兼容补丁。下面的标准构建命令用于 macOS / Windows；麒麟使用独立的旧 ABI 环境，离线语音构建与固定来源见 [麒麟语音适配](patches/loongarch-speech/README.md)，安装使用 Release 的 `.deb` 及随包说明。
 
-需要 Git、Node.js **24.15.0** 与 npm：
+需要 Git、Node.js **24.22.3** 与 npm：
 
 ```sh
 npm ci
